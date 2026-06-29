@@ -11,6 +11,7 @@
 *.ilk
 *.map
 *.exp
+build/
 
 # Precompiled Headers
 *.gch
@@ -53,3 +54,6 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# vscode
+.vscode/
