@@ -19,7 +19,6 @@ VOICE_TEST_TARGET := build/test_voice
 MIDI_TYPES_TEST_TARGET := build/test_midi_types
 
 CORE_SOURCES := \
-	src/audio_types.c \
 	src/midi_types.c \
 	src/oscillator.c \
 	src/envelope.c \
