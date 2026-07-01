@@ -152,6 +152,10 @@ int main(int argc, char **argv)
         synth_set_filter_cutoff(&app.synth, (float)strtod(argv[4], 0));
     }
 
+    if (argc > 5) {
+        synth_set_filter_poles(&app.synth, atoi(argv[5]));
+    }
+
     if (should_play_note) {
         if (use_frequency) {
             synth_note_on_frequency(&app.synth, frequency, 0.9f);

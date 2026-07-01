@@ -137,6 +137,11 @@ void synth_set_filter_cutoff(synth *s, float cutoff_hz)
     synth_filter_set_cutoff(&s->filter, cutoff_hz);
 }
 
+void synth_set_filter_poles(synth *s, int pole_count)
+{
+    synth_filter_set_poles(&s->filter, pole_count);
+}
+
 void synth_render_mono(synth *s, float *output, size_t frame_count)
 {
     for (size_t frame = 0; frame < frame_count; ++frame) {

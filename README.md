@@ -50,6 +50,7 @@ Try saw or square with an optional low-pass cutoff:
 ```sh
 ./build/synth 45 2 saw 1200
 ./build/synth 45 2 square 900
+./build/synth freq:2000 1 saw 100 4
 ```
 
 Run silence through miniaudio:
@@ -64,7 +65,8 @@ Arguments:
 - `freq:<hz>`: direct oscillator frequency, for example `freq:440`
 - `seconds`: optional run duration; omit it to stop with Enter
 - `waveform`: optional `sine`, `saw`, or `square`
-- `filter_cutoff_hz`: optional one-pole low-pass cutoff
+- `filter_cutoff_hz`: optional low-pass cutoff
+- `filter_poles`: optional pole count after cutoff, clamped to `1..8`; each pole adds about `6 dB/oct`
 
 Implemented so far:
 
@@ -76,7 +78,7 @@ Implemented so far:
 - ADSR envelope
 - 8 voice polyphony in the portable engine
 - saw and square waveform functions in the portable engine
-- simple one-pole low-pass filter
+- low-pass filter with configurable pole count
 - MIDI controller input through PortMidi when `libportmidi` is installed
 - portable tests for oscillator, envelope, voice, and MIDI type behavior
 

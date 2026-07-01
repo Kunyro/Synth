@@ -14,6 +14,7 @@ endif
 TARGET := build/synth
 OSCILLATOR_TEST_TARGET := build/test_oscillator
 ENVELOPE_TEST_TARGET := build/test_envelope
+FILTER_TEST_TARGET := build/test_filter
 VOICE_TEST_TARGET := build/test_voice
 MIDI_TYPES_TEST_TARGET := build/test_midi_types
 
@@ -41,9 +42,10 @@ all: $(TARGET)
 run: $(TARGET)
 	./$(TARGET)
 
-test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET)
+test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET)
 	./$(OSCILLATOR_TEST_TARGET)
 	./$(ENVELOPE_TEST_TARGET)
+	./$(FILTER_TEST_TARGET)
 	./$(VOICE_TEST_TARGET)
 	./$(MIDI_TYPES_TEST_TARGET)
 
@@ -55,6 +57,9 @@ $(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c | build
 
 $(ENVELOPE_TEST_TARGET): tests/test_envelope.c src/envelope.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@
+
+$(FILTER_TEST_TARGET): tests/test_filter.c src/filter.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(VOICE_TEST_TARGET): tests/test_voice.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
