@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     int midi_stream_count;
     double seconds = 0.0;
     int midi_note = 57;
-    int should_play_note = 1;
+    int should_play_note = 0;
     int use_frequency = 0;
     float frequency = 220.0f;
 
@@ -159,11 +159,15 @@ int main(int argc, char **argv)
         if (strcmp(argv[1], "silence") == 0) {
             should_play_note = 0;
         } else if (strncmp(argv[1], "freq:", 5) == 0) {
+            should_play_note = 1;
             use_frequency = 1;
             frequency = (float)strtod(argv[1] + 5, 0);
         } else {
+            should_play_note = 1;
             midi_note = atoi(argv[1]);
         }
+    } else if (midi_stream_count <= 0 && midi.source_count == 0) {
+        should_play_note = 1;
     }
 
     if (argc > 2) {

@@ -44,6 +44,10 @@ Run until Enter is pressed:
 make run
 ```
 
+With no arguments, the desktop app plays MIDI note `57` as a quick audio test
+only when no MIDI input device is detected. If a MIDI input device is connected,
+the app starts silent and waits for notes from the device.
+
 Run a specific MIDI note for a fixed number of seconds:
 
 ```sh
@@ -72,7 +76,7 @@ Run silence through miniaudio:
 
 Arguments:
 
-- `midi_note`: MIDI note number, default `57` (`220 Hz`)
+- `midi_note`: MIDI note number, defaults to `57` (`220 Hz`) only when no MIDI input device is detected
 - `freq:<hz>`: direct oscillator frequency, for example `freq:440`
 - `seconds`: optional run duration; omit it to stop with Enter
 - `waveform`: optional `sine`, `saw`, or `square`
