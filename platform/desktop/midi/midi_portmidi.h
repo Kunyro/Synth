@@ -5,6 +5,10 @@
 
 // the most midi input streams to open at once.
 #define MIDI_PORTMIDI_MAX_STREAMS 16
+// portmidi could not be loaded or did not have the needed symbols.
+#define MIDI_PORTMIDI_INIT_UNAVAILABLE -1
+// portmidi loaded but failed to initialize.
+#define MIDI_PORTMIDI_INIT_FAILED -2
 
 // a portmidi input wrapper with opened streams and callbacks.
 typedef struct midi_portmidi_input {

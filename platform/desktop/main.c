@@ -216,8 +216,14 @@ int main(int argc, char **argv)
 
     if (midi_stream_count > 0) {
         printf("PortMidi connected to %d input stream(s). ", midi_stream_count);
+    } else if (midi_stream_count == MIDI_PORTMIDI_INIT_UNAVAILABLE) {
+        printf("PortMidi library not found, so MIDI input is disabled. ");
+    } else if (midi_stream_count == MIDI_PORTMIDI_INIT_FAILED) {
+        printf("PortMidi loaded but failed to initialize, so MIDI input is disabled. ");
+    } else if (midi.source_count == 0) {
+        printf("PortMidi loaded, but no MIDI input devices were found. ");
     } else {
-        printf("No PortMidi input streams connected. ");
+        printf("PortMidi found %d MIDI input source(s), but none opened. ", midi.source_count);
     }
 
     if (seconds > 0.0) {

@@ -199,12 +199,12 @@ int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbac
 
     if (input->library == 0 || !load_portmidi_api(input->library)) {
         midi_portmidi_uninit(input);
-        return -1;
+        return MIDI_PORTMIDI_INIT_UNAVAILABLE;
     }
 
     if (g_portmidi.Initialize() != 0) {
         midi_portmidi_uninit(input);
-        return -1;
+        return MIDI_PORTMIDI_INIT_FAILED;
     }
 
     input->portmidi_initialized = 1;

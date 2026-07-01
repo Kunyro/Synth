@@ -21,6 +21,17 @@ Build:
 make
 ```
 
+Install optional desktop MIDI support:
+
+```sh
+brew install portmidi
+```
+
+PortMidi is loaded dynamically at runtime. If it is installed with Homebrew on
+macOS, the desktop app should find it automatically from `/opt/homebrew/lib` or
+`/usr/local/lib`. If no MIDI device is connected, the app will still run and
+print that no MIDI input devices were found.
+
 Run portable engine tests:
 
 ```sh
