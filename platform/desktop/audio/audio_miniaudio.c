@@ -1,9 +1,11 @@
+// makes this file compile miniaudio's implementation.
 #define MINIAUDIO_IMPLEMENTATION
 #include "audio/audio_miniaudio.h"
 
 #include <stdio.h>
 #include <string.h>
 
+// sends miniaudio output requests into the app render callback.
 static void audio_callback(ma_device *device, void *output, const void *input, ma_uint32 frame_count)
 {
     audio_miniaudio_device *audio = (audio_miniaudio_device *)device->pUserData;
@@ -12,6 +14,7 @@ static void audio_callback(ma_device *device, void *output, const void *input, m
     audio->render(audio->user_data, (float *)output, frame_count, device->playback.channels);
 }
 
+// opens a miniaudio playback device.
 int audio_miniaudio_init(
     audio_miniaudio_device *device,
     unsigned int sample_rate,
@@ -47,6 +50,7 @@ int audio_miniaudio_init(
     return 1;
 }
 
+// starts playback on the audio device.
 int audio_miniaudio_start(audio_miniaudio_device *device)
 {
     ma_result result = ma_device_start(&device->device);
@@ -59,22 +63,26 @@ int audio_miniaudio_start(audio_miniaudio_device *device)
     return 1;
 }
 
+// closes the audio device and its lock.
 void audio_miniaudio_uninit(audio_miniaudio_device *device)
 {
     ma_device_uninit(&device->device);
     ma_mutex_uninit(&device->lock);
 }
 
+// locks the audio device state.
 void audio_miniaudio_lock(audio_miniaudio_device *device)
 {
     ma_mutex_lock(&device->lock);
 }
 
+// unlocks the audio device state.
 void audio_miniaudio_unlock(audio_miniaudio_device *device)
 {
     ma_mutex_unlock(&device->lock);
 }
 
+// sleeps for a short number of milliseconds.
 void audio_miniaudio_sleep(unsigned int milliseconds)
 {
     ma_sleep(milliseconds);

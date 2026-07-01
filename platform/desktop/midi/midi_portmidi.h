@@ -3,8 +3,10 @@
 
 #include "midi_device.h"
 
+// the most midi input streams to open at once.
 #define MIDI_PORTMIDI_MAX_STREAMS 16
 
+// a portmidi input wrapper with opened streams and callbacks.
 typedef struct midi_portmidi_input {
     midi_device_callbacks callbacks;
     void *library;
@@ -14,8 +16,11 @@ typedef struct midi_portmidi_input {
     int portmidi_initialized;
 } midi_portmidi_input;
 
+// loads portmidi and opens available midi input streams.
 int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbacks);
+// reads pending midi events and sends callbacks.
 void midi_portmidi_poll(midi_portmidi_input *input);
+// closes midi streams and unloads portmidi.
 void midi_portmidi_uninit(midi_portmidi_input *input);
 
 #endif

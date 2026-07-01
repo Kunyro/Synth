@@ -4,6 +4,7 @@
 #include "synth/envelope.h"
 #include "synth/oscillator.h"
 
+// one playable synth voice with its oscillator and envelope.
 typedef struct synth_voice {
     int active;
     int midi_note;
@@ -12,7 +13,9 @@ typedef struct synth_voice {
     synth_envelope envelope;
 } synth_voice;
 
+// sets up a quiet voice with the given envelope shape.
 void synth_voice_init(synth_voice *voice, synth_adsr adsr);
+// starts a voice on a note, pitch, velocity, waveform, and envelope.
 void synth_voice_note_on(
     synth_voice *voice,
     int midi_note,
@@ -20,7 +23,9 @@ void synth_voice_note_on(
     float velocity,
     synth_waveform waveform,
     synth_adsr adsr);
+// releases a voice so it can fade out.
 void synth_voice_note_off(synth_voice *voice);
+// renders one sample from the voice.
 float synth_voice_render(synth_voice *voice, float sample_rate);
 
 #endif

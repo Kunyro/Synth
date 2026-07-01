@@ -2,11 +2,13 @@
 
 #include <math.h>
 
+// converts a midi note number into hz.
 float synth_midi_note_to_frequency(int midi_note)
 {
     return 440.0f * powf(2.0f, ((float)midi_note - 69.0f) / 12.0f);
 }
 
+// parses a short midi packet into a synth midi message.
 int synth_midi_parse_short_message(const unsigned char *data, unsigned short length, synth_midi_message *message)
 {
     unsigned char status;

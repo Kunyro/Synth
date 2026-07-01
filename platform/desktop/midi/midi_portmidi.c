@@ -12,17 +12,24 @@
 #include <dlfcn.h>
 #endif
 
+// a portmidi stream handle from the loaded library.
 typedef void PortMidiStream;
+// a portmidi error code from the loaded library.
 typedef int PmError;
+// a portmidi device id from the loaded library.
 typedef int PmDeviceID;
+// a packed short midi message from the loaded library.
 typedef int32_t PmMessage;
+// a portmidi timestamp from the loaded library.
 typedef int32_t PmTimestamp;
 
+// one raw event read from a portmidi stream.
 typedef struct PmEvent {
     PmMessage message;
     PmTimestamp timestamp;
 } PmEvent;
 
+// basic info about a portmidi device.
 typedef struct PmDeviceInfo {
     int structVersion;
     const char *interf;
@@ -32,6 +39,7 @@ typedef struct PmDeviceInfo {
     int opened;
 } PmDeviceInfo;
 
+// the portmidi functions loaded at runtime.
 typedef struct portmidi_api {
     PmError (*Initialize)(void);
     PmError (*Terminate)(void);
@@ -51,6 +59,7 @@ typedef struct portmidi_api {
 
 static portmidi_api g_portmidi;
 
+// parses raw midi bytes and calls note callbacks.
 static void dispatch_midi_bytes(const midi_device_callbacks *callbacks, const unsigned char *data)
 {
     synth_midi_message message;
@@ -68,6 +77,7 @@ static void dispatch_midi_bytes(const midi_device_callbacks *callbacks, const un
     }
 }
 
+// unpacks a portmidi message and dispatches its bytes.
 static void dispatch_portmidi_message(const midi_device_callbacks *callbacks, PmMessage message)
 {
     unsigned char data[3];
@@ -79,16 +89,19 @@ static void dispatch_portmidi_message(const midi_device_callbacks *callbacks, Pm
 }
 
 #if defined(_WIN32)
+// loads a symbol from a windows library handle.
 static void *load_symbol(void *library, const char *name)
 {
     return (void *)GetProcAddress((HMODULE)library, name);
 }
 
+// opens the portmidi library on windows.
 static void *open_portmidi_library(void)
 {
     return (void *)LoadLibraryA("portmidi.dll");
 }
 
+// closes a windows library handle.
 static void close_portmidi_library(void *library)
 {
     if (library != 0) {
@@ -96,16 +109,19 @@ static void close_portmidi_library(void *library)
     }
 }
 #else
+// loads a symbol from a posix library handle.
 static void *load_symbol(void *library, const char *name)
 {
     return dlsym(library, name);
 }
 
+// tries to open one shared library path.
 static void *try_dlopen(const char *path)
 {
     return dlopen(path, RTLD_NOW | RTLD_LOCAL);
 }
 
+// opens portmidi from a few common library paths.
 static void *open_portmidi_library(void)
 {
 #if defined(__APPLE__)
@@ -133,6 +149,7 @@ static void *open_portmidi_library(void)
     return 0;
 }
 
+// closes a posix library handle.
 static void close_portmidi_library(void *library)
 {
     if (library != 0) {
@@ -141,6 +158,7 @@ static void close_portmidi_library(void *library)
 }
 #endif
 
+// fills the portmidi api table from the loaded library.
 static int load_portmidi_api(void *library)
 {
     memset(&g_portmidi, 0, sizeof(g_portmidi));
@@ -170,6 +188,7 @@ static int load_portmidi_api(void *library)
            g_portmidi.Read != 0;
 }
 
+// loads portmidi and opens available midi input streams.
 int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbacks)
 {
     int device_count;
@@ -210,6 +229,7 @@ int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbac
     return input->stream_count;
 }
 
+// reads pending midi events and sends callbacks.
 void midi_portmidi_poll(midi_portmidi_input *input)
 {
     PmEvent events[32];
@@ -238,6 +258,7 @@ void midi_portmidi_poll(midi_portmidi_input *input)
     }
 }
 
+// closes midi streams and unloads portmidi.
 void midi_portmidi_uninit(midi_portmidi_input *input)
 {
     if (input == 0) {

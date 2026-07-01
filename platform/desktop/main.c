@@ -9,9 +9,12 @@
 #include <sys/select.h>
 #include <unistd.h>
 
+// the desktop app asks for stereo output.
 #define DESKTOP_CHANNEL_COUNT 2
+// the most synth frames rendered at once in the audio callback.
 #define DESKTOP_RENDER_CHUNK_FRAMES 1024
 
+// the desktop app state shared by audio and midi callbacks.
 typedef struct desktop_synth_app {
     synth synth;
     audio_miniaudio_device audio;
@@ -19,6 +22,7 @@ typedef struct desktop_synth_app {
     float right_buffer[DESKTOP_RENDER_CHUNK_FRAMES];
 } desktop_synth_app;
 
+// turns a text waveform name into a synth waveform.
 static synth_waveform parse_waveform(const char *value)
 {
     if (strcmp(value, "saw") == 0) {
@@ -32,6 +36,7 @@ static synth_waveform parse_waveform(const char *value)
     return SYNTH_WAVEFORM_SINE;
 }
 
+// renders audio chunks from the synth into the device buffer.
 static void render_audio(void *user_data, float *output, unsigned int frame_count, unsigned int channel_count)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -71,6 +76,7 @@ static void render_audio(void *user_data, float *output, unsigned int frame_coun
     }
 }
 
+// handles incoming midi note on messages.
 static void on_midi_note_on(void *user_data, int midi_note, float velocity)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -80,6 +86,7 @@ static void on_midi_note_on(void *user_data, int midi_note, float velocity)
     audio_miniaudio_unlock(&app->audio);
 }
 
+// handles incoming midi note off messages.
 static void on_midi_note_off(void *user_data, int midi_note)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -89,6 +96,7 @@ static void on_midi_note_off(void *user_data, int midi_note)
     audio_miniaudio_unlock(&app->audio);
 }
 
+// checks whether stdin has a line ready.
 static int stdin_has_line(void)
 {
     fd_set read_fds;
@@ -102,6 +110,7 @@ static int stdin_has_line(void)
     return select(STDIN_FILENO + 1, &read_fds, 0, 0, &timeout) > 0;
 }
 
+// polls midi while waiting for a fixed number of seconds.
 static void run_for_seconds(midi_portmidi_input *midi, double seconds)
 {
     unsigned int remaining_ms = (unsigned int)(seconds * 1000.0);
@@ -115,6 +124,7 @@ static void run_for_seconds(midi_portmidi_input *midi, double seconds)
     }
 }
 
+// polls midi until the user presses enter.
 static void run_until_enter(midi_portmidi_input *midi)
 {
     while (!stdin_has_line()) {
@@ -125,6 +135,7 @@ static void run_until_enter(midi_portmidi_input *midi)
     (void)getchar();
 }
 
+// starts the desktop synth app.
 int main(int argc, char **argv)
 {
     desktop_synth_app app;

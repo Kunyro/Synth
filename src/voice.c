@@ -1,5 +1,6 @@
 #include "synth/voice.h"
 
+// keeps a float inside a min and max range.
 static float clampf(float value, float min_value, float max_value)
 {
     if (value < min_value) {
@@ -13,6 +14,7 @@ static float clampf(float value, float min_value, float max_value)
     return value;
 }
 
+// sets up a quiet voice with the given envelope shape.
 void synth_voice_init(synth_voice *voice, synth_adsr adsr)
 {
     voice->active = 0;
@@ -22,6 +24,7 @@ void synth_voice_init(synth_voice *voice, synth_adsr adsr)
     synth_envelope_init(&voice->envelope, adsr);
 }
 
+// starts a voice on a note, pitch, velocity, waveform, and envelope.
 void synth_voice_note_on(
     synth_voice *voice,
     int midi_note,
@@ -38,11 +41,13 @@ void synth_voice_note_on(
     synth_envelope_note_on(&voice->envelope);
 }
 
+// releases a voice so it can fade out.
 void synth_voice_note_off(synth_voice *voice)
 {
     synth_envelope_note_off(&voice->envelope);
 }
 
+// renders one sample from the voice.
 float synth_voice_render(synth_voice *voice, float sample_rate)
 {
     float envelope_level;

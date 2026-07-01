@@ -1,5 +1,6 @@
 #include "synth/envelope.h"
 
+// keeps a float inside a min and max range.
 static float clampf(float value, float min_value, float max_value)
 {
     if (value < min_value) {
@@ -13,6 +14,7 @@ static float clampf(float value, float min_value, float max_value)
     return value;
 }
 
+// turns a time in seconds into a per sample step.
 static float seconds_to_step(float sample_rate, float seconds)
 {
     if (seconds <= 0.0f) {
@@ -22,6 +24,7 @@ static float seconds_to_step(float sample_rate, float seconds)
     return 1.0f / (seconds * sample_rate);
 }
 
+// sets up an envelope with adsr settings.
 void synth_envelope_init(synth_envelope *envelope, synth_adsr adsr)
 {
     envelope->adsr = adsr;
@@ -30,12 +33,14 @@ void synth_envelope_init(synth_envelope *envelope, synth_adsr adsr)
     envelope->level = 0.0f;
 }
 
+// starts the envelope attack stage.
 void synth_envelope_note_on(synth_envelope *envelope)
 {
     envelope->stage = SYNTH_ENV_ATTACK;
     envelope->level = 0.0f;
 }
 
+// starts the envelope release stage.
 void synth_envelope_note_off(synth_envelope *envelope)
 {
     if (envelope->stage != SYNTH_ENV_OFF) {
@@ -43,6 +48,7 @@ void synth_envelope_note_off(synth_envelope *envelope)
     }
 }
 
+// advances the envelope by one sample and returns its level.
 float synth_envelope_advance(synth_envelope *envelope, float sample_rate)
 {
     const float attack_step = seconds_to_step(sample_rate, envelope->adsr.attack_seconds);
@@ -87,6 +93,7 @@ float synth_envelope_advance(synth_envelope *envelope, float sample_rate)
     return envelope->level;
 }
 
+// checks whether the envelope is still making sound.
 int synth_envelope_is_active(const synth_envelope *envelope)
 {
     return envelope->stage != SYNTH_ENV_OFF;
