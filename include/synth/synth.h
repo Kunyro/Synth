@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "synth/audio_types.h"
 #include "synth/filter.h"
 #include "synth/midi_types.h"
 #include "synth/synth_config.h"
@@ -27,6 +28,7 @@ void synth_set_adsr(synth *s, synth_adsr envelope);
 void synth_set_waveform(synth *s, synth_waveform waveform);
 void synth_set_filter_cutoff(synth *s, float cutoff_hz);
 void synth_set_filter_poles(synth *s, int pole_count);
+void synth_render_stereo(synth *s, synth_audio_buffer *output);
 void synth_render_mono(synth *s, float *output, size_t frame_count);
 
 #endif

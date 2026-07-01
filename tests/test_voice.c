@@ -25,11 +25,25 @@ static int buffer_has_signal(const float *buffer, size_t count)
     return 0;
 }
 
+static int buffers_match(const float *a, const float *b, size_t count)
+{
+    for (size_t i = 0; i < count; ++i) {
+        if (fabsf(a[i] - b[i]) > 0.0001f) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 int main(void)
 {
     synth s;
     synth_adsr quick_release = {0.0f, 0.0f, 1.0f, 0.001f};
     float buffer[256];
+    float left[256];
+    float right[256];
+    synth_audio_buffer stereo_buffer = {left, right, 256};
     int active_count = 0;
 
     synth_init(&s, 48000.0f);
@@ -62,6 +76,11 @@ int main(void)
     synth_note_on_frequency(&s, 440.0f, 1.0f);
     synth_render_mono(&s, buffer, 256);
     expect_true(buffer_has_signal(buffer, 256), "direct frequency voice renders through filter");
+
+    synth_render_stereo(&s, &stereo_buffer);
+    expect_true(buffer_has_signal(left, 256), "stereo render writes left channel");
+    expect_true(buffer_has_signal(right, 256), "stereo render writes right channel");
+    expect_true(buffers_match(left, right, 256), "stereo render starts centered");
 
     if (failures != 0) {
         fprintf(stderr, "%d voice test(s) failed\n", failures);

@@ -77,6 +77,7 @@ Implemented so far:
 - note on / note off API
 - ADSR envelope
 - 8 voice polyphony in the portable engine
+- stereo audio buffer and desktop output path
 - saw and square waveform functions in the portable engine
 - low-pass filter with configurable pole count
 - MIDI controller input through PortMidi when `libportmidi` is installed

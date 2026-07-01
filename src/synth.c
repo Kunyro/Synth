@@ -142,15 +142,30 @@ void synth_set_filter_poles(synth *s, int pole_count)
     synth_filter_set_poles(&s->filter, pole_count);
 }
 
+static float synth_render_sample(synth *s)
+{
+    float sample = 0.0f;
+
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        sample += synth_voice_render(&s->voices[i], s->sample_rate);
+    }
+
+    return synth_filter_process(&s->filter, sample * s->master_gain, s->sample_rate);
+}
+
+void synth_render_stereo(synth *s, synth_audio_buffer *output)
+{
+    for (size_t frame = 0; frame < output->frame_count; ++frame) {
+        const float sample = synth_render_sample(s);
+
+        output->left[frame] = sample;
+        output->right[frame] = sample;
+    }
+}
+
 void synth_render_mono(synth *s, float *output, size_t frame_count)
 {
     for (size_t frame = 0; frame < frame_count; ++frame) {
-        float sample = 0.0f;
-
-        for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-            sample += synth_voice_render(&s->voices[i], s->sample_rate);
-        }
-
-        output[frame] = synth_filter_process(&s->filter, sample * s->master_gain, s->sample_rate);
+        output[frame] = synth_render_sample(s);
     }
 }

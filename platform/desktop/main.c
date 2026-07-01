@@ -15,7 +15,8 @@
 typedef struct desktop_synth_app {
     synth synth;
     audio_miniaudio_device audio;
-    float mono_buffer[DESKTOP_RENDER_CHUNK_FRAMES];
+    float left_buffer[DESKTOP_RENDER_CHUNK_FRAMES];
+    float right_buffer[DESKTOP_RENDER_CHUNK_FRAMES];
 } desktop_synth_app;
 
 static synth_waveform parse_waveform(const char *value)
@@ -39,16 +40,30 @@ static void render_audio(void *user_data, float *output, unsigned int frame_coun
     while (frames_done < frame_count) {
         const unsigned int remaining = frame_count - frames_done;
         const unsigned int chunk_size = remaining > DESKTOP_RENDER_CHUNK_FRAMES ? DESKTOP_RENDER_CHUNK_FRAMES : remaining;
+        synth_audio_buffer synth_buffer;
+
+        synth_buffer.left = app->left_buffer;
+        synth_buffer.right = app->right_buffer;
+        synth_buffer.frame_count = chunk_size;
 
         audio_miniaudio_lock(&app->audio);
-        synth_render_mono(&app->synth, app->mono_buffer, chunk_size);
+        synth_render_stereo(&app->synth, &synth_buffer);
         audio_miniaudio_unlock(&app->audio);
 
         for (unsigned int frame = 0; frame < chunk_size; ++frame) {
-            const float sample = app->mono_buffer[frame];
+            const float left = app->left_buffer[frame];
+            const float right = app->right_buffer[frame];
+            float *frame_output = &output[(frames_done + frame) * channel_count];
 
-            for (unsigned int channel = 0; channel < channel_count; ++channel) {
-                output[(frames_done + frame) * channel_count + channel] = sample;
+            if (channel_count == 1) {
+                frame_output[0] = (left + right) * 0.5f;
+            } else {
+                frame_output[0] = left;
+                frame_output[1] = right;
+
+                for (unsigned int channel = 2; channel < channel_count; ++channel) {
+                    frame_output[channel] = 0.0f;
+                }
             }
         }
 
