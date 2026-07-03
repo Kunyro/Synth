@@ -18,7 +18,9 @@ typedef enum midi_mapping_parameter {
     MIDI_MAPPING_PARAM_DECAY,
     MIDI_MAPPING_PARAM_SUSTAIN,
     MIDI_MAPPING_PARAM_RELEASE,
-    MIDI_MAPPING_PARAM_MASTER_GAIN
+    MIDI_MAPPING_PARAM_MASTER_GAIN,
+    MIDI_MAPPING_PARAM_FILTER_CUTOFF,
+    MIDI_MAPPING_PARAM_FILTER_POLES
 } midi_mapping_parameter;
 
 // the kind of midi source a binding listens for.
@@ -28,7 +30,9 @@ typedef enum midi_mapping_source_type {
 
 // how a midi value should be scaled into a synth value.
 typedef enum midi_mapping_scale {
-    MIDI_MAPPING_SCALE_LINEAR = 0
+    MIDI_MAPPING_SCALE_LINEAR = 0,
+    MIDI_MAPPING_SCALE_LOG,
+    MIDI_MAPPING_SCALE_STEP
 } midi_mapping_scale;
 
 // one binding from a midi control to a synth parameter.

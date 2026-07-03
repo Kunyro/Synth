@@ -50,8 +50,8 @@ bytes. Use this to build controller mappings.
 
 MIDI controller configs live in `config/midi/`. The default desktop config is
 `config/midi/akai_mpk_mini_mk2.conf`, which currently maps CC knobs 1 through 4
-on channel 1 to attack, decay, sustain, and release, and CC knob 8 to master
-gain.
+on channel 1 to attack, decay, sustain, and release, CC knob 5 to filter cutoff,
+CC knob 6 to filter poles, and CC knob 8 to master gain.
 
 Run with another config or disable config mapping:
 
@@ -66,10 +66,12 @@ Config lines use:
 parameter=cc:channel:control:scale:min:max
 ```
 
+Supported scales are `linear`, `log`, and `step`.
+
 For example:
 
 ```text
-attack=cc:1:1:linear:0.001:2.0
+filter_cutoff=cc:1:5:log:20.0:20000.0
 ```
 
 Run until Enter is pressed:

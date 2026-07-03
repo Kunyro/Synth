@@ -1,6 +1,7 @@
 #include "midi/midi_mapping.h"
 
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,6 +78,16 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "filter_cutoff") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_FILTER_CUTOFF;
+        return 1;
+    }
+
+    if (strcmp(name, "filter_poles") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_FILTER_POLES;
+        return 1;
+    }
+
     return 0;
 }
 
@@ -96,6 +107,16 @@ static int parse_scale(const char *name, midi_mapping_scale *scale)
 {
     if (strcmp(name, "linear") == 0) {
         *scale = MIDI_MAPPING_SCALE_LINEAR;
+        return 1;
+    }
+
+    if (strcmp(name, "step") == 0) {
+        *scale = MIDI_MAPPING_SCALE_STEP;
+        return 1;
+    }
+
+    if (strcmp(name, "log") == 0) {
+        *scale = MIDI_MAPPING_SCALE_LOG;
         return 1;
     }
 
@@ -136,6 +157,12 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
     const float normalized = (float)midi_value / 127.0f;
 
     switch (binding->scale) {
+        case MIDI_MAPPING_SCALE_LOG:
+            return expf(logf(binding->min_value) + (normalized * (logf(binding->max_value) - logf(binding->min_value))));
+
+        case MIDI_MAPPING_SCALE_STEP:
+            return binding->min_value + (float)(int)((normalized * (binding->max_value - binding->min_value)) + 0.5f);
+
         case MIDI_MAPPING_SCALE_LINEAR:
         default:
             return binding->min_value + (normalized * (binding->max_value - binding->min_value));
@@ -207,6 +234,11 @@ static int add_binding(midi_mapping *mapping, const char *key, char *value, char
         return 0;
     }
 
+    if (binding.scale == MIDI_MAPPING_SCALE_LOG && (binding.min_value <= 0.0f || binding.max_value <= 0.0f)) {
+        set_error(error, error_size, line_number, "log scale min and max must be above zero");
+        return 0;
+    }
+
     mapping->bindings[mapping->binding_count] = binding;
     mapping->binding_count += 1;
     return 1;
@@ -237,6 +269,12 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 
         case MIDI_MAPPING_PARAM_MASTER_GAIN:
             return "master_gain";
+
+        case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
+            return "filter_cutoff";
+
+        case MIDI_MAPPING_PARAM_FILTER_POLES:
+            return "filter_poles";
 
         default:
             return "unknown";
@@ -325,30 +363,43 @@ int midi_mapping_apply_short_message(
             binding->control == control) {
             synth_adsr adsr = s->envelope;
             const float synth_value = scale_midi_value(binding, midi_value);
+            int should_set_adsr = 0;
 
             switch (binding->parameter) {
                 case MIDI_MAPPING_PARAM_ATTACK:
                     adsr.attack_seconds = synth_value;
+                    should_set_adsr = 1;
                     break;
 
                 case MIDI_MAPPING_PARAM_DECAY:
                     adsr.decay_seconds = synth_value;
+                    should_set_adsr = 1;
                     break;
 
                 case MIDI_MAPPING_PARAM_SUSTAIN:
                     adsr.sustain_level = synth_value;
+                    should_set_adsr = 1;
                     break;
 
                 case MIDI_MAPPING_PARAM_RELEASE:
                     adsr.release_seconds = synth_value;
+                    should_set_adsr = 1;
                     break;
 
                 case MIDI_MAPPING_PARAM_MASTER_GAIN:
                     synth_set_master_gain(s, synth_value);
                     break;
+
+                case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
+                    synth_set_filter_cutoff(s, synth_value);
+                    break;
+
+                case MIDI_MAPPING_PARAM_FILTER_POLES:
+                    synth_set_filter_poles(s, (int)synth_value);
+                    break;
             }
 
-            if (binding->parameter != MIDI_MAPPING_PARAM_MASTER_GAIN) {
+            if (should_set_adsr) {
                 synth_set_adsr(s, adsr);
             }
 
