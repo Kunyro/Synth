@@ -31,7 +31,7 @@ void synth_note_off(synth *s, int midi_note);
 void synth_all_notes_off(synth *s);
 // changes the main output level.
 void synth_set_master_gain(synth *s, float gain);
-// changes the default envelope shape for new notes.
+// changes the envelope shape for new and active voices.
 void synth_set_adsr(synth *s, synth_adsr envelope);
 // changes the default waveform and current voice waveforms.
 void synth_set_waveform(synth *s, synth_waveform waveform);

@@ -38,6 +38,39 @@ Run portable engine tests:
 make test
 ```
 
+Build and run the MIDI monitor:
+
+```sh
+make midi-monitor
+```
+
+Touch one knob, pad, or button at a time and the monitor prints the incoming
+MIDI message, including channel, message type, CC or note number, value, and raw
+bytes. Use this to build controller mappings.
+
+MIDI controller configs live in `config/midi/`. The default desktop config is
+`config/midi/akai_mpk_mini_mk2.conf`, which currently maps CC knobs 1 through 4
+on channel 1 to attack, decay, sustain, and release.
+
+Run with another config or disable config mapping:
+
+```sh
+./build/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
+./build/synth --no-midi-config
+```
+
+Config lines use:
+
+```text
+parameter=cc:channel:control:scale:min:max
+```
+
+For example:
+
+```text
+attack=cc:1:1:linear:0.001:2.0
+```
+
 Run until Enter is pressed:
 
 ```sh

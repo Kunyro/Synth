@@ -124,13 +124,17 @@ void synth_set_master_gain(synth *s, float gain)
     s->master_gain = clampf(gain, 0.0f, 1.0f);
 }
 
-// changes the default envelope shape for new notes.
+// changes the envelope shape for new and active voices.
 void synth_set_adsr(synth *s, synth_adsr envelope)
 {
     s->envelope.attack_seconds = envelope.attack_seconds;
     s->envelope.decay_seconds = envelope.decay_seconds;
     s->envelope.sustain_level = clampf(envelope.sustain_level, 0.0f, 1.0f);
     s->envelope.release_seconds = envelope.release_seconds;
+
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        s->voices[i].envelope.adsr = s->envelope;
+    }
 }
 
 // changes the default waveform and current voice waveforms.

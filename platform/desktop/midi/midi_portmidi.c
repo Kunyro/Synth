@@ -64,6 +64,10 @@ static void dispatch_midi_bytes(const midi_device_callbacks *callbacks, const un
 {
     synth_midi_message message;
 
+    if (callbacks->short_message != 0) {
+        callbacks->short_message(callbacks->user_data, data, 3);
+    }
+
     if (!synth_midi_parse_short_message(data, 3, &message)) {
         return;
     }
