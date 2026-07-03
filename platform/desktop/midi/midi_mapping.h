@@ -17,7 +17,8 @@ typedef enum midi_mapping_parameter {
     MIDI_MAPPING_PARAM_ATTACK = 0,
     MIDI_MAPPING_PARAM_DECAY,
     MIDI_MAPPING_PARAM_SUSTAIN,
-    MIDI_MAPPING_PARAM_RELEASE
+    MIDI_MAPPING_PARAM_RELEASE,
+    MIDI_MAPPING_PARAM_MASTER_GAIN
 } midi_mapping_parameter;
 
 // the kind of midi source a binding listens for.

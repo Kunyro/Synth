@@ -28,7 +28,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 4, "akai mapping has four bindings");
+    expect_true(mapping.binding_count == 5, "akai mapping has five bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -62,10 +62,31 @@ static void test_applies_adsr_cc_values(void)
         "wrong channel does not apply");
 }
 
+static void test_applies_master_gain_cc_value(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const unsigned char master_gain_mid[] = {0xB0, 8, 64};
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for master gain test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    expect_true(
+        midi_mapping_apply_short_message(&mapping, master_gain_mid, sizeof(master_gain_mid), &s, &result),
+        "master gain cc applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN, "master gain cc reports master gain parameter");
+    expect_near(s.master_gain, 64.0f / 127.0f, 0.0001f, "master gain cc scales to normalized gain");
+}
+
 int main(void)
 {
     test_loads_akai_mapping();
     test_applies_adsr_cc_values();
+    test_applies_master_gain_cc_value();
     printf("All MIDI mapping tests passed.\n");
     return 0;
 }

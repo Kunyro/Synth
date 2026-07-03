@@ -72,6 +72,11 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "master_gain") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_MASTER_GAIN;
+        return 1;
+    }
+
     return 0;
 }
 
@@ -230,6 +235,9 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
         case MIDI_MAPPING_PARAM_RELEASE:
             return "release";
 
+        case MIDI_MAPPING_PARAM_MASTER_GAIN:
+            return "master_gain";
+
         default:
             return "unknown";
     }
@@ -334,9 +342,15 @@ int midi_mapping_apply_short_message(
                 case MIDI_MAPPING_PARAM_RELEASE:
                     adsr.release_seconds = synth_value;
                     break;
+
+                case MIDI_MAPPING_PARAM_MASTER_GAIN:
+                    synth_set_master_gain(s, synth_value);
+                    break;
             }
 
-            synth_set_adsr(s, adsr);
+            if (binding->parameter != MIDI_MAPPING_PARAM_MASTER_GAIN) {
+                synth_set_adsr(s, adsr);
+            }
 
             if (result != 0) {
                 result->parameter = binding->parameter;
