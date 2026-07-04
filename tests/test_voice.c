@@ -14,6 +14,14 @@ static void expect_true(int condition, const char *message)
     }
 }
 
+static void expect_near(float actual, float expected, float tolerance, const char *message)
+{
+    if (fabsf(actual - expected) > tolerance) {
+        fprintf(stderr, "FAIL: %s: got %.6f expected %.6f\n", message, actual, expected);
+        ++failures;
+    }
+}
+
 static int buffer_has_signal(const float *buffer, size_t count)
 {
     for (size_t i = 0; i < count; ++i) {
@@ -36,9 +44,23 @@ static int buffers_match(const float *a, const float *b, size_t count)
     return 1;
 }
 
+static synth_voice *find_voice_by_frequency(synth *s, float frequency)
+{
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice *voice = &s->voices[i];
+
+        if (voice->active && fabsf(voice->oscillator.frequency - frequency) < 0.0001f) {
+            return voice;
+        }
+    }
+
+    return 0;
+}
+
 int main(void)
 {
     synth s;
+    synth_voice *morphed_voice;
     synth_adsr quick_release = {0.0f, 0.0f, 1.0f, 0.001f};
     float buffer[256];
     float left[256];
@@ -76,6 +98,17 @@ int main(void)
     synth_note_on_frequency(&s, 440.0f, 1.0f);
     synth_render_mono(&s, buffer, 256);
     expect_true(buffer_has_signal(buffer, 256), "direct frequency voice renders through filter");
+
+    synth_set_oscillator_morph(&s, 0.75f);
+    expect_near(s.oscillator_morph, 0.75f, 0.0001f, "synth stores oscillator morph");
+    synth_note_on_frequency(&s, 220.0f, 0.8f);
+    morphed_voice = find_voice_by_frequency(&s, 220.0f);
+    expect_true(morphed_voice != 0, "morphed frequency voice starts");
+    if (morphed_voice != 0) {
+        expect_near(morphed_voice->oscillator.morph, 0.75f, 0.0001f, "new voice receives default morph");
+    }
+    synth_set_oscillator_morph(&s, 2.0f);
+    expect_near(s.oscillator_morph, 1.0f, 0.0001f, "synth oscillator morph clamps high");
 
     synth_render_stereo(&s, &stereo_buffer);
     expect_true(buffer_has_signal(left, 256), "stereo render writes left channel");

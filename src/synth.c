@@ -50,6 +50,22 @@ static synth_voice *find_available_voice(synth *s)
     return quietest;
 }
 
+// maps the waveform presets onto the normalized sine-to-saw-to-square morph.
+static float waveform_to_morph(synth_waveform waveform)
+{
+    switch (waveform) {
+        case SYNTH_WAVEFORM_SAW:
+            return 0.5f;
+
+        case SYNTH_WAVEFORM_SQUARE:
+            return 1.0f;
+
+        case SYNTH_WAVEFORM_SINE:
+        default:
+            return 0.0f;
+    }
+}
+
 // sets up the synth with defaults.
 void synth_init(synth *s, float sample_rate)
 {
@@ -57,6 +73,7 @@ void synth_init(synth *s, float sample_rate)
     s->sample_rate = sample_rate;
     s->master_gain = SYNTH_DEFAULT_MASTER_GAIN;
     s->waveform = SYNTH_WAVEFORM_SINE;
+    s->oscillator_morph = waveform_to_morph(s->waveform);
     s->envelope.attack_seconds = 0.01f;
     s->envelope.decay_seconds = 0.08f;
     s->envelope.sustain_level = 0.75f;
@@ -84,18 +101,22 @@ void synth_note_on(synth *s, int midi_note, float velocity)
         velocity,
         s->waveform,
         s->envelope);
+    synth_oscillator_set_morph(&voice->oscillator, s->oscillator_morph);
 }
 
 // starts a note by frequency instead of midi note.
 void synth_note_on_frequency(synth *s, float frequency, float velocity)
 {
+    synth_voice *voice = find_available_voice(s);
+
     synth_voice_note_on(
-        find_available_voice(s),
+        voice,
         -1,
         frequency,
         velocity,
         s->waveform,
         s->envelope);
+    synth_oscillator_set_morph(&voice->oscillator, s->oscillator_morph);
 }
 
 // releases a midi note if it is playing.
@@ -141,9 +162,20 @@ void synth_set_adsr(synth *s, synth_adsr envelope)
 void synth_set_waveform(synth *s, synth_waveform waveform)
 {
     s->waveform = waveform;
+    s->oscillator_morph = waveform_to_morph(waveform);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_oscillator_set_waveform(&s->voices[i].oscillator, waveform);
+    }
+}
+
+// changes the default oscillator morph and current voice morphs.
+void synth_set_oscillator_morph(synth *s, float morph)
+{
+    s->oscillator_morph = clampf(morph, 0.0f, 1.0f);
+
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_oscillator_set_morph(&s->voices[i].oscillator, s->oscillator_morph);
     }
 }
 

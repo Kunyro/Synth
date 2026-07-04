@@ -124,12 +124,13 @@ Implemented so far:
 - miniaudio playback device setup
 - silence output path
 - sine oscillator
+- spectral bandlimited wavetable oscillator with sine-to-saw-to-square morph tables
 - MIDI note number to frequency conversion
 - note on / note off API
 - ADSR envelope
 - 8 voice polyphony in the portable engine
 - stereo audio buffer and desktop output path
-- saw and square waveform functions in the portable engine
+- saw and square waveform presets in the portable engine
 - low-pass filter with configurable pole count
 - MIDI controller input through PortMidi when `libportmidi` is installed
 - portable tests for oscillator, envelope, voice, and MIDI type behavior

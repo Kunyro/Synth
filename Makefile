@@ -22,6 +22,7 @@ MIDI_MAPPING_TEST_TARGET := build/test_midi_mapping
 
 CORE_SOURCES := \
 	src/midi_types.c \
+	src/wavetable.c \
 	src/oscillator.c \
 	src/envelope.c \
 	src/voice.c \
@@ -61,7 +62,7 @@ $(TARGET): $(SOURCES) third_party/miniaudio/miniaudio.h | build
 $(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/midi_portmidi.c src/midi_types.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
-$(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c | build
+$(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c src/wavetable.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(ENVELOPE_TEST_TARGET): tests/test_envelope.c src/envelope.c | build

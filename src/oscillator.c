@@ -2,8 +2,49 @@
 
 #include <math.h>
 
-// one full circle in radians as a float.
-#define SYNTH_TAU 6.28318530717958647692f
+#include "wavetable.h"
+
+// keeps a float inside a min and max range.
+static float clampf(float value, float min_value, float max_value)
+{
+    if (value < min_value) {
+        return min_value;
+    }
+
+    if (value > max_value) {
+        return max_value;
+    }
+
+    return value;
+}
+
+// maps the legacy waveform enum onto the normalized spectral morph path.
+static float waveform_to_morph(synth_waveform waveform)
+{
+    switch (waveform) {
+        case SYNTH_WAVEFORM_SAW:
+            return 0.5f;
+
+        case SYNTH_WAVEFORM_SQUARE:
+            return 1.0f;
+
+        case SYNTH_WAVEFORM_SINE:
+        default:
+            return 0.0f;
+    }
+}
+
+// keeps the normalized phase inside one oscillator cycle.
+static float wrap_phase(float phase)
+{
+    phase -= floorf(phase);
+
+    if (phase < 0.0f) {
+        phase += 1.0f;
+    }
+
+    return phase;
+}
 
 // sets up an oscillator with a waveform and pitch.
 void synth_oscillator_init(synth_oscillator *oscillator, synth_waveform waveform, float frequency)
@@ -11,12 +52,21 @@ void synth_oscillator_init(synth_oscillator *oscillator, synth_waveform waveform
     oscillator->waveform = waveform;
     oscillator->frequency = frequency;
     oscillator->phase = 0.0f;
+    oscillator->morph = waveform_to_morph(waveform);
+    synth_wavetable_prepare();
 }
 
 // changes the oscillator wave shape.
 void synth_oscillator_set_waveform(synth_oscillator *oscillator, synth_waveform waveform)
 {
     oscillator->waveform = waveform;
+    oscillator->morph = waveform_to_morph(waveform);
+}
+
+// changes the oscillator shape morph from sine to saw to square.
+void synth_oscillator_set_morph(synth_oscillator *oscillator, float morph)
+{
+    oscillator->morph = clampf(morph, 0.0f, 1.0f);
 }
 
 // changes the oscillator pitch in hz.
@@ -29,26 +79,20 @@ void synth_oscillator_set_frequency(synth_oscillator *oscillator, float frequenc
 float synth_oscillator_render(synth_oscillator *oscillator, float sample_rate)
 {
     float sample;
+    float phase_step;
 
-    switch (oscillator->waveform) {
-        case SYNTH_WAVEFORM_SAW:
-            sample = (2.0f * oscillator->phase) - 1.0f;
-            break;
-
-        case SYNTH_WAVEFORM_SQUARE:
-            sample = oscillator->phase < 0.5f ? 1.0f : -1.0f;
-            break;
-
-        case SYNTH_WAVEFORM_SINE:
-        default:
-            sample = sinf(oscillator->phase * SYNTH_TAU);
-            break;
+    if (sample_rate <= 0.0f) {
+        return 0.0f;
     }
 
-    oscillator->phase += oscillator->frequency / sample_rate;
-    while (oscillator->phase >= 1.0f) {
-        oscillator->phase -= 1.0f;
-    }
+    sample = synth_wavetable_render(
+        oscillator->phase,
+        oscillator->frequency,
+        sample_rate,
+        oscillator->morph);
+
+    phase_step = oscillator->frequency / sample_rate;
+    oscillator->phase = wrap_phase(oscillator->phase + phase_step);
 
     return sample;
 }

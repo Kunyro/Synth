@@ -14,6 +14,7 @@ typedef struct synth {
     float sample_rate;
     float master_gain;
     synth_waveform waveform;
+    float oscillator_morph;
     synth_adsr envelope;
     synth_filter filter;
     synth_voice voices[SYNTH_MAX_VOICES];
@@ -35,6 +36,8 @@ void synth_set_master_gain(synth *s, float gain);
 void synth_set_adsr(synth *s, synth_adsr envelope);
 // changes the default waveform and current voice waveforms.
 void synth_set_waveform(synth *s, synth_waveform waveform);
+// changes the default oscillator morph and current voice morphs.
+void synth_set_oscillator_morph(synth *s, float morph);
 // changes the synth filter cutoff in hz.
 void synth_set_filter_cutoff(synth *s, float cutoff_hz);
 // changes how many poles the synth filter uses.
