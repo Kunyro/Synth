@@ -28,7 +28,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 7, "akai mapping has seven bindings");
+    expect_true(mapping.binding_count == 8, "akai mapping has eight bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -128,12 +128,36 @@ static void test_applies_filter_cc_values(void)
     expect_true(s.filter.pole_count == 8, "filter poles max steps to eight poles");
 }
 
+static void test_applies_oscillator_morph_cc_value(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const unsigned char oscillator_morph_value[] = {0xB0, 7, 76};
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for oscillator morph test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    expect_true(
+        midi_mapping_apply_short_message(&mapping, oscillator_morph_value, sizeof(oscillator_morph_value), &s, &result),
+        "oscillator morph cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_OSCILLATOR_MORPH,
+        "oscillator morph cc reports oscillator morph parameter");
+    expect_near(result.synth_value, 76.0f / 127.0f, 0.0001f, "oscillator morph result reports normalized value");
+    expect_near(s.oscillator_morph, 76.0f / 127.0f, 0.0001f, "oscillator morph cc scales to normalized morph");
+}
+
 int main(void)
 {
     test_loads_akai_mapping();
     test_applies_adsr_cc_values();
     test_applies_master_gain_cc_value();
     test_applies_filter_cc_values();
+    test_applies_oscillator_morph_cc_value();
     printf("All MIDI mapping tests passed.\n");
     return 0;
 }

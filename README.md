@@ -51,7 +51,8 @@ bytes. Use this to build controller mappings.
 MIDI controller configs live in `config/midi/`. The default desktop config is
 `config/midi/akai_mpk_mini_mk2.conf`, which currently maps CC knobs 1 through 4
 on channel 1 to attack, decay, sustain, and release, CC knob 5 to filter cutoff,
-CC knob 6 to filter poles, and CC knob 8 to master gain.
+CC knob 6 to filter poles, CC knob 7 to oscillator morph, and CC knob 8 to
+master gain.
 
 Run with another config or disable config mapping:
 

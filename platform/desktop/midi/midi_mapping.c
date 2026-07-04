@@ -88,6 +88,11 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "oscillator_morph") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_OSCILLATOR_MORPH;
+        return 1;
+    }
+
     return 0;
 }
 
@@ -276,6 +281,9 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
         case MIDI_MAPPING_PARAM_FILTER_POLES:
             return "filter_poles";
 
+        case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
+            return "oscillator_morph";
+
         default:
             return "unknown";
     }
@@ -396,6 +404,10 @@ int midi_mapping_apply_short_message(
 
                 case MIDI_MAPPING_PARAM_FILTER_POLES:
                     synth_set_filter_poles(s, (int)synth_value);
+                    break;
+
+                case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
+                    synth_set_oscillator_morph(s, synth_value);
                     break;
             }
 

@@ -20,7 +20,8 @@ typedef enum midi_mapping_parameter {
     MIDI_MAPPING_PARAM_RELEASE,
     MIDI_MAPPING_PARAM_MASTER_GAIN,
     MIDI_MAPPING_PARAM_FILTER_CUTOFF,
-    MIDI_MAPPING_PARAM_FILTER_POLES
+    MIDI_MAPPING_PARAM_FILTER_POLES,
+    MIDI_MAPPING_PARAM_OSCILLATOR_MORPH
 } midi_mapping_parameter;
 
 // the kind of midi source a binding listens for.
