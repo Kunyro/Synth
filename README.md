@@ -4,16 +4,16 @@ Synth engine written in C
 
 ## Synth engine roadmap
 
-This project uses [miniaudio](https://miniaud.io/) for desktop audio output, while
-the actual synth engine lives in plain C files that do not depend on miniaudio:
+This project uses [miniaudio](https://miniaud.io/) for desktop audio output, but
+the actual synth engine does not depend on miniaudio:
 
 - `include/synth/` contains the public synth engine headers
 - `src/` contains the portable synth engine implementation
 - `platform/desktop/audio/` contains the miniaudio desktop adapter
 - `platform/desktop/midi/` contains the PortMidi desktop adapter
 - `platform/teensy/` is reserved for the future Teensy 4.1 port
-- `third_party/miniaudio/` contains the vendored miniaudio header
-- `third_party/portmidi/` is reserved for optional PortMidi vendoring
+- `third_party/miniaudio/` contains the miniaudio header
+- `third_party/portmidi/` is reserved for optional PortMidi implementation
 
 Build:
 
@@ -105,12 +105,6 @@ Try saw or square with an optional low-pass cutoff:
 ./build/synth freq:2000 1 saw 100 4
 ```
 
-Run silence through miniaudio:
-
-```sh
-./build/synth silence 2
-```
-
 Arguments:
 
 - `midi_note`: MIDI note number, defaults to `57` (`220 Hz`) only when no MIDI input device is detected
@@ -123,18 +117,16 @@ Arguments:
 Implemented so far:
 
 - miniaudio playback device setup
-- silence output path
-- sine oscillator
 - spectral bandlimited wavetable oscillator with sine-to-saw-to-square morph tables
 - MIDI note number to frequency conversion
 - note on / note off API
 - ADSR envelope
-- 8 voice polyphony in the portable engine
+- 8 voice polyphony
 - stereo audio buffer and desktop output path
-- saw and square waveform presets in the portable engine
+- sine, saw and square waveform presets
 - low-pass filter with configurable pole count
 - MIDI controller input through PortMidi when `libportmidi` is installed
-- portable tests for oscillator, envelope, voice, and MIDI type behavior
+- tests for oscillator, envelope, voice, and MIDI type behavior
 
 PortMidi is loaded dynamically, so the project still builds when the library is
 not installed. MIDI input activates automatically when PortMidi is available at
