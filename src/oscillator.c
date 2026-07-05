@@ -2,37 +2,8 @@
 
 #include <math.h>
 
+#include "synth_internal.h"
 #include "wavetable.h"
-
-// keeps a float inside a min and max range.
-static float clampf(float value, float min_value, float max_value)
-{
-    if (value < min_value) {
-        return min_value;
-    }
-
-    if (value > max_value) {
-        return max_value;
-    }
-
-    return value;
-}
-
-// maps the legacy waveform enum onto the normalized spectral morph path.
-static float waveform_to_morph(synth_waveform waveform)
-{
-    switch (waveform) {
-        case SYNTH_WAVEFORM_SAW:
-            return 0.5f;
-
-        case SYNTH_WAVEFORM_SQUARE:
-            return 1.0f;
-
-        case SYNTH_WAVEFORM_SINE:
-        default:
-            return 0.0f;
-    }
-}
 
 // keeps the normalized phase inside one oscillator cycle.
 static float wrap_phase(float phase)
@@ -52,7 +23,7 @@ void synth_oscillator_init(synth_oscillator *oscillator, synth_waveform waveform
     oscillator->waveform = waveform;
     oscillator->frequency = frequency;
     oscillator->phase = 0.0f;
-    oscillator->morph = waveform_to_morph(waveform);
+    oscillator->morph = synth_waveform_to_morph(waveform);
     synth_wavetable_prepare();
 }
 
@@ -60,13 +31,13 @@ void synth_oscillator_init(synth_oscillator *oscillator, synth_waveform waveform
 void synth_oscillator_set_waveform(synth_oscillator *oscillator, synth_waveform waveform)
 {
     oscillator->waveform = waveform;
-    oscillator->morph = waveform_to_morph(waveform);
+    oscillator->morph = synth_waveform_to_morph(waveform);
 }
 
 // changes the oscillator shape morph from sine to saw to square.
 void synth_oscillator_set_morph(synth_oscillator *oscillator, float morph)
 {
-    oscillator->morph = clampf(morph, 0.0f, 1.0f);
+    oscillator->morph = synth_clampf(morph, 0.0f, 1.0f);
 }
 
 // changes the oscillator pitch in hz.

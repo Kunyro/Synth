@@ -369,7 +369,7 @@ int midi_mapping_apply_short_message(
         if (binding->source_type == MIDI_MAPPING_SOURCE_CC &&
             binding->channel == channel &&
             binding->control == control) {
-            synth_adsr adsr = s->envelope;
+            synth_adsr adsr = synth_get_adsr(s);
             const float synth_value = scale_midi_value(binding, midi_value);
             int should_set_adsr = 0;
 

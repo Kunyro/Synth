@@ -3,6 +3,8 @@
 #include <math.h>
 #include <stddef.h>
 
+#include "synth_internal.h"
+
 // the wavetable bank is deliberately static: it avoids heap allocation, keeps
 // the synth core portable, and makes the future embedded memory cost explicit.
 #define SYNTH_WAVETABLE_SIZE 1024
@@ -27,20 +29,6 @@ typedef struct synth_wavetable_morph_frame {
 
 static synth_wavetable_morph_frame wavetable_bank[SYNTH_WAVETABLE_MORPH_POINTS];
 static int wavetable_bank_ready = 0;
-
-// keeps a float inside a min and max range.
-static float clampf(float value, float min_value, float max_value)
-{
-    if (value < min_value) {
-        return min_value;
-    }
-
-    if (value > max_value) {
-        return max_value;
-    }
-
-    return value;
-}
 
 // returns the absolute value without forcing callers to include math details.
 static float absf(float value)
@@ -209,7 +197,7 @@ static float interpolate_table_sample(const synth_wavetable_mip *mip, float phas
 // renders one sample from the closest mip and interpolates between morph frames.
 float synth_wavetable_render(float phase, float frequency, float sample_rate, float morph)
 {
-    const float clamped_morph = clampf(morph, 0.0f, 1.0f);
+    const float clamped_morph = synth_clampf(morph, 0.0f, 1.0f);
     const float morph_position = clamped_morph * (float)(SYNTH_WAVETABLE_MORPH_POINTS - 1);
     const int lower_morph_index = (int)floorf(morph_position);
     int mip_index;

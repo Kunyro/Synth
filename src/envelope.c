@@ -1,18 +1,6 @@
 #include "synth/envelope.h"
 
-// keeps a float inside a min and max range.
-static float clampf(float value, float min_value, float max_value)
-{
-    if (value < min_value) {
-        return min_value;
-    }
-
-    if (value > max_value) {
-        return max_value;
-    }
-
-    return value;
-}
+#include "synth_internal.h"
 
 // turns a time in seconds into a per sample step.
 static float seconds_to_step(float sample_rate, float seconds)
@@ -27,8 +15,7 @@ static float seconds_to_step(float sample_rate, float seconds)
 // sets up an envelope with adsr settings.
 void synth_envelope_init(synth_envelope *envelope, synth_adsr adsr)
 {
-    envelope->adsr = adsr;
-    envelope->adsr.sustain_level = clampf(envelope->adsr.sustain_level, 0.0f, 1.0f);
+    envelope->adsr = synth_sanitize_adsr(adsr);
     envelope->stage = SYNTH_ENV_OFF;
     envelope->level = 0.0f;
 }
