@@ -56,6 +56,7 @@ static void render_audio(void *user_data, float *output, unsigned int frame_coun
         synth_buffer.right = app->right_buffer;
         synth_buffer.frame_count = chunk_size;
 
+        // the audio thread and midi callbacks both touch synth state.
         audio_miniaudio_lock(&app->audio);
         synth_render_stereo(&app->synth, &synth_buffer);
         audio_miniaudio_unlock(&app->audio);
@@ -231,6 +232,7 @@ int main(int argc, char **argv)
             midi_note = atoi(argv[arg_index]);
         }
     } else if (midi_stream_count <= 0 && midi.source_count == 0) {
+        // no controller is present, so a bare run plays a test note.
         should_play_note = 1;
     }
 
@@ -300,6 +302,7 @@ int main(int argc, char **argv)
     if (seconds > 0.0) {
         printf("Stopping after %.2f seconds.\n", seconds);
         if (should_play_note && seconds > 0.25) {
+            // release before the end so the envelope tail can be heard.
             run_for_seconds(&midi, seconds * 0.8);
             audio_miniaudio_lock(&app.audio);
             if (use_frequency) {

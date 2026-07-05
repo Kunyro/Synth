@@ -163,9 +163,11 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
 
     switch (binding->scale) {
         case MIDI_MAPPING_SCALE_LOG:
+            // log scaling gives knobs more room in the low frequency range.
             return expf(logf(binding->min_value) + (normalized * (logf(binding->max_value) - logf(binding->min_value))));
 
         case MIDI_MAPPING_SCALE_STEP:
+            // step scaling snaps continuous midi values to whole-number choices.
             return binding->min_value + (float)(int)((normalized * (binding->max_value - binding->min_value)) + 0.5f);
 
         case MIDI_MAPPING_SCALE_LINEAR:
@@ -369,6 +371,7 @@ int midi_mapping_apply_short_message(
         if (binding->source_type == MIDI_MAPPING_SOURCE_CC &&
             binding->channel == channel &&
             binding->control == control) {
+            // adsr is updated as one struct so the unchanged parts stay intact.
             synth_adsr adsr = synth_get_adsr(s);
             const float synth_value = scale_midi_value(binding, midi_value);
             int should_set_adsr = 0;

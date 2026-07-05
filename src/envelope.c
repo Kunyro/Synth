@@ -52,6 +52,7 @@ float synth_envelope_advance(synth_envelope *envelope, float sample_rate)
             break;
 
         case SYNTH_ENV_DECAY:
+            // decay moves from full level down to sustain over the decay time.
             envelope->level -= decay_step * (1.0f - envelope->adsr.sustain_level);
             if (envelope->level <= envelope->adsr.sustain_level) {
                 envelope->level = envelope->adsr.sustain_level;

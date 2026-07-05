@@ -34,6 +34,7 @@ int synth_midi_parse_short_message(const unsigned char *data, unsigned short len
         message->type = SYNTH_MIDI_MESSAGE_NOTE_ON;
         message->velocity = (float)velocity / 127.0f;
     } else {
+        // midi treats note on with zero velocity as note off.
         message->type = SYNTH_MIDI_MESSAGE_NOTE_OFF;
         message->velocity = 0.0f;
     }

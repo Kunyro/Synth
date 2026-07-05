@@ -26,6 +26,7 @@ static void synth_filter_update_coefficient(synth_filter *filter)
         return;
     }
 
+    // this turns cutoff hz into the per sample pull toward the input.
     filter->coefficient = 1.0f - expf((-2.0f * SYNTH_PI * filter->cutoff_hz) / filter->sample_rate);
 }
 
@@ -68,6 +69,7 @@ float synth_filter_process(synth_filter *filter, float input)
     float output = input;
 
     for (int pole = 0; pole < filter->pole_count; ++pole) {
+        // each pole smooths the previous pole, making the slope steeper.
         filter->state[pole] += filter->coefficient * (output - filter->state[pole]);
         output = filter->state[pole];
     }

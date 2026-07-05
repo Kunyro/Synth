@@ -143,6 +143,7 @@ void synth_wavetable_prepare(void)
         wavetable_bank[morph_index].morph = morph;
 
         for (int mip_index = 0; mip_index < SYNTH_WAVETABLE_MIP_LEVELS; ++mip_index) {
+            // each next mip keeps fewer harmonics so high notes stay clean.
             build_mip(&wavetable_bank[morph_index].mips[mip_index], morph, harmonic_limit);
 
             if (harmonic_limit > 1) {
@@ -165,6 +166,7 @@ static int select_mip_index(float frequency, float sample_rate)
         return SYNTH_WAVETABLE_MIP_LEVELS - 1;
     }
 
+    // higher notes can fit fewer harmonics before they fold back as aliasing.
     allowed_harmonics = (int)floorf(nyquist / safe_frequency);
     if (allowed_harmonics < 1) {
         allowed_harmonics = 1;
@@ -217,6 +219,7 @@ float synth_wavetable_render(float phase, float frequency, float sample_rate, fl
     lower_sample = interpolate_table_sample(
         &wavetable_bank[lower_morph_index].mips[mip_index],
         phase);
+    // the morph knob lands between stored frames, so blend the two neighbors.
     upper_sample = interpolate_table_sample(
         &wavetable_bank[upper_morph_index].mips[mip_index],
         phase);

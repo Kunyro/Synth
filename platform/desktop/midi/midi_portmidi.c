@@ -89,6 +89,7 @@ static void dispatch_portmidi_message(const midi_device_callbacks *callbacks, Pm
     data[0] = (unsigned char)(message & 0xFF);
     data[1] = (unsigned char)((message >> 8) & 0xFF);
     data[2] = (unsigned char)((message >> 16) & 0xFF);
+    // portmidi packs the three midi bytes into one little-endian int.
     dispatch_midi_bytes(callbacks, data);
 }
 
@@ -201,6 +202,7 @@ int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbac
     input->callbacks = callbacks;
     input->library = open_portmidi_library();
 
+    // load at runtime so the synth can still build without portmidi installed.
     if (input->library == 0 || !load_portmidi_api(input->library)) {
         midi_portmidi_uninit(input);
         return MIDI_PORTMIDI_INIT_UNAVAILABLE;
@@ -247,6 +249,7 @@ void midi_portmidi_poll(midi_portmidi_input *input)
         PmError poll_result = g_portmidi.Poll(stream);
 
         while (poll_result > 0) {
+            // keep draining until portmidi says this stream is empty.
             int read_count = g_portmidi.Read(stream, events, 32);
 
             if (read_count <= 0) {
