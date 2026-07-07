@@ -54,8 +54,65 @@ static void print_short_message(void *user_data, const unsigned char *data, unsi
 
     (void)user_data;
 
-    if (length < 3) {
-        printf("short message: length=%u\n", length);
+    if (data[0] >= 0xF0) {
+        switch (data[0]) {
+            case 0xF1:
+                printf("midi time code quarter frame: value=%u raw=%02x %02x\n", data[1], data[0], data[1]);
+                break;
+
+            case 0xF2:
+                printf(
+                    "song position pointer: value=%u raw=%02x %02x %02x\n",
+                    ((unsigned int)data[2] << 7) | data[1],
+                    data[0],
+                    data[1],
+                    data[2]);
+                break;
+
+            case 0xF3:
+                printf("song select: song=%u raw=%02x %02x\n", data[1], data[0], data[1]);
+                break;
+
+            case 0xF6:
+                printf("tune request: raw=%02x\n", data[0]);
+                break;
+
+            case 0xF8:
+                printf("timing clock: raw=%02x\n", data[0]);
+                break;
+
+            case 0xFA:
+                printf("start: raw=%02x\n", data[0]);
+                break;
+
+            case 0xFB:
+                printf("continue: raw=%02x\n", data[0]);
+                break;
+
+            case 0xFC:
+                printf("stop: raw=%02x\n", data[0]);
+                break;
+
+            case 0xFE:
+                printf("active sensing: raw=%02x\n", data[0]);
+                break;
+
+            case 0xFF:
+                printf("system reset: raw=%02x\n", data[0]);
+                break;
+
+            default:
+                printf("system message: length=%u raw=%02x %02x %02x\n", length, data[0], data[1], data[2]);
+                break;
+        }
+
+        fflush(stdout);
+        return;
+    }
+
+    if (length < 2) {
+        printf("short message: length=%u raw=%02x\n", length, data[0]);
+        fflush(stdout);
         return;
     }
 
@@ -102,22 +159,20 @@ static void print_short_message(void *user_data, const unsigned char *data, unsi
 
         case 0xC0:
             printf(
-                "program change: channel=%d program=%u raw=%02x %02x %02x\n",
+                "program change: channel=%d program=%u raw=%02x %02x\n",
                 channel,
                 data[1],
                 data[0],
-                data[1],
-                data[2]);
+                data[1]);
             break;
 
         case 0xD0:
             printf(
-                "channel pressure: channel=%d pressure=%u raw=%02x %02x %02x\n",
+                "channel pressure: channel=%d pressure=%u raw=%02x %02x\n",
                 channel,
                 data[1],
                 data[0],
-                data[1],
-                data[2]);
+                data[1]);
             break;
 
         case 0xE0:
@@ -147,8 +202,10 @@ static void print_midi_status(int stream_count, const midi_portmidi_input *midi)
         printf("portmidi library not found, so midi monitoring cannot start.\n");
     } else if (stream_count == MIDI_PORTMIDI_INIT_FAILED) {
         printf("portmidi loaded but failed to initialize, so midi monitoring cannot start.\n");
+    } else if (midi->device_count == 0) {
+        printf("portmidi loaded, but no midi devices were found.\n");
     } else if (midi->source_count == 0) {
-        printf("portmidi loaded, but no midi input devices were found.\n");
+        printf("portmidi found %d midi device(s), but none were input devices.\n", midi->device_count);
     } else {
         printf("portmidi found %d midi input source(s), but none opened.\n", midi->source_count);
     }

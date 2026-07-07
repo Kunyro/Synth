@@ -15,6 +15,7 @@ typedef struct midi_portmidi_input {
     midi_device_callbacks callbacks;
     void *library;
     void *streams[MIDI_PORTMIDI_MAX_STREAMS];
+    int device_count;
     int stream_count;
     int source_count;
     int portmidi_initialized;

@@ -215,6 +215,7 @@ int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbac
 
     input->portmidi_initialized = 1;
     device_count = g_portmidi.CountDevices();
+    input->device_count = device_count;
 
     for (PmDeviceID id = 0; id < device_count && input->stream_count < MIDI_PORTMIDI_MAX_STREAMS; ++id) {
         const PmDeviceInfo *info = g_portmidi.GetDeviceInfo(id);
