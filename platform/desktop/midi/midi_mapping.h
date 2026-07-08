@@ -11,6 +11,8 @@
 #define MIDI_MAPPING_NAME_LENGTH 64
 // the longest mapping load error message.
 #define MIDI_MAPPING_ERROR_LENGTH 160
+// how close a knob must get to the current parameter before it takes over.
+#define MIDI_MAPPING_PICKUP_THRESHOLD 1.0f
 
 // the synth parameters a midi control can update.
 typedef enum midi_mapping_parameter {
@@ -36,6 +38,13 @@ typedef enum midi_mapping_scale {
     MIDI_MAPPING_SCALE_STEP
 } midi_mapping_scale;
 
+// runtime state for soft takeover on one midi control.
+typedef struct midi_mapping_pickup {
+    int picked_up;
+    int has_last_midi_value;
+    int last_midi_value;
+} midi_mapping_pickup;
+
 // one binding from a midi control to a synth parameter.
 typedef struct midi_mapping_binding {
     midi_mapping_parameter parameter;
@@ -45,6 +54,7 @@ typedef struct midi_mapping_binding {
     midi_mapping_scale scale;
     float min_value;
     float max_value;
+    midi_mapping_pickup pickup;
 } midi_mapping_binding;
 
 // a loaded controller mapping with all of its bindings.
@@ -71,7 +81,7 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter);
 int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size_t error_size);
 // applies a raw midi message to the synth when it matches a binding.
 int midi_mapping_apply_short_message(
-    const midi_mapping *mapping,
+    midi_mapping *mapping,
     const unsigned char *data,
     unsigned short length,
     synth *s,

@@ -6,6 +6,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+// clamps a float without depending on synth internals from the desktop layer.
+static float clampf(float value, float min_value, float max_value)
+{
+    if (value < min_value) {
+        return min_value;
+    }
+
+    if (value > max_value) {
+        return max_value;
+    }
+
+    return value;
+}
+
 // writes a formatted load error when there is room for one.
 static void set_error(char *error, size_t error_size, int line_number, const char *message)
 {
@@ -176,6 +190,159 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
     }
 }
 
+// returns the current synth-side value for a mapped parameter.
+static float current_parameter_value(const synth *s, midi_mapping_parameter parameter)
+{
+    const synth_adsr adsr = synth_get_adsr(s);
+
+    switch (parameter) {
+        case MIDI_MAPPING_PARAM_ATTACK:
+            return adsr.attack_seconds;
+
+        case MIDI_MAPPING_PARAM_DECAY:
+            return adsr.decay_seconds;
+
+        case MIDI_MAPPING_PARAM_SUSTAIN:
+            return adsr.sustain_level;
+
+        case MIDI_MAPPING_PARAM_RELEASE:
+            return adsr.release_seconds;
+
+        case MIDI_MAPPING_PARAM_MASTER_GAIN:
+            return s->master_gain;
+
+        case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
+            return s->filter.cutoff_hz;
+
+        case MIDI_MAPPING_PARAM_FILTER_POLES:
+            return (float)s->filter.pole_count;
+
+        case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
+            return s->oscillator_morph;
+
+        default:
+            return 0.0f;
+    }
+}
+
+// converts the current synth value back into the midi range for pickup checks.
+static float synth_value_to_midi_value(const midi_mapping_binding *binding, float synth_value)
+{
+    const float bounded_value = clampf(synth_value, binding->min_value, binding->max_value);
+    float normalized;
+
+    if (binding->max_value == binding->min_value) {
+        return 0.0f;
+    }
+
+    switch (binding->scale) {
+        case MIDI_MAPPING_SCALE_LOG:
+            normalized =
+                (logf(bounded_value) - logf(binding->min_value)) /
+                (logf(binding->max_value) - logf(binding->min_value));
+            break;
+
+        case MIDI_MAPPING_SCALE_STEP:
+        case MIDI_MAPPING_SCALE_LINEAR:
+        default:
+            normalized = (bounded_value - binding->min_value) / (binding->max_value - binding->min_value);
+            break;
+    }
+
+    return clampf(normalized, 0.0f, 1.0f) * 127.0f;
+}
+
+// checks whether a new midi value has reached or crossed the pickup point.
+static int midi_value_reaches_pickup(const midi_mapping_pickup *pickup, float pickup_midi_value, int midi_value)
+{
+    const float current = (float)midi_value;
+
+    if (fabsf(current - pickup_midi_value) <= MIDI_MAPPING_PICKUP_THRESHOLD) {
+        return 1;
+    }
+
+    if (pickup->has_last_midi_value) {
+        const float previous = (float)pickup->last_midi_value;
+
+        if ((previous < pickup_midi_value && current > pickup_midi_value) ||
+            (previous > pickup_midi_value && current < pickup_midi_value)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+// tracks soft takeover state and tells the caller when this binding can write.
+static int binding_has_pickup(midi_mapping_binding *binding, const synth *s, int midi_value)
+{
+    const float synth_value = current_parameter_value(s, binding->parameter);
+    const float pickup_midi_value = synth_value_to_midi_value(binding, synth_value);
+
+    if (binding->pickup.picked_up) {
+        return 1;
+    }
+
+    if (midi_value_reaches_pickup(&binding->pickup, pickup_midi_value, midi_value)) {
+        binding->pickup.picked_up = 1;
+        return 1;
+    }
+
+    binding->pickup.has_last_midi_value = 1;
+    binding->pickup.last_midi_value = midi_value;
+    return 0;
+}
+
+// writes one mapped value into the synth.
+static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float synth_value)
+{
+    // adsr is updated as one struct so the unchanged parts stay intact.
+    synth_adsr adsr = synth_get_adsr(s);
+    int should_set_adsr = 0;
+
+    switch (parameter) {
+        case MIDI_MAPPING_PARAM_ATTACK:
+            adsr.attack_seconds = synth_value;
+            should_set_adsr = 1;
+            break;
+
+        case MIDI_MAPPING_PARAM_DECAY:
+            adsr.decay_seconds = synth_value;
+            should_set_adsr = 1;
+            break;
+
+        case MIDI_MAPPING_PARAM_SUSTAIN:
+            adsr.sustain_level = synth_value;
+            should_set_adsr = 1;
+            break;
+
+        case MIDI_MAPPING_PARAM_RELEASE:
+            adsr.release_seconds = synth_value;
+            should_set_adsr = 1;
+            break;
+
+        case MIDI_MAPPING_PARAM_MASTER_GAIN:
+            synth_set_master_gain(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
+            synth_set_filter_cutoff(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_FILTER_POLES:
+            synth_set_filter_poles(s, (int)synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
+            synth_set_oscillator_morph(s, synth_value);
+            break;
+    }
+
+    if (should_set_adsr) {
+        synth_set_adsr(s, adsr);
+    }
+}
+
 // adds one binding from a config line.
 static int add_binding(midi_mapping *mapping, const char *key, char *value, char *error, size_t error_size, int line_number)
 {
@@ -186,6 +353,8 @@ static int add_binding(midi_mapping *mapping, const char *key, char *value, char
     char *min_text;
     char *max_text;
     midi_mapping_binding binding;
+
+    memset(&binding, 0, sizeof(binding));
 
     if (mapping->binding_count >= MIDI_MAPPING_MAX_BINDINGS) {
         set_error(error, error_size, line_number, "too many midi bindings");
@@ -238,6 +407,11 @@ static int add_binding(midi_mapping *mapping, const char *key, char *value, char
 
     if (!parse_float_value(min_text, &binding.min_value) || !parse_float_value(max_text, &binding.max_value)) {
         set_error(error, error_size, line_number, "min and max must be numbers");
+        return 0;
+    }
+
+    if (binding.max_value <= binding.min_value) {
+        set_error(error, error_size, line_number, "max must be greater than min");
         return 0;
     }
 
@@ -341,7 +515,7 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
 
 // applies a raw midi message to the synth when it matches a binding.
 int midi_mapping_apply_short_message(
-    const midi_mapping *mapping,
+    midi_mapping *mapping,
     const unsigned char *data,
     unsigned short length,
     synth *s,
@@ -366,57 +540,18 @@ int midi_mapping_apply_short_message(
     midi_value = data[2];
 
     for (size_t i = 0; i < mapping->binding_count; ++i) {
-        const midi_mapping_binding *binding = &mapping->bindings[i];
+        midi_mapping_binding *binding = &mapping->bindings[i];
 
         if (binding->source_type == MIDI_MAPPING_SOURCE_CC &&
             binding->channel == channel &&
             binding->control == control) {
-            // adsr is updated as one struct so the unchanged parts stay intact.
-            synth_adsr adsr = synth_get_adsr(s);
             const float synth_value = scale_midi_value(binding, midi_value);
-            int should_set_adsr = 0;
 
-            switch (binding->parameter) {
-                case MIDI_MAPPING_PARAM_ATTACK:
-                    adsr.attack_seconds = synth_value;
-                    should_set_adsr = 1;
-                    break;
-
-                case MIDI_MAPPING_PARAM_DECAY:
-                    adsr.decay_seconds = synth_value;
-                    should_set_adsr = 1;
-                    break;
-
-                case MIDI_MAPPING_PARAM_SUSTAIN:
-                    adsr.sustain_level = synth_value;
-                    should_set_adsr = 1;
-                    break;
-
-                case MIDI_MAPPING_PARAM_RELEASE:
-                    adsr.release_seconds = synth_value;
-                    should_set_adsr = 1;
-                    break;
-
-                case MIDI_MAPPING_PARAM_MASTER_GAIN:
-                    synth_set_master_gain(s, synth_value);
-                    break;
-
-                case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
-                    synth_set_filter_cutoff(s, synth_value);
-                    break;
-
-                case MIDI_MAPPING_PARAM_FILTER_POLES:
-                    synth_set_filter_poles(s, (int)synth_value);
-                    break;
-
-                case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
-                    synth_set_oscillator_morph(s, synth_value);
-                    break;
+            if (!binding_has_pickup(binding, s, midi_value)) {
+                return 0;
             }
 
-            if (should_set_adsr) {
-                synth_set_adsr(s, adsr);
-            }
+            apply_synth_value(s, binding->parameter, synth_value);
 
             if (result != 0) {
                 result->parameter = binding->parameter;
