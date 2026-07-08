@@ -2,7 +2,7 @@
 
 #include <math.h>
 
-#include "synth_internal.h"
+#include "internal/synth_internal.h"
 
 // pi as a float for filter math.
 #define SYNTH_PI 3.14159265358979323846f

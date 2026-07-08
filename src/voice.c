@@ -1,6 +1,6 @@
 #include "synth/voice.h"
 
-#include "synth_internal.h"
+#include "internal/synth_internal.h"
 
 // sets up a quiet voice with the given envelope shape.
 void synth_voice_init(synth_voice *voice, synth_adsr adsr)

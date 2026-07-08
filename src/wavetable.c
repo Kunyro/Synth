@@ -1,9 +1,9 @@
-#include "wavetable.h"
+#include "internal/wavetable.h"
 
 #include <math.h>
 #include <stddef.h>
 
-#include "synth_internal.h"
+#include "internal/synth_internal.h"
 
 // the wavetable bank is deliberately static: it avoids heap allocation, keeps
 // the synth core portable, and makes the future embedded memory cost explicit.

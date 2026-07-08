@@ -2,8 +2,8 @@
 
 #include <math.h>
 
-#include "synth_internal.h"
-#include "wavetable.h"
+#include "internal/synth_internal.h"
+#include "internal/wavetable.h"
 
 // keeps the normalized phase inside one oscillator cycle.
 static float wrap_phase(float phase)

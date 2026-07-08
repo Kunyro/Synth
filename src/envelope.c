@@ -1,6 +1,6 @@
 #include "synth/envelope.h"
 
-#include "synth_internal.h"
+#include "internal/synth_internal.h"
 
 // turns a time in seconds into a per sample step.
 static float seconds_to_step(float sample_rate, float seconds)

@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "synth_internal.h"
+#include "internal/synth_internal.h"
 
 // finds the active voice that is playing a midi note.
 static synth_voice *find_voice_for_note(synth *s, int midi_note)
