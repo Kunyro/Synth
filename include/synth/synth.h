@@ -13,6 +13,8 @@
 typedef struct synth {
     float sample_rate;
     float master_gain;
+    float pitch_bend;
+    float pitch_bend_semitones;
     synth_waveform waveform;
     float oscillator_morph;
     synth_adsr envelope;
@@ -30,6 +32,8 @@ void synth_note_on(synth *s, int midi_note, float velocity);
 void synth_note_off(synth *s, int midi_note);
 // releases every active voice.
 void synth_all_notes_off(synth *s);
+// changes pitch bend from full down (-1) through center (0) to full up (1).
+void synth_set_pitch_bend(synth *s, float pitch_bend);
 // changes the main output level.
 void synth_set_master_gain(synth *s, float gain);
 // changes the envelope shape for new and active voices.

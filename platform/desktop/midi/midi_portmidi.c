@@ -1,7 +1,5 @@
 #include "midi/midi_portmidi.h"
 
-#include "synth/midi_types.h"
-
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -59,25 +57,11 @@ typedef struct portmidi_api {
 
 static portmidi_api g_portmidi;
 
-// parses raw midi bytes and calls note callbacks.
+// forwards raw midi bytes to the app-level midi parser.
 static void dispatch_midi_bytes(const midi_device_callbacks *callbacks, const unsigned char *data)
 {
-    synth_midi_message message;
-
     if (callbacks->short_message != 0) {
         callbacks->short_message(callbacks->user_data, data, 3);
-    }
-
-    if (!synth_midi_parse_short_message(data, 3, &message)) {
-        return;
-    }
-
-    if (message.type == SYNTH_MIDI_MESSAGE_NOTE_ON) {
-        if (callbacks->note_on != 0) {
-            callbacks->note_on(callbacks->user_data, message.note, message.velocity);
-        }
-    } else if (message.type == SYNTH_MIDI_MESSAGE_NOTE_OFF && callbacks->note_off != 0) {
-        callbacks->note_off(callbacks->user_data, message.note);
     }
 }
 

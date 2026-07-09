@@ -1,8 +1,21 @@
 #include "synth/synth.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "internal/synth_internal.h"
+
+// converts a semitone offset into a frequency multiplier.
+static float pitch_bend_ratio(float semitones)
+{
+    return powf(2.0f, semitones / 12.0f);
+}
+
+// applies the current synth bend to a base frequency.
+static float bend_frequency(const synth *s, float base_frequency)
+{
+    return base_frequency * pitch_bend_ratio(s->pitch_bend_semitones);
+}
 
 // finds the active voice that is playing a midi note.
 static synth_voice *find_voice_for_note(synth *s, int midi_note)
@@ -38,6 +51,18 @@ static synth_voice *find_available_voice(synth *s)
     return quietest;
 }
 
+// retunes active voices without changing their original note or phase.
+static void retune_active_voices(synth *s)
+{
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice *voice = &s->voices[i];
+
+        if (voice->active) {
+            synth_oscillator_set_frequency(&voice->oscillator, bend_frequency(s, voice->base_frequency));
+        }
+    }
+}
+
 // sets up the synth with defaults.
 void synth_init(synth *s, float sample_rate)
 {
@@ -46,6 +71,8 @@ void synth_init(synth *s, float sample_rate)
     memset(s, 0, sizeof(*s));
     s->sample_rate = sample_rate;
     s->master_gain = SYNTH_DEFAULT_MASTER_GAIN;
+    s->pitch_bend = 0.0f;
+    s->pitch_bend_semitones = 0.0f;
     s->waveform = SYNTH_WAVEFORM_SINE;
     s->oscillator_morph = synth_waveform_to_morph(s->waveform);
     s->envelope = synth_sanitize_adsr(default_envelope);
@@ -60,6 +87,7 @@ void synth_init(synth *s, float sample_rate)
 void synth_note_on(synth *s, int midi_note, float velocity)
 {
     synth_voice *voice = find_voice_for_note(s, midi_note);
+    const float base_frequency = synth_midi_note_to_frequency(midi_note);
 
     if (voice == 0) {
         voice = find_available_voice(s);
@@ -68,10 +96,11 @@ void synth_note_on(synth *s, int midi_note, float velocity)
     synth_voice_note_on(
         voice,
         midi_note,
-        synth_midi_note_to_frequency(midi_note),
+        base_frequency,
         velocity,
         s->waveform,
         s->envelope);
+    synth_oscillator_set_frequency(&voice->oscillator, bend_frequency(s, voice->base_frequency));
     synth_oscillator_set_morph(&voice->oscillator, s->oscillator_morph);
 }
 
@@ -87,6 +116,7 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
         velocity,
         s->waveform,
         s->envelope);
+    synth_oscillator_set_frequency(&voice->oscillator, bend_frequency(s, voice->base_frequency));
     synth_oscillator_set_morph(&voice->oscillator, s->oscillator_morph);
 }
 
@@ -108,6 +138,14 @@ void synth_all_notes_off(synth *s)
             synth_voice_note_off(&s->voices[i]);
         }
     }
+}
+
+// changes pitch bend from full down (-1) through center (0) to full up (1).
+void synth_set_pitch_bend(synth *s, float pitch_bend)
+{
+    s->pitch_bend = synth_clampf(pitch_bend, -1.0f, 1.0f);
+    s->pitch_bend_semitones = s->pitch_bend * SYNTH_PITCH_BEND_MAX_SEMITONES;
+    retune_active_voices(s);
 }
 
 // changes the main output level.

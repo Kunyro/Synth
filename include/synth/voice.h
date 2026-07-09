@@ -8,6 +8,7 @@
 typedef struct synth_voice {
     int active;
     int midi_note;
+    float base_frequency;
     float velocity;
     synth_oscillator oscillator;
     synth_envelope envelope;

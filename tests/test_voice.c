@@ -57,10 +57,26 @@ static synth_voice *find_voice_by_frequency(synth *s, float frequency)
     return 0;
 }
 
+static synth_voice *find_voice_by_note(synth *s, int midi_note)
+{
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice *voice = &s->voices[i];
+
+        if (voice->active && voice->midi_note == midi_note) {
+            return voice;
+        }
+    }
+
+    return 0;
+}
+
 int main(void)
 {
     synth s;
+    synth bend_synth;
     synth_voice *morphed_voice;
+    synth_voice *bent_voice;
+    synth_voice *held_bend_voice;
     synth_adsr quick_release = {0.0f, 0.0f, 1.0f, 0.001f};
     float buffer[256];
     float left[256];
@@ -109,6 +125,40 @@ int main(void)
     }
     synth_set_oscillator_morph(&s, 2.0f);
     expect_near(s.oscillator_morph, 1.0f, 0.0001f, "synth oscillator morph clamps high");
+
+    synth_init(&bend_synth, 48000.0f);
+    synth_note_on(&bend_synth, 69, 1.0f);
+    bent_voice = find_voice_by_note(&bend_synth, 69);
+    expect_true(bent_voice != 0, "pitch bend test voice starts");
+    if (bent_voice != 0) {
+        expect_near(bent_voice->base_frequency, 440.0f, 0.001f, "pitch bend keeps base frequency");
+        synth_set_pitch_bend(&bend_synth, 1.0f);
+        expect_near(
+            bent_voice->oscillator.frequency,
+            synth_midi_note_to_frequency(70),
+            0.001f,
+            "full pitch bend up retunes by one semitone");
+        synth_set_pitch_bend(&bend_synth, -1.0f);
+        expect_near(
+            bent_voice->oscillator.frequency,
+            synth_midi_note_to_frequency(68),
+            0.001f,
+            "full pitch bend down retunes by one semitone");
+        synth_set_pitch_bend(&bend_synth, 0.0f);
+        expect_near(bent_voice->oscillator.frequency, 440.0f, 0.001f, "center pitch bend restores base pitch");
+    }
+
+    synth_set_pitch_bend(&bend_synth, 1.0f);
+    synth_note_on(&bend_synth, 72, 1.0f);
+    held_bend_voice = find_voice_by_note(&bend_synth, 72);
+    expect_true(held_bend_voice != 0, "new voice starts while pitch bend is held");
+    if (held_bend_voice != 0) {
+        expect_near(
+            held_bend_voice->oscillator.frequency,
+            synth_midi_note_to_frequency(73),
+            0.001f,
+            "new voice receives held pitch bend");
+    }
 
     synth_render_stereo(&s, &stereo_buffer);
     expect_true(buffer_has_signal(left, 256), "stereo render writes left channel");

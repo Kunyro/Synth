@@ -7,6 +7,7 @@ void synth_voice_init(synth_voice *voice, synth_adsr adsr)
 {
     voice->active = 0;
     voice->midi_note = -1;
+    voice->base_frequency = 0.0f;
     voice->velocity = 0.0f;
     synth_oscillator_init(&voice->oscillator, SYNTH_WAVEFORM_SINE, 0.0f);
     synth_envelope_init(&voice->envelope, adsr);
@@ -23,6 +24,7 @@ void synth_voice_note_on(
 {
     voice->active = 1;
     voice->midi_note = midi_note;
+    voice->base_frequency = frequency;
     voice->velocity = synth_clampf(velocity, 0.0f, 1.0f);
     synth_oscillator_init(&voice->oscillator, waveform, frequency);
     synth_envelope_init(&voice->envelope, adsr);

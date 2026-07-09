@@ -102,12 +102,49 @@ static void on_midi_note_off(void *user_data, int midi_note)
     audio_miniaudio_unlock(&app->audio);
 }
 
-// handles raw midi messages that may control synth parameters.
+// handles incoming midi pitch bend messages.
+static void on_midi_pitch_bend(void *user_data, float pitch_bend)
+{
+    desktop_synth_app *app = (desktop_synth_app *)user_data;
+
+    audio_miniaudio_lock(&app->audio);
+    synth_set_pitch_bend(&app->synth, pitch_bend);
+    audio_miniaudio_unlock(&app->audio);
+}
+
+// applies parsed midi messages to the synth.
+static void apply_midi_message(void *user_data, const synth_midi_message *message)
+{
+    switch (message->type) {
+        case SYNTH_MIDI_MESSAGE_NOTE_ON:
+            on_midi_note_on(user_data, message->note, message->velocity);
+            break;
+
+        case SYNTH_MIDI_MESSAGE_NOTE_OFF:
+            on_midi_note_off(user_data, message->note);
+            break;
+
+        case SYNTH_MIDI_MESSAGE_PITCH_BEND:
+            on_midi_pitch_bend(user_data, message->pitch_bend);
+            break;
+
+        case SYNTH_MIDI_MESSAGE_NONE:
+        default:
+            break;
+    }
+}
+
+// handles raw midi messages by parsing notes/bends and applying mapped controls.
 static void on_midi_short_message(void *user_data, const unsigned char *data, unsigned short length)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
+    synth_midi_message message;
     midi_mapping_apply_result result;
     int applied;
+
+    if (synth_midi_parse_short_message(data, length, &message)) {
+        apply_midi_message(user_data, &message);
+    }
 
     if (!app->midi_mapping_enabled) {
         return;
@@ -214,8 +251,6 @@ int main(int argc, char **argv)
         }
     }
 
-    midi_callbacks.note_on = on_midi_note_on;
-    midi_callbacks.note_off = on_midi_note_off;
     midi_callbacks.short_message = on_midi_short_message;
     midi_callbacks.user_data = &app;
     midi_stream_count = midi_portmidi_init(&midi, midi_callbacks);

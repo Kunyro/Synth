@@ -12,6 +12,7 @@ float synth_midi_note_to_frequency(int midi_note)
 int synth_midi_parse_short_message(const unsigned char *data, unsigned short length, synth_midi_message *message)
 {
     unsigned char status;
+    int value_14_bit;
     int velocity;
 
     if (message == 0 || data == 0 || length < 3) {
@@ -19,12 +20,27 @@ int synth_midi_parse_short_message(const unsigned char *data, unsigned short len
     }
 
     message->type = SYNTH_MIDI_MESSAGE_NONE;
+    message->channel = 0;
     message->note = 0;
     message->velocity = 0.0f;
+    message->pitch_bend_value = 0;
+    message->pitch_bend = 0.0f;
 
     status = data[0] & 0xF0;
-    if (status != 0x80 && status != 0x90) {
+    if (status != 0x80 && status != 0x90 && status != 0xE0) {
         return 0;
+    }
+
+    message->channel = (data[0] & 0x0F) + 1;
+
+    if (status == 0xE0) {
+        value_14_bit = ((int)data[2] << 7) | (int)data[1];
+        message->type = SYNTH_MIDI_MESSAGE_PITCH_BEND;
+        message->pitch_bend_value = value_14_bit - 8192;
+        message->pitch_bend = message->pitch_bend_value < 0
+            ? (float)message->pitch_bend_value / 8192.0f
+            : (float)message->pitch_bend_value / 8191.0f;
+        return 1;
     }
 
     velocity = data[2];
