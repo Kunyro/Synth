@@ -60,7 +60,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 8, "akai mapping has eight bindings");
+    expect_true(mapping.binding_count == 11, "akai mapping has eleven bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -180,6 +180,57 @@ static void test_applies_oscillator_morph_cc_value(void)
     expect_near(s.oscillator_morph, 76.0f / 127.0f, 0.0001f, "oscillator morph cc scales to normalized morph");
 }
 
+static void test_applies_second_oscillator_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for second oscillator test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 9, 0, 64);
+    expect_true(
+        apply_cc_value(&mapping, &s, 9, 58, &result),
+        "second oscillator octave cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE,
+        "second oscillator octave cc reports octave parameter");
+    expect_true(s.second_oscillator_octave == 0, "second oscillator octave cc 58 steps to zero");
+    expect_near(result.synth_value, 0.0f, 0.0001f, "second oscillator octave result reports stepped value");
+
+    pickup_cc(&mapping, &s, 10, 0, 64);
+    expect_true(
+        apply_cc_value(&mapping, &s, 10, 123, &result),
+        "second oscillator pitch cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH,
+        "second oscillator pitch cc reports pitch parameter");
+    expect_true(s.second_oscillator_pitch_semitones == 6, "second oscillator pitch cc 123 steps to plus six");
+    expect_near(result.synth_value, 6.0f, 0.0001f, "second oscillator pitch result reports stepped value");
+
+    pickup_cc(&mapping, &s, 11, 0, 64);
+    expect_true(
+        apply_cc_value(&mapping, &s, 11, 76, &result),
+        "second oscillator fine tune cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE,
+        "second oscillator fine tune cc reports fine tune parameter");
+    expect_near(
+        s.second_oscillator_fine_tune_cents,
+        -50.0f + ((76.0f / 127.0f) * 100.0f),
+        0.0001f,
+        "second oscillator fine tune cc scales to cents");
+    expect_near(
+        result.synth_value,
+        s.second_oscillator_fine_tune_cents,
+        0.0001f,
+        "second oscillator fine tune result reports cents");
+}
+
 static void test_waits_for_pickup_before_first_knob_change(void)
 {
     midi_mapping mapping;
@@ -212,6 +263,7 @@ int main(void)
     test_applies_master_gain_cc_value();
     test_applies_filter_cc_values();
     test_applies_oscillator_morph_cc_value();
+    test_applies_second_oscillator_cc_values();
     test_waits_for_pickup_before_first_knob_change();
     printf("All MIDI mapping tests passed.\n");
     return 0;

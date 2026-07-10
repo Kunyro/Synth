@@ -44,6 +44,11 @@ static int buffers_match(const float *a, const float *b, size_t count)
     return 1;
 }
 
+static float frequency_with_semitone_offset(float frequency, float semitones)
+{
+    return frequency * powf(2.0f, semitones / 12.0f);
+}
+
 static synth_voice *find_voice_by_frequency(synth *s, float frequency)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
@@ -74,9 +79,11 @@ int main(void)
 {
     synth s;
     synth bend_synth;
+    synth second_tune_synth;
     synth_voice *morphed_voice;
     synth_voice *bent_voice;
     synth_voice *held_bend_voice;
+    synth_voice *second_tune_voice;
     synth_adsr quick_release = {0.0f, 0.0f, 1.0f, 0.001f};
     float buffer[256];
     float left[256];
@@ -191,6 +198,54 @@ int main(void)
             synth_midi_note_to_frequency(73),
             0.001f,
             "new voice second oscillator receives held pitch bend");
+    }
+
+    synth_init(&second_tune_synth, 48000.0f);
+    expect_true(second_tune_synth.second_oscillator_octave == 0, "second oscillator octave defaults to zero");
+    expect_true(
+        second_tune_synth.second_oscillator_pitch_semitones == 0,
+        "second oscillator pitch defaults to zero");
+    expect_near(
+        second_tune_synth.second_oscillator_fine_tune_cents,
+        0.0f,
+        0.0001f,
+        "second oscillator fine tune defaults to zero");
+
+    synth_note_on_frequency(&second_tune_synth, 440.0f, 1.0f);
+    second_tune_voice = find_voice_by_frequency(&second_tune_synth, 440.0f);
+    expect_true(second_tune_voice != 0, "second oscillator tuning test voice starts");
+    if (second_tune_voice != 0) {
+        synth_set_second_oscillator_octave(&second_tune_synth, 1);
+        expect_true(second_tune_synth.second_oscillator_octave == 1, "second oscillator octave stores upper octave");
+        expect_near(second_tune_voice->oscillator.frequency, 440.0f, 0.001f, "second tuning keeps primary pitch");
+        expect_near(second_tune_voice->second_oscillator.frequency, 880.0f, 0.001f, "second oscillator octave retunes active voice");
+
+        synth_set_second_oscillator_pitch(&second_tune_synth, -6);
+        expect_near(
+            second_tune_voice->second_oscillator.frequency,
+            frequency_with_semitone_offset(440.0f, 6.0f),
+            0.001f,
+            "second oscillator semitone pitch retunes active voice");
+
+        synth_set_second_oscillator_fine_tune(&second_tune_synth, 50.0f);
+        expect_near(
+            second_tune_voice->second_oscillator.frequency,
+            frequency_with_semitone_offset(440.0f, 6.5f),
+            0.001f,
+            "second oscillator fine tune retunes active voice");
+
+        synth_set_second_oscillator_octave(&second_tune_synth, -4);
+        synth_set_second_oscillator_pitch(&second_tune_synth, 99);
+        synth_set_second_oscillator_fine_tune(&second_tune_synth, -99.0f);
+        expect_true(second_tune_synth.second_oscillator_octave == -1, "second oscillator octave clamps low");
+        expect_true(
+            second_tune_synth.second_oscillator_pitch_semitones == 6,
+            "second oscillator pitch clamps high");
+        expect_near(
+            second_tune_synth.second_oscillator_fine_tune_cents,
+            -50.0f,
+            0.0001f,
+            "second oscillator fine tune clamps low");
     }
 
     synth_render_stereo(&s, &stereo_buffer);

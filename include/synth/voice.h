@@ -25,8 +25,8 @@ void synth_voice_note_on(
     float velocity,
     synth_waveform waveform,
     synth_adsr adsr);
-// retunes every oscillator in the voice together.
-void synth_voice_set_frequency(synth_voice *voice, float frequency);
+// retunes both oscillators in the voice.
+void synth_voice_set_frequencies(synth_voice *voice, float primary_frequency, float second_frequency);
 // changes the primary oscillator shape.
 void synth_voice_set_waveform(synth_voice *voice, synth_waveform waveform);
 // changes the primary oscillator morph.

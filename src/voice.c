@@ -49,11 +49,11 @@ void synth_voice_note_on(
     synth_envelope_note_on(&voice->envelope);
 }
 
-// retunes every oscillator in the voice together.
-void synth_voice_set_frequency(synth_voice *voice, float frequency)
+// retunes both oscillators in the voice.
+void synth_voice_set_frequencies(synth_voice *voice, float primary_frequency, float second_frequency)
 {
-    synth_oscillator_set_frequency(&voice->oscillator, frequency);
-    synth_oscillator_set_frequency(&voice->second_oscillator, frequency);
+    synth_oscillator_set_frequency(&voice->oscillator, primary_frequency);
+    synth_oscillator_set_frequency(&voice->second_oscillator, second_frequency);
 }
 
 // changes the primary oscillator shape.

@@ -17,6 +17,20 @@ static float bend_frequency(const synth *s, float base_frequency)
     return base_frequency * pitch_bend_ratio(s->pitch_bend_semitones);
 }
 
+// totals the second oscillator pitch offset in semitones.
+static float second_oscillator_semitones(const synth *s)
+{
+    return (float)(s->second_oscillator_octave * 12) +
+           (float)s->second_oscillator_pitch_semitones +
+           (s->second_oscillator_fine_tune_cents / 100.0f);
+}
+
+// applies the current second oscillator tuning to a primary frequency.
+static float second_oscillator_frequency(const synth *s, float primary_frequency)
+{
+    return primary_frequency * pitch_bend_ratio(second_oscillator_semitones(s));
+}
+
 // finds the active voice that is playing a midi note.
 static synth_voice *find_voice_for_note(synth *s, int midi_note)
 {
@@ -51,6 +65,15 @@ static synth_voice *find_available_voice(synth *s)
     return quietest;
 }
 
+// retunes one voice without changing its original note or phase.
+static void retune_voice(synth *s, synth_voice *voice)
+{
+    const float primary_frequency = bend_frequency(s, voice->base_frequency);
+    const float secondary_frequency = second_oscillator_frequency(s, primary_frequency);
+
+    synth_voice_set_frequencies(voice, primary_frequency, secondary_frequency);
+}
+
 // retunes active voices without changing their original note or phase.
 static void retune_active_voices(synth *s)
 {
@@ -58,7 +81,7 @@ static void retune_active_voices(synth *s)
         synth_voice *voice = &s->voices[i];
 
         if (voice->active) {
-            synth_voice_set_frequency(voice, bend_frequency(s, voice->base_frequency));
+            retune_voice(s, voice);
         }
     }
 }
@@ -75,6 +98,9 @@ void synth_init(synth *s, float sample_rate)
     s->pitch_bend_semitones = 0.0f;
     s->waveform = SYNTH_WAVEFORM_SINE;
     s->oscillator_morph = synth_waveform_to_morph(s->waveform);
+    s->second_oscillator_octave = 0;
+    s->second_oscillator_pitch_semitones = 0;
+    s->second_oscillator_fine_tune_cents = 0.0f;
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
 
@@ -100,7 +126,7 @@ void synth_note_on(synth *s, int midi_note, float velocity)
         velocity,
         s->waveform,
         s->envelope);
-    synth_voice_set_frequency(voice, bend_frequency(s, voice->base_frequency));
+    retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
 }
 
@@ -116,7 +142,7 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
         velocity,
         s->waveform,
         s->envelope);
-    synth_voice_set_frequency(voice, bend_frequency(s, voice->base_frequency));
+    retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
 }
 
@@ -189,6 +215,27 @@ void synth_set_oscillator_morph(synth *s, float morph)
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice_set_oscillator_morph(&s->voices[i], s->oscillator_morph);
     }
+}
+
+// changes the second oscillator octave offset.
+void synth_set_second_oscillator_octave(synth *s, int octave)
+{
+    s->second_oscillator_octave = synth_clampi(octave, -1, 1);
+    retune_active_voices(s);
+}
+
+// changes the second oscillator semitone offset.
+void synth_set_second_oscillator_pitch(synth *s, int semitones)
+{
+    s->second_oscillator_pitch_semitones = synth_clampi(semitones, -6, 6);
+    retune_active_voices(s);
+}
+
+// changes the second oscillator fine tune in cents.
+void synth_set_second_oscillator_fine_tune(synth *s, float cents)
+{
+    s->second_oscillator_fine_tune_cents = synth_clampf(cents, -50.0f, 50.0f);
+    retune_active_voices(s);
 }
 
 // changes the synth filter cutoff in hz.

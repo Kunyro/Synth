@@ -17,6 +17,9 @@ typedef struct synth {
     float pitch_bend_semitones;
     synth_waveform waveform;
     float oscillator_morph;
+    int second_oscillator_octave;
+    int second_oscillator_pitch_semitones;
+    float second_oscillator_fine_tune_cents;
     synth_adsr envelope;
     synth_filter filter;
     synth_voice voices[SYNTH_MAX_VOICES];
@@ -44,6 +47,12 @@ synth_adsr synth_get_adsr(const synth *s);
 void synth_set_waveform(synth *s, synth_waveform waveform);
 // changes the default primary oscillator morph and active primary oscillators.
 void synth_set_oscillator_morph(synth *s, float morph);
+// changes the second oscillator octave offset.
+void synth_set_second_oscillator_octave(synth *s, int octave);
+// changes the second oscillator semitone offset.
+void synth_set_second_oscillator_pitch(synth *s, int semitones);
+// changes the second oscillator fine tune in cents.
+void synth_set_second_oscillator_fine_tune(synth *s, float cents);
 // changes the synth filter cutoff in hz.
 void synth_set_filter_cutoff(synth *s, float cutoff_hz);
 // changes how many poles the synth filter uses.

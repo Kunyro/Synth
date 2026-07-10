@@ -107,6 +107,21 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "second_oscillator_octave") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE;
+        return 1;
+    }
+
+    if (strcmp(name, "second_oscillator_pitch") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH;
+        return 1;
+    }
+
+    if (strcmp(name, "second_oscillator_fine_tune") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE;
+        return 1;
+    }
+
     return 0;
 }
 
@@ -219,6 +234,15 @@ static float current_parameter_value(const synth *s, midi_mapping_parameter para
 
         case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
             return s->oscillator_morph;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
+            return (float)s->second_oscillator_octave;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH:
+            return (float)s->second_oscillator_pitch_semitones;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
+            return s->second_oscillator_fine_tune_cents;
 
         default:
             return 0.0f;
@@ -335,6 +359,18 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
 
         case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
             synth_set_oscillator_morph(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
+            synth_set_second_oscillator_octave(s, (int)synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH:
+            synth_set_second_oscillator_pitch(s, (int)synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
+            synth_set_second_oscillator_fine_tune(s, synth_value);
             break;
     }
 
@@ -459,6 +495,15 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 
         case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
             return "oscillator_morph";
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
+            return "second_oscillator_octave";
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH:
+            return "second_oscillator_pitch";
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
+            return "second_oscillator_fine_tune";
 
         default:
             return "unknown";
