@@ -60,7 +60,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 11, "akai mapping has eleven bindings");
+    expect_true(mapping.binding_count == 15, "akai mapping has fifteen bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -231,6 +231,55 @@ static void test_applies_second_oscillator_cc_values(void)
         "second oscillator fine tune result reports cents");
 }
 
+static void test_applies_oscillator_mix_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for oscillator mix test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 13, 127, 119);
+    expect_true(
+        apply_cc_value(&mapping, &s, 13, 119, &result),
+        "first oscillator gain cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN,
+        "first oscillator gain cc reports first oscillator gain parameter");
+    expect_near(s.first_oscillator_gain, 119.0f / 127.0f, 0.0001f, "first oscillator gain cc scales to normalized gain");
+
+    pickup_cc(&mapping, &s, 14, 127, 59);
+    expect_true(
+        apply_cc_value(&mapping, &s, 14, 59, &result),
+        "second oscillator gain cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN,
+        "second oscillator gain cc reports second oscillator gain parameter");
+    expect_near(s.second_oscillator_gain, 59.0f / 127.0f, 0.0001f, "second oscillator gain cc scales to normalized gain");
+
+    pickup_cc(&mapping, &s, 15, 127, 117);
+    expect_true(
+        apply_cc_value(&mapping, &s, 15, 117, &result),
+        "second oscillator morph cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH,
+        "second oscillator morph cc reports second oscillator morph parameter");
+    expect_near(s.second_oscillator_morph, 117.0f / 127.0f, 0.0001f, "second oscillator morph cc scales to normalized morph");
+
+    pickup_cc(&mapping, &s, 16, 0, 32);
+    expect_true(
+        apply_cc_value(&mapping, &s, 16, 29, &result),
+        "second master gain cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN,
+        "second master gain cc reports master gain parameter");
+    expect_near(s.master_gain, 29.0f / 127.0f, 0.0001f, "second master gain cc scales to normalized gain");
+}
+
 static void test_waits_for_pickup_before_first_knob_change(void)
 {
     midi_mapping mapping;
@@ -264,6 +313,7 @@ int main(void)
     test_applies_filter_cc_values();
     test_applies_oscillator_morph_cc_value();
     test_applies_second_oscillator_cc_values();
+    test_applies_oscillator_mix_cc_values();
     test_waits_for_pickup_before_first_knob_change();
     printf("All MIDI mapping tests passed.\n");
     return 0;

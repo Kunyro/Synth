@@ -17,6 +17,9 @@ typedef struct synth {
     float pitch_bend_semitones;
     synth_waveform waveform;
     float oscillator_morph;
+    float first_oscillator_gain;
+    float second_oscillator_gain;
+    float second_oscillator_morph;
     int second_oscillator_octave;
     int second_oscillator_pitch_semitones;
     float second_oscillator_fine_tune_cents;
@@ -47,6 +50,12 @@ synth_adsr synth_get_adsr(const synth *s);
 void synth_set_waveform(synth *s, synth_waveform waveform);
 // changes the default primary oscillator morph and active primary oscillators.
 void synth_set_oscillator_morph(synth *s, float morph);
+// changes the primary oscillator output level.
+void synth_set_first_oscillator_gain(synth *s, float gain);
+// changes the second oscillator output level.
+void synth_set_second_oscillator_gain(synth *s, float gain);
+// changes the second oscillator morph and active second oscillators.
+void synth_set_second_oscillator_morph(synth *s, float morph);
 // changes the second oscillator octave offset.
 void synth_set_second_oscillator_octave(synth *s, int octave);
 // changes the second oscillator semitone offset.

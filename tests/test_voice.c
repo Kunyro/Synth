@@ -210,6 +210,9 @@ int main(void)
         0.0f,
         0.0001f,
         "second oscillator fine tune defaults to zero");
+    expect_near(second_tune_synth.first_oscillator_gain, 1.0f, 0.0001f, "first oscillator gain defaults to full");
+    expect_near(second_tune_synth.second_oscillator_gain, 1.0f, 0.0001f, "second oscillator gain defaults to full");
+    expect_near(second_tune_synth.second_oscillator_morph, 1.0f, 0.0001f, "second oscillator morph defaults to square");
 
     synth_note_on_frequency(&second_tune_synth, 440.0f, 1.0f);
     second_tune_voice = find_voice_by_frequency(&second_tune_synth, 440.0f);
@@ -246,6 +249,18 @@ int main(void)
             -50.0f,
             0.0001f,
             "second oscillator fine tune clamps low");
+
+        synth_set_first_oscillator_gain(&second_tune_synth, 2.0f);
+        synth_set_second_oscillator_gain(&second_tune_synth, -1.0f);
+        synth_set_second_oscillator_morph(&second_tune_synth, 0.25f);
+        expect_near(second_tune_synth.first_oscillator_gain, 1.0f, 0.0001f, "first oscillator gain clamps high");
+        expect_near(second_tune_synth.second_oscillator_gain, 0.0f, 0.0001f, "second oscillator gain clamps low");
+        expect_near(second_tune_synth.second_oscillator_morph, 0.25f, 0.0001f, "second oscillator morph stores value");
+        expect_near(
+            second_tune_voice->second_oscillator.morph,
+            0.25f,
+            0.0001f,
+            "second oscillator morph updates active voice");
     }
 
     synth_render_stereo(&s, &stereo_buffer);

@@ -3,6 +3,7 @@
 #include "internal/synth_internal.h"
 
 static const float voice_oscillator_mix_gain = 0.5f;
+static const synth_voice_mix default_voice_mix = {1.0f, 1.0f};
 
 // sets up both oscillators at the same pitch.
 static void init_oscillators(synth_voice *voice, synth_waveform waveform, float frequency)
@@ -12,10 +13,10 @@ static void init_oscillators(synth_voice *voice, synth_waveform waveform, float 
 }
 
 // renders the voice oscillator pair before envelope and voice gain.
-static float render_oscillators(synth_voice *voice, float sample_rate)
+static float render_oscillators(synth_voice *voice, float sample_rate, synth_voice_mix mix)
 {
-    const float primary = synth_oscillator_render(&voice->oscillator, sample_rate);
-    const float secondary = synth_oscillator_render(&voice->second_oscillator, sample_rate);
+    const float primary = synth_oscillator_render(&voice->oscillator, sample_rate) * mix.first_oscillator_gain;
+    const float secondary = synth_oscillator_render(&voice->second_oscillator, sample_rate) * mix.second_oscillator_gain;
 
     return (primary + secondary) * voice_oscillator_mix_gain;
 }
@@ -68,6 +69,12 @@ void synth_voice_set_oscillator_morph(synth_voice *voice, float morph)
     synth_oscillator_set_morph(&voice->oscillator, morph);
 }
 
+// changes the second oscillator morph.
+void synth_voice_set_second_oscillator_morph(synth_voice *voice, float morph)
+{
+    synth_oscillator_set_morph(&voice->second_oscillator, morph);
+}
+
 // releases a voice so it can fade out.
 void synth_voice_note_off(synth_voice *voice)
 {
@@ -76,6 +83,12 @@ void synth_voice_note_off(synth_voice *voice)
 
 // renders one sample from the voice.
 float synth_voice_render(synth_voice *voice, float sample_rate)
+{
+    return synth_voice_render_mix(voice, sample_rate, default_voice_mix);
+}
+
+// renders one sample from the voice with oscillator mix controls.
+float synth_voice_render_mix(synth_voice *voice, float sample_rate, synth_voice_mix mix)
 {
     float envelope_level;
     float oscillator_sample;
@@ -90,6 +103,6 @@ float synth_voice_render(synth_voice *voice, float sample_rate)
         return 0.0f;
     }
 
-    oscillator_sample = render_oscillators(voice, sample_rate);
+    oscillator_sample = render_oscillators(voice, sample_rate, mix);
     return oscillator_sample * envelope_level * voice->velocity;
 }

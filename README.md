@@ -146,6 +146,10 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 9: second oscillator octave
 - CC 10: second oscillator pitch
 - CC 11: second oscillator fine tune
+- CC 13: first oscillator volume
+- CC 14: second oscillator volume
+- CC 15: second oscillator morph
+- CC 16: master gain
 
 Run with another config, or disable config mapping:
 
@@ -171,6 +175,9 @@ Supported parameters:
 - `filter_cutoff`
 - `filter_poles`
 - `oscillator_morph`
+- `first_oscillator_gain`
+- `second_oscillator_gain`
+- `second_oscillator_morph`
 - `second_oscillator_octave`
 - `second_oscillator_pitch`
 - `second_oscillator_fine_tune`

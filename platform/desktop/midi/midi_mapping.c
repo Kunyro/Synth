@@ -107,6 +107,21 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "first_oscillator_gain") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN;
+        return 1;
+    }
+
+    if (strcmp(name, "second_oscillator_gain") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN;
+        return 1;
+    }
+
+    if (strcmp(name, "second_oscillator_morph") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH;
+        return 1;
+    }
+
     if (strcmp(name, "second_oscillator_octave") == 0) {
         *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE;
         return 1;
@@ -235,6 +250,15 @@ static float current_parameter_value(const synth *s, midi_mapping_parameter para
         case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
             return s->oscillator_morph;
 
+        case MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN:
+            return s->first_oscillator_gain;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN:
+            return s->second_oscillator_gain;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH:
+            return s->second_oscillator_morph;
+
         case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
             return (float)s->second_oscillator_octave;
 
@@ -359,6 +383,18 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
 
         case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
             synth_set_oscillator_morph(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN:
+            synth_set_first_oscillator_gain(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN:
+            synth_set_second_oscillator_gain(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH:
+            synth_set_second_oscillator_morph(s, synth_value);
             break;
 
         case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
@@ -495,6 +531,15 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 
         case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
             return "oscillator_morph";
+
+        case MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN:
+            return "first_oscillator_gain";
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN:
+            return "second_oscillator_gain";
+
+        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH:
+            return "second_oscillator_morph";
 
         case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
             return "second_oscillator_octave";

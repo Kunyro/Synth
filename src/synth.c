@@ -31,6 +31,16 @@ static float second_oscillator_frequency(const synth *s, float primary_frequency
     return primary_frequency * pitch_bend_ratio(second_oscillator_semitones(s));
 }
 
+// packages the current oscillator mix settings for voice rendering.
+static synth_voice_mix synth_voice_mix_from_state(const synth *s)
+{
+    synth_voice_mix mix;
+
+    mix.first_oscillator_gain = s->first_oscillator_gain;
+    mix.second_oscillator_gain = s->second_oscillator_gain;
+    return mix;
+}
+
 // finds the active voice that is playing a midi note.
 static synth_voice *find_voice_for_note(synth *s, int midi_note)
 {
@@ -98,6 +108,9 @@ void synth_init(synth *s, float sample_rate)
     s->pitch_bend_semitones = 0.0f;
     s->waveform = SYNTH_WAVEFORM_SINE;
     s->oscillator_morph = synth_waveform_to_morph(s->waveform);
+    s->first_oscillator_gain = 1.0f;
+    s->second_oscillator_gain = 1.0f;
+    s->second_oscillator_morph = synth_waveform_to_morph(SYNTH_WAVEFORM_SQUARE);
     s->second_oscillator_octave = 0;
     s->second_oscillator_pitch_semitones = 0;
     s->second_oscillator_fine_tune_cents = 0.0f;
@@ -128,6 +141,7 @@ void synth_note_on(synth *s, int midi_note, float velocity)
         s->envelope);
     retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
+    synth_voice_set_second_oscillator_morph(voice, s->second_oscillator_morph);
 }
 
 // starts a note by frequency instead of midi note.
@@ -144,6 +158,7 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
         s->envelope);
     retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
+    synth_voice_set_second_oscillator_morph(voice, s->second_oscillator_morph);
 }
 
 // releases a midi note if it is playing.
@@ -217,6 +232,28 @@ void synth_set_oscillator_morph(synth *s, float morph)
     }
 }
 
+// changes the second oscillator morph and active second oscillators.
+void synth_set_second_oscillator_morph(synth *s, float morph)
+{
+    s->second_oscillator_morph = synth_clampf(morph, 0.0f, 1.0f);
+
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice_set_second_oscillator_morph(&s->voices[i], s->second_oscillator_morph);
+    }
+}
+
+// changes the primary oscillator output level.
+void synth_set_first_oscillator_gain(synth *s, float gain)
+{
+    s->first_oscillator_gain = synth_clampf(gain, 0.0f, 1.0f);
+}
+
+// changes the second oscillator output level.
+void synth_set_second_oscillator_gain(synth *s, float gain)
+{
+    s->second_oscillator_gain = synth_clampf(gain, 0.0f, 1.0f);
+}
+
 // changes the second oscillator octave offset.
 void synth_set_second_oscillator_octave(synth *s, int octave)
 {
@@ -253,10 +290,11 @@ void synth_set_filter_poles(synth *s, int pole_count)
 // renders one mixed and filtered synth sample.
 static float synth_render_sample(synth *s)
 {
+    const synth_voice_mix mix = synth_voice_mix_from_state(s);
     float sample = 0.0f;
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        sample += synth_voice_render(&s->voices[i], s->sample_rate);
+        sample += synth_voice_render_mix(&s->voices[i], s->sample_rate, mix);
     }
 
     return synth_filter_process(&s->filter, sample * s->master_gain);

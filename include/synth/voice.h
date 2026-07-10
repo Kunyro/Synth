@@ -4,6 +4,12 @@
 #include "synth/envelope.h"
 #include "synth/oscillator.h"
 
+// per-voice oscillator mix controls.
+typedef struct synth_voice_mix {
+    float first_oscillator_gain;
+    float second_oscillator_gain;
+} synth_voice_mix;
+
 // one playable synth voice with its oscillators and envelope.
 typedef struct synth_voice {
     int active;
@@ -31,9 +37,13 @@ void synth_voice_set_frequencies(synth_voice *voice, float primary_frequency, fl
 void synth_voice_set_waveform(synth_voice *voice, synth_waveform waveform);
 // changes the primary oscillator morph.
 void synth_voice_set_oscillator_morph(synth_voice *voice, float morph);
+// changes the second oscillator morph.
+void synth_voice_set_second_oscillator_morph(synth_voice *voice, float morph);
 // releases a voice so it can fade out.
 void synth_voice_note_off(synth_voice *voice);
 // renders one sample from the voice.
 float synth_voice_render(synth_voice *voice, float sample_rate);
+// renders one sample from the voice with oscillator mix controls.
+float synth_voice_render_mix(synth_voice *voice, float sample_rate, synth_voice_mix mix);
 
 #endif
