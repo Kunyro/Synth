@@ -1,79 +1,54 @@
 # Synth
 
-Synth engine written in C
+A small portable C synth engine with a desktop host for realtime audio and MIDI control.
 
-## Synth engine roadmap
+The core synth lives in `include/synth/` and `src/`. Desktop audio, MIDI input,
+controller mappings, and runtime library loading live under `platform/desktop/`
+so the engine can stay independent of miniaudio and PortMidi.
 
-This project uses [miniaudio](https://miniaud.io/) for desktop audio output, but
-the actual synth engine does not depend on miniaudio:
+## Project Layout
 
-- `include/synth/` contains the public synth engine headers
-- `src/` contains the portable synth engine implementation
-- `platform/desktop/audio/` contains the miniaudio desktop adapter
-- `platform/desktop/midi/` contains the PortMidi desktop adapter
-- `platform/teensy/` is reserved for the future Teensy 4.1 port
-- `third_party/miniaudio/` contains the miniaudio header
-- `third_party/portmidi/` is reserved for optional PortMidi implementation
+- `include/synth/`: public synth engine headers
+- `src/`: portable synth engine implementation
+- `src/internal/`: private engine helpers and wavetable internals
+- `platform/desktop/audio/`: miniaudio desktop audio adapter
+- `platform/desktop/midi/`: PortMidi transport and MIDI CC mapping layer
+- `config/midi/`: controller mapping files
+- `tools/midi_monitor.c`: MIDI inspection utility
+- `tests/`: C test programs built by `make test`
+- `third_party/miniaudio/`: vendored miniaudio header
+- `third_party/portmidi/`: reserved for an optional local PortMidi copy
+- `platform/teensy/`: reserved for a future Teensy 4.1 port
 
-Build:
+`include/synth/lfo.h`, `src/lfo.c`, and `tools/render_wav.c` are currently
+empty placeholders.
+
+## Build And Test
+
+Build the desktop synth:
 
 ```sh
 make
 ```
 
-Install optional desktop MIDI support:
-
-```sh
-brew install portmidi
-```
-
-PortMidi is loaded dynamically at runtime. If it is installed with Homebrew on
-macOS, the desktop app should find it automatically from `/opt/homebrew/lib` or
-`/usr/local/lib`. If no MIDI device is connected, the app will still run and
-print that no MIDI input devices were found.
-
-Run portable engine tests:
+Run the test suite:
 
 ```sh
 make test
 ```
 
-Build and run the MIDI monitor:
+This builds and runs tests for the oscillator, envelope, filter, voice/synth
+behavior, MIDI parsing, and MIDI mapping.
+
+Clean build artifacts:
 
 ```sh
-make midi-monitor
+make clean
 ```
 
-Touch one knob, pad, or button at a time and the monitor prints the incoming
-MIDI message, including channel, message type, CC or note number, value, and raw
-bytes. Use this to build controller mappings.
+## Desktop Audio
 
-MIDI controller configs live in `config/midi/`. The default desktop config is
-`config/midi/akai_mpk_mini_mk2.conf`, which currently maps CC knobs 1 through 4
-on channel 1 to attack, decay, sustain, and release, CC knob 5 to filter cutoff,
-CC knob 6 to filter poles, CC knob 7 to oscillator morph, and CC knob 8 to
-master gain.
-
-Run with another config or disable config mapping:
-
-```sh
-./build/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
-./build/synth --no-midi-config
-```
-
-Config lines use:
-
-```text
-parameter=cc:channel:control:scale:min:max
-```
-
-Supported scales are `linear`, `log`, and `step`.
-
-For example:
-
-```text
-filter_cutoff=cc:1:5:log:20.0:20000.0
-```
+The desktop app uses miniaudio for playback. The synth engine renders into planar stereo buffers with `synth_render_stereo()`. The current signal is centered, so left and right receive the same sample until panning or stereo imaging is added.
 
 Run until Enter is pressed:
 
@@ -81,11 +56,7 @@ Run until Enter is pressed:
 make run
 ```
 
-With no arguments, the desktop app plays MIDI note `57` as a quick audio test
-only when no MIDI input device is detected. If a MIDI input device is connected,
-the app starts silent and waits for notes from the device.
-
-Run a specific MIDI note for a fixed number of seconds:
+Run a MIDI note for a fixed number of seconds:
 
 ```sh
 ./build/synth 69 2
@@ -97,7 +68,7 @@ Run a direct frequency:
 ./build/synth freq:440 2
 ```
 
-Try saw or square with an optional low-pass cutoff:
+Try waveform, filter cutoff, and filter pole arguments:
 
 ```sh
 ./build/synth 45 2 saw 1200
@@ -105,29 +76,132 @@ Try saw or square with an optional low-pass cutoff:
 ./build/synth freq:2000 1 saw 100 4
 ```
 
-Arguments:
+Positional arguments, after any MIDI config flags:
 
-- `midi_note`: MIDI note number, defaults to `57` (`220 Hz`) only when no MIDI input device is detected
+- `midi_note`: MIDI note number
 - `freq:<hz>`: direct oscillator frequency, for example `freq:440`
+- `silence`: start without a test note
 - `seconds`: optional run duration; omit it to stop with Enter
 - `waveform`: optional `sine`, `saw`, or `square`
 - `filter_cutoff_hz`: optional low-pass cutoff
-- `filter_poles`: optional pole count after cutoff, clamped to `1..8`; each pole adds about `6 dB/oct`
+- `filter_poles`: optional pole count after cutoff, clamped to `1..8`
+
+With no note or frequency argument, the app plays MIDI note `57` only when no
+MIDI input source is detected. If a MIDI input source is connected, the app
+starts silent and waits for MIDI notes.
+
+## MIDI
+
+MIDI is split into three layers:
+
+- PortMidi layer: transport only. It loads PortMidi at runtime, opens input
+  streams, unpacks short messages into raw bytes, and forwards those bytes.
+- MIDI parser: translation. It parses short MIDI packets into note on, note off,
+  and pitch bend messages.
+- Synth engine: musical behavior. It decides how notes and pitch bend affect
+  active voices.
+
+PortMidi is loaded dynamically at runtime, so the project still builds when
+PortMidi is not installed. On macOS, Homebrew PortMidi is found from common
+paths such as `/opt/homebrew/lib/libportmidi.dylib` and
+`/usr/local/lib/libportmidi.dylib`.
+
+Optional install on macOS:
+
+```sh
+brew install portmidi
+```
+
+Build and run the MIDI monitor:
+
+```sh
+make midi-monitor
+```
+
+Touch one controller at a time and the monitor prints the incoming MIDI message,
+including channel, message type, values, and raw bytes. It recognizes note
+on/off, control change, pitch bend, program change, channel pressure, poly
+pressure, common system messages, and realtime messages.
+
+Pitch bend messages are parsed by the portable MIDI parser. A full-up message such as `e0 7f 7f` becomes value `8191`, normalized to `+1.0`. The synth maps the wheel to a two-semitone span: `-1` semitone at full down, center at `0`, and `+1` semitone at full up.
+
+## MIDI Controller Mapping
+
+Controller config files live in `config/midi/`. The default desktop config is:
+
+```text
+config/midi/akai_mpk_mini_mk2.conf
+```
+
+It maps Akai MPK Mini MK2-style CC knobs on channel 1:
+
+- CC 1: attack
+- CC 2: decay
+- CC 3: sustain
+- CC 4: release
+- CC 5: filter cutoff
+- CC 6: filter poles
+- CC 7: oscillator morph
+- CC 8: master gain
+
+Run with another config, or disable config mapping:
+
+```sh
+./build/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
+./build/synth --midi-config=path/to/controller.conf
+./build/synth --no-midi-config
+```
+
+Config lines use:
+
+```text
+parameter=cc:channel:control:scale:min:max
+```
+
+Supported parameters:
+
+- `attack`
+- `decay`
+- `sustain`
+- `release`
+- `master_gain`
+- `filter_cutoff`
+- `filter_poles`
+- `oscillator_morph`
+
+Supported scales:
+
+- `linear`
+- `log`
+- `step`
+
+Example:
+
+```text
+filter_cutoff=cc:1:5:log:20.0:20000.0
+```
+
+CC mappings use soft takeover: a knob must reach or cross the current synth
+value before it starts changing that parameter.
+
+## Engine Features
 
 Implemented so far:
 
-- miniaudio playback device setup
-- spectral bandlimited wavetable oscillator with sine-to-saw-to-square morph tables
-- MIDI note number to frequency conversion
-- note on / note off API
+- 8-voice polyphony
+- MIDI note to frequency conversion
+- note on, note off, all notes off, and direct-frequency note APIs
 - ADSR envelope
-- 8 voice polyphony
-- stereo audio buffer and desktop output path
-- sine, saw and square waveform presets
-- low-pass filter with configurable pole count
-- MIDI controller input through PortMidi when `libportmidi` is installed
-- tests for oscillator, envelope, voice, and MIDI type behavior
+- master gain
+- pitch bend with a `-1..+1` semitone range
+- spectral bandlimited wavetable oscillator
+- sine, saw, and square waveform presets
+- continuous oscillator morph from sine to saw to square
+- one-pole low-pass filter with `1..8` chained poles
+- planar stereo render API and mono render helper
+- short MIDI parser for notes and pitch bend
+- desktop MIDI input through runtime-loaded PortMidi
+- config-driven MIDI CC mapping for synth parameters
 
-PortMidi is loaded dynamically, so the project still builds when the library is
-not installed. MIDI input activates automatically when PortMidi is available at
-runtime.
+The filter cutoff is clamped to the valid audio range. Each filter pole adds
+roughly `6 dB/oct` of low-pass slope.
