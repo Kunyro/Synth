@@ -122,6 +122,19 @@ int main(void)
     expect_true(morphed_voice != 0, "morphed frequency voice starts");
     if (morphed_voice != 0) {
         expect_near(morphed_voice->oscillator.morph, 0.75f, 0.0001f, "new voice receives default morph");
+        expect_true(
+            morphed_voice->second_oscillator.waveform == SYNTH_WAVEFORM_SQUARE,
+            "second oscillator starts as square");
+        expect_near(
+            morphed_voice->second_oscillator.frequency,
+            220.0f,
+            0.0001f,
+            "second oscillator starts at voice frequency");
+        expect_near(
+            morphed_voice->second_oscillator.morph,
+            1.0f,
+            0.0001f,
+            "second oscillator uses square morph");
     }
     synth_set_oscillator_morph(&s, 2.0f);
     expect_near(s.oscillator_morph, 1.0f, 0.0001f, "synth oscillator morph clamps high");
@@ -138,14 +151,29 @@ int main(void)
             synth_midi_note_to_frequency(70),
             0.001f,
             "full pitch bend up retunes by one semitone");
+        expect_near(
+            bent_voice->second_oscillator.frequency,
+            synth_midi_note_to_frequency(70),
+            0.001f,
+            "full pitch bend up retunes second oscillator");
         synth_set_pitch_bend(&bend_synth, -1.0f);
         expect_near(
             bent_voice->oscillator.frequency,
             synth_midi_note_to_frequency(68),
             0.001f,
             "full pitch bend down retunes by one semitone");
+        expect_near(
+            bent_voice->second_oscillator.frequency,
+            synth_midi_note_to_frequency(68),
+            0.001f,
+            "full pitch bend down retunes second oscillator");
         synth_set_pitch_bend(&bend_synth, 0.0f);
         expect_near(bent_voice->oscillator.frequency, 440.0f, 0.001f, "center pitch bend restores base pitch");
+        expect_near(
+            bent_voice->second_oscillator.frequency,
+            440.0f,
+            0.001f,
+            "center pitch bend restores second oscillator base pitch");
     }
 
     synth_set_pitch_bend(&bend_synth, 1.0f);
@@ -158,6 +186,11 @@ int main(void)
             synth_midi_note_to_frequency(73),
             0.001f,
             "new voice receives held pitch bend");
+        expect_near(
+            held_bend_voice->second_oscillator.frequency,
+            synth_midi_note_to_frequency(73),
+            0.001f,
+            "new voice second oscillator receives held pitch bend");
     }
 
     synth_render_stereo(&s, &stereo_buffer);

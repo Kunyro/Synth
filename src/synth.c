@@ -58,7 +58,7 @@ static void retune_active_voices(synth *s)
         synth_voice *voice = &s->voices[i];
 
         if (voice->active) {
-            synth_oscillator_set_frequency(&voice->oscillator, bend_frequency(s, voice->base_frequency));
+            synth_voice_set_frequency(voice, bend_frequency(s, voice->base_frequency));
         }
     }
 }
@@ -100,8 +100,8 @@ void synth_note_on(synth *s, int midi_note, float velocity)
         velocity,
         s->waveform,
         s->envelope);
-    synth_oscillator_set_frequency(&voice->oscillator, bend_frequency(s, voice->base_frequency));
-    synth_oscillator_set_morph(&voice->oscillator, s->oscillator_morph);
+    synth_voice_set_frequency(voice, bend_frequency(s, voice->base_frequency));
+    synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
 }
 
 // starts a note by frequency instead of midi note.
@@ -116,8 +116,8 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
         velocity,
         s->waveform,
         s->envelope);
-    synth_oscillator_set_frequency(&voice->oscillator, bend_frequency(s, voice->base_frequency));
-    synth_oscillator_set_morph(&voice->oscillator, s->oscillator_morph);
+    synth_voice_set_frequency(voice, bend_frequency(s, voice->base_frequency));
+    synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
 }
 
 // releases a midi note if it is playing.
@@ -170,24 +170,24 @@ synth_adsr synth_get_adsr(const synth *s)
     return s->envelope;
 }
 
-// changes the default waveform and current voice waveforms.
+// changes the default primary oscillator waveform and active primary oscillators.
 void synth_set_waveform(synth *s, synth_waveform waveform)
 {
     s->waveform = waveform;
     s->oscillator_morph = synth_waveform_to_morph(waveform);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        synth_oscillator_set_waveform(&s->voices[i].oscillator, waveform);
+        synth_voice_set_waveform(&s->voices[i], waveform);
     }
 }
 
-// changes the default oscillator morph and current voice morphs.
+// changes the default primary oscillator morph and active primary oscillators.
 void synth_set_oscillator_morph(synth *s, float morph)
 {
     s->oscillator_morph = synth_clampf(morph, 0.0f, 1.0f);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        synth_oscillator_set_morph(&s->voices[i].oscillator, s->oscillator_morph);
+        synth_voice_set_oscillator_morph(&s->voices[i], s->oscillator_morph);
     }
 }
 

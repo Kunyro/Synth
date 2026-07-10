@@ -40,9 +40,9 @@ void synth_set_master_gain(synth *s, float gain);
 void synth_set_adsr(synth *s, synth_adsr envelope);
 // returns the current sanitized envelope shape.
 synth_adsr synth_get_adsr(const synth *s);
-// changes the default waveform and current voice waveforms.
+// changes the default primary oscillator waveform and active primary oscillators.
 void synth_set_waveform(synth *s, synth_waveform waveform);
-// changes the default oscillator morph and current voice morphs.
+// changes the default primary oscillator morph and active primary oscillators.
 void synth_set_oscillator_morph(synth *s, float morph);
 // changes the synth filter cutoff in hz.
 void synth_set_filter_cutoff(synth *s, float cutoff_hz);
