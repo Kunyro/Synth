@@ -3,7 +3,7 @@
 #include "internal/synth_internal.h"
 
 static const float voice_oscillator_mix_gain = 0.5f;
-static const synth_voice_mix default_voice_mix = {1.0f, 1.0f};
+static const synth_voice_mix default_voice_mix = {1.0f, 1.0f, 0.0f};
 
 // sets up both oscillators at the same pitch.
 static void init_oscillators(synth_voice *voice, synth_waveform waveform, float frequency)
@@ -12,13 +12,30 @@ static void init_oscillators(synth_voice *voice, synth_waveform waveform, float 
     synth_oscillator_init(&voice->second_oscillator, SYNTH_WAVEFORM_SQUARE, frequency);
 }
 
-// renders the voice oscillator pair before envelope and voice gain.
-static float render_oscillators(synth_voice *voice, float sample_rate, synth_voice_mix mix)
+// spreads the oscillator pair while keeping their mono average unchanged.
+static synth_stereo_sample spread_oscillators(float primary, float secondary, float spread)
 {
-    const float primary = synth_oscillator_render(&voice->oscillator, sample_rate) * mix.first_oscillator_gain;
-    const float secondary = synth_oscillator_render(&voice->second_oscillator, sample_rate) * mix.second_oscillator_gain;
+    const float mid = (primary + secondary) * voice_oscillator_mix_gain;
+    const float side = (primary - secondary) * voice_oscillator_mix_gain * spread;
+    synth_stereo_sample sample;
 
-    return (primary + secondary) * voice_oscillator_mix_gain;
+    sample.left = mid + side;
+    sample.right = mid - side;
+    return sample;
+}
+
+// renders both oscillators once before envelope and voice gain.
+static synth_stereo_sample render_oscillators_stereo(
+    synth_voice *voice,
+    float sample_rate,
+    synth_voice_mix mix)
+{
+    const float primary =
+        synth_oscillator_render(&voice->oscillator, sample_rate) * mix.first_oscillator_gain;
+    const float secondary =
+        synth_oscillator_render(&voice->second_oscillator, sample_rate) * mix.second_oscillator_gain;
+
+    return spread_oscillators(primary, secondary, mix.stereo_spread);
 }
 
 // sets up a quiet voice with the given envelope shape.
@@ -90,19 +107,32 @@ float synth_voice_render(synth_voice *voice, float sample_rate)
 // renders one sample from the voice with oscillator mix controls.
 float synth_voice_render_mix(synth_voice *voice, float sample_rate, synth_voice_mix mix)
 {
+    const synth_stereo_sample sample = synth_voice_render_stereo_mix(voice, sample_rate, mix);
+
+    return (sample.left + sample.right) * 0.5f;
+}
+
+// renders one stereo sample with opposed oscillator panning.
+synth_stereo_sample synth_voice_render_stereo_mix(
+    synth_voice *voice,
+    float sample_rate,
+    synth_voice_mix mix)
+{
     float envelope_level;
-    float oscillator_sample;
+    synth_stereo_sample sample = {0.0f, 0.0f};
 
     if (!voice->active) {
-        return 0.0f;
+        return sample;
     }
 
     envelope_level = synth_envelope_advance(&voice->envelope, sample_rate);
     if (!synth_envelope_is_active(&voice->envelope)) {
         voice->active = 0;
-        return 0.0f;
+        return sample;
     }
 
-    oscillator_sample = render_oscillators(voice, sample_rate, mix);
-    return oscillator_sample * envelope_level * voice->velocity;
+    sample = render_oscillators_stereo(voice, sample_rate, mix);
+    sample.left *= envelope_level * voice->velocity;
+    sample.right *= envelope_level * voice->velocity;
+    return sample;
 }

@@ -19,12 +19,14 @@ typedef struct synth {
     float oscillator_morph;
     float first_oscillator_gain;
     float second_oscillator_gain;
+    float stereo_spread;
     float second_oscillator_morph;
     int second_oscillator_octave;
     int second_oscillator_pitch_semitones;
     float second_oscillator_fine_tune_cents;
     synth_adsr envelope;
     synth_filter filter;
+    synth_filter right_filter;
     synth_voice voices[SYNTH_MAX_VOICES];
 } synth;
 
@@ -54,6 +56,8 @@ void synth_set_oscillator_morph(synth *s, float morph);
 void synth_set_first_oscillator_gain(synth *s, float gain);
 // changes the second oscillator output level.
 void synth_set_second_oscillator_gain(synth *s, float gain);
+// changes opposed oscillator panning from centered to fully spread.
+void synth_set_stereo_spread(synth *s, float spread);
 // changes the second oscillator morph and active second oscillators.
 void synth_set_second_oscillator_morph(synth *s, float morph);
 // changes the second oscillator octave offset.

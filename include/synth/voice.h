@@ -1,6 +1,7 @@
 #ifndef SYNTH_VOICE_H
 #define SYNTH_VOICE_H
 
+#include "synth/audio_types.h"
 #include "synth/envelope.h"
 #include "synth/oscillator.h"
 
@@ -8,6 +9,7 @@
 typedef struct synth_voice_mix {
     float first_oscillator_gain;
     float second_oscillator_gain;
+    float stereo_spread;
 } synth_voice_mix;
 
 // one playable synth voice with its oscillators and envelope.
@@ -45,5 +47,10 @@ void synth_voice_note_off(synth_voice *voice);
 float synth_voice_render(synth_voice *voice, float sample_rate);
 // renders one sample from the voice with oscillator mix controls.
 float synth_voice_render_mix(synth_voice *voice, float sample_rate, synth_voice_mix mix);
+// renders one stereo sample with opposed oscillator panning.
+synth_stereo_sample synth_voice_render_stereo_mix(
+    synth_voice *voice,
+    float sample_rate,
+    synth_voice_mix mix);
 
 #endif

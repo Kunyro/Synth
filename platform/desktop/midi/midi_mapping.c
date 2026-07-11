@@ -137,6 +137,11 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "stereo_spread") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_STEREO_SPREAD;
+        return 1;
+    }
+
     return 0;
 }
 
@@ -267,6 +272,9 @@ static float current_parameter_value(const synth *s, midi_mapping_parameter para
 
         case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
             return s->second_oscillator_fine_tune_cents;
+
+        case MIDI_MAPPING_PARAM_STEREO_SPREAD:
+            return s->stereo_spread;
 
         default:
             return 0.0f;
@@ -407,6 +415,10 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
 
         case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
             synth_set_second_oscillator_fine_tune(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_STEREO_SPREAD:
+            synth_set_stereo_spread(s, synth_value);
             break;
     }
 
@@ -549,6 +561,9 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 
         case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
             return "second_oscillator_fine_tune";
+
+        case MIDI_MAPPING_PARAM_STEREO_SPREAD:
+            return "stereo_spread";
 
         default:
             return "unknown";

@@ -60,7 +60,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 15, "akai mapping has fifteen bindings");
+    expect_true(mapping.binding_count == 16, "akai mapping has sixteen bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -137,6 +137,7 @@ static void test_applies_filter_cc_values(void)
         "filter cutoff cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_FILTER_CUTOFF, "filter cutoff cc reports filter cutoff parameter");
     expect_near(s.filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff cc scales to max cutoff");
+    expect_near(s.right_filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff keeps stereo filters in sync");
 
     pickup_cc(&mapping, &s, 6, 0, 127);
     expect_true(
@@ -144,6 +145,7 @@ static void test_applies_filter_cc_values(void)
         "filter poles cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_FILTER_POLES, "filter poles cc reports filter poles parameter");
     expect_true(s.filter.pole_count == 5, "filter poles cc steps to five poles");
+    expect_true(s.right_filter.pole_count == 5, "filter poles keep stereo filters in sync");
     expect_near(result.synth_value, 5.0f, 0.0001f, "filter poles result reports stepped value");
 
     expect_true(
@@ -280,6 +282,28 @@ static void test_applies_oscillator_mix_cc_values(void)
     expect_near(s.master_gain, 29.0f / 127.0f, 0.0001f, "second master gain cc scales to normalized gain");
 }
 
+static void test_applies_stereo_spread_cc_value(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for stereo spread test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 12, 0, 0);
+    expect_true(
+        apply_cc_value(&mapping, &s, 12, 41, &result),
+        "stereo spread cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_STEREO_SPREAD,
+        "stereo spread cc reports stereo spread parameter");
+    expect_near(s.stereo_spread, 41.0f / 127.0f, 0.0001f, "stereo spread cc scales to normalized width");
+}
+
 static void test_waits_for_pickup_before_first_knob_change(void)
 {
     midi_mapping mapping;
@@ -314,6 +338,7 @@ int main(void)
     test_applies_oscillator_morph_cc_value();
     test_applies_second_oscillator_cc_values();
     test_applies_oscillator_mix_cc_values();
+    test_applies_stereo_spread_cc_value();
     test_waits_for_pickup_before_first_knob_change();
     printf("All MIDI mapping tests passed.\n");
     return 0;

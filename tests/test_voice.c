@@ -75,6 +75,46 @@ static synth_voice *find_voice_by_note(synth *s, int midi_note)
     return 0;
 }
 
+static void test_stereo_spread(void)
+{
+    synth centered;
+    synth wide;
+    const synth_adsr immediate_envelope = {0.0f, 0.0f, 1.0f, 0.0f};
+    float centered_left[256];
+    float centered_right[256];
+    float wide_left[256];
+    float wide_right[256];
+    synth_audio_buffer centered_buffer = {centered_left, centered_right, 256};
+    synth_audio_buffer wide_buffer = {wide_left, wide_right, 256};
+
+    synth_init(&centered, 48000.0f);
+    synth_init(&wide, 48000.0f);
+    synth_set_adsr(&centered, immediate_envelope);
+    synth_set_adsr(&wide, immediate_envelope);
+    synth_note_on_frequency(&centered, 440.0f, 1.0f);
+    synth_note_on_frequency(&wide, 440.0f, 1.0f);
+    synth_set_stereo_spread(&wide, 1.0f);
+
+    synth_render_stereo(&centered, &centered_buffer);
+    synth_render_stereo(&wide, &wide_buffer);
+
+    expect_true(buffers_match(centered_left, centered_right, 256), "zero spread stays centered");
+    expect_true(!buffers_match(wide_left, wide_right, 256), "full spread separates the oscillator pair");
+
+    for (size_t i = 0; i < 256; ++i) {
+        expect_near(
+            (wide_left[i] + wide_right[i]) * 0.5f,
+            centered_left[i],
+            0.0001f,
+            "spread keeps the mono average unchanged");
+    }
+
+    synth_set_stereo_spread(&wide, -1.0f);
+    expect_near(wide.stereo_spread, 0.0f, 0.0001f, "stereo spread clamps low");
+    synth_set_stereo_spread(&wide, 2.0f);
+    expect_near(wide.stereo_spread, 1.0f, 0.0001f, "stereo spread clamps high");
+}
+
 int main(void)
 {
     synth s;
@@ -267,6 +307,8 @@ int main(void)
     expect_true(buffer_has_signal(left, 256), "stereo render writes left channel");
     expect_true(buffer_has_signal(right, 256), "stereo render writes right channel");
     expect_true(buffers_match(left, right, 256), "stereo render starts centered");
+
+    test_stereo_spread();
 
     if (failures != 0) {
         fprintf(stderr, "%d voice test(s) failed\n", failures);

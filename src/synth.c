@@ -38,6 +38,7 @@ static synth_voice_mix synth_voice_mix_from_state(const synth *s)
 
     mix.first_oscillator_gain = s->first_oscillator_gain;
     mix.second_oscillator_gain = s->second_oscillator_gain;
+    mix.stereo_spread = s->stereo_spread;
     return mix;
 }
 
@@ -110,12 +111,14 @@ void synth_init(synth *s, float sample_rate)
     s->oscillator_morph = synth_waveform_to_morph(s->waveform);
     s->first_oscillator_gain = 1.0f;
     s->second_oscillator_gain = 1.0f;
+    s->stereo_spread = 0.0f;
     s->second_oscillator_morph = synth_waveform_to_morph(SYNTH_WAVEFORM_SQUARE);
     s->second_oscillator_octave = 0;
     s->second_oscillator_pitch_semitones = 0;
     s->second_oscillator_fine_tune_cents = 0.0f;
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
+    synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice_init(&s->voices[i], s->envelope);
@@ -254,6 +257,12 @@ void synth_set_second_oscillator_gain(synth *s, float gain)
     s->second_oscillator_gain = synth_clampf(gain, 0.0f, 1.0f);
 }
 
+// changes opposed oscillator panning from centered to fully spread.
+void synth_set_stereo_spread(synth *s, float spread)
+{
+    s->stereo_spread = synth_clampf(spread, 0.0f, 1.0f);
+}
+
 // changes the second oscillator octave offset.
 void synth_set_second_oscillator_octave(synth *s, int octave)
 {
@@ -279,35 +288,43 @@ void synth_set_second_oscillator_fine_tune(synth *s, float cents)
 void synth_set_filter_cutoff(synth *s, float cutoff_hz)
 {
     synth_filter_set_cutoff(&s->filter, cutoff_hz);
+    synth_filter_set_cutoff(&s->right_filter, cutoff_hz);
 }
 
 // changes how many poles the synth filter uses.
 void synth_set_filter_poles(synth *s, int pole_count)
 {
     synth_filter_set_poles(&s->filter, pole_count);
+    synth_filter_set_poles(&s->right_filter, pole_count);
 }
 
-// renders one mixed and filtered synth sample.
-static float synth_render_sample(synth *s)
+// renders one mixed stereo sample through independent channel filter state.
+static synth_stereo_sample synth_render_stereo_sample(synth *s)
 {
     const synth_voice_mix mix = synth_voice_mix_from_state(s);
-    float sample = 0.0f;
+    synth_stereo_sample sample = {0.0f, 0.0f};
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        sample += synth_voice_render_mix(&s->voices[i], s->sample_rate, mix);
+        const synth_stereo_sample voice_sample =
+            synth_voice_render_stereo_mix(&s->voices[i], s->sample_rate, mix);
+
+        sample.left += voice_sample.left;
+        sample.right += voice_sample.right;
     }
 
-    return synth_filter_process(&s->filter, sample * s->master_gain);
+    sample.left = synth_filter_process(&s->filter, sample.left * s->master_gain);
+    sample.right = synth_filter_process(&s->right_filter, sample.right * s->master_gain);
+    return sample;
 }
 
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output)
 {
     for (size_t frame = 0; frame < output->frame_count; ++frame) {
-        const float sample = synth_render_sample(s);
+        const synth_stereo_sample sample = synth_render_stereo_sample(s);
 
-        output->left[frame] = sample;
-        output->right[frame] = sample;
+        output->left[frame] = sample.left;
+        output->right[frame] = sample.right;
     }
 }
 
@@ -315,6 +332,8 @@ void synth_render_stereo(synth *s, synth_audio_buffer *output)
 void synth_render_mono(synth *s, float *output, size_t frame_count)
 {
     for (size_t frame = 0; frame < frame_count; ++frame) {
-        output[frame] = synth_render_sample(s);
+        const synth_stereo_sample sample = synth_render_stereo_sample(s);
+
+        output[frame] = (sample.left + sample.right) * 0.5f;
     }
 }

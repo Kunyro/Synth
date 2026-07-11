@@ -48,7 +48,7 @@ make clean
 
 ## Desktop Audio
 
-The desktop app uses miniaudio for playback. The synth engine renders into planar stereo buffers with `synth_render_stereo()`. The current signal is centered, so left and right receive the same sample until panning or stereo imaging is added.
+The desktop app uses miniaudio for playback. The synth engine renders into planar stereo buffers with `synth_render_stereo()`. Its stereo spread control moves the first and second oscillators toward opposite channels while keeping their mono average unchanged.
 
 Run until Enter is pressed:
 
@@ -146,6 +146,7 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 9: second oscillator octave
 - CC 10: second oscillator pitch
 - CC 11: second oscillator fine tune
+- CC 12: stereo spread
 - CC 13: first oscillator volume
 - CC 14: second oscillator volume
 - CC 15: second oscillator morph
@@ -181,6 +182,7 @@ Supported parameters:
 - `second_oscillator_octave`
 - `second_oscillator_pitch`
 - `second_oscillator_fine_tune`
+- `stereo_spread`
 
 Supported scales:
 
