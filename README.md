@@ -20,8 +20,7 @@ so the engine can stay independent of miniaudio and PortMidi.
 - `third_party/portmidi/`: reserved for an optional local PortMidi copy
 - `platform/teensy/`: reserved for a future Teensy 4.1 port
 
-`include/synth/lfo.h`, `src/lfo.c`, and `tools/render_wav.c` are currently
-empty placeholders.
+`tools/render_wav.c` is currently an empty placeholder.
 
 ## Build And Test
 
@@ -37,8 +36,8 @@ Run the test suite:
 make test
 ```
 
-This builds and runs tests for the oscillator, envelope, filter, voice/synth
-behavior, MIDI parsing, and MIDI mapping.
+This builds and runs tests for the oscillator, LFO, envelope, filter,
+voice/synth behavior, MIDI parsing, and MIDI mapping.
 
 Clean build artifacts:
 
@@ -151,6 +150,13 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 14: second oscillator volume
 - CC 15: second oscillator morph
 - CC 16: master gain
+- CC 17: first oscillator LFO volume amount
+- CC 18: second oscillator LFO volume amount
+- CC 19: filter LFO amount
+- CC 20: oscillator morph LFO amount
+- CC 21: LFO rate
+- CC 22: global LFO depth
+- CC 23: LFO shape morph
 
 Run with another config, or disable config mapping:
 
@@ -183,6 +189,13 @@ Supported parameters:
 - `second_oscillator_pitch`
 - `second_oscillator_fine_tune`
 - `stereo_spread`
+- `lfo_rate`
+- `lfo_shape_morph`
+- `lfo_depth`
+- `lfo_morph_amount`
+- `lfo_first_oscillator_gain_amount`
+- `lfo_second_oscillator_gain_amount`
+- `lfo_filter_amount`
 
 Supported scales:
 
@@ -217,6 +230,16 @@ Implemented so far:
 - short MIDI parser for notes and pitch bend
 - desktop MIDI input through runtime-loaded PortMidi
 - config-driven MIDI CC mapping for synth parameters
+- continuous global morphable LFO with morph, oscillator volume, and filter routes
 
 The filter cutoff is clamped to the valid audio range. Each filter pole adds
 roughly `6 dB/oct` of low-pass slope.
+
+The global LFO runs continuously, including while no voices are active. Its
+shape uses the same spectral wavetable morph as the audio oscillators:
+`0.0 = sine`, `0.5 = saw`, and `1.0 = square`. Its depth is a master multiplier
+for every route amount. Morph modulation moves both oscillator morph positions
+around their stored base values, oscillator volume modulation moves down from
+each stored base gain, and filter modulation moves the stored cutoff
+exponentially by up to eight octaves in either direction. Render-time
+modulation does not overwrite the underlying knob settings.

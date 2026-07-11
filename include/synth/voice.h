@@ -10,6 +10,8 @@ typedef struct synth_voice_mix {
     float first_oscillator_gain;
     float second_oscillator_gain;
     float stereo_spread;
+    float first_oscillator_morph_offset;
+    float second_oscillator_morph_offset;
 } synth_voice_mix;
 
 // one playable synth voice with its oscillators and envelope.

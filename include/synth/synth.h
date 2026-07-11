@@ -5,6 +5,7 @@
 
 #include "synth/audio_types.h"
 #include "synth/filter.h"
+#include "synth/lfo.h"
 #include "synth/midi_types.h"
 #include "synth/synth_config.h"
 #include "synth/voice.h"
@@ -24,6 +25,12 @@ typedef struct synth {
     int second_oscillator_octave;
     int second_oscillator_pitch_semitones;
     float second_oscillator_fine_tune_cents;
+    synth_lfo lfo;
+    float lfo_depth;
+    float lfo_morph_amount;
+    float lfo_first_oscillator_gain_amount;
+    float lfo_second_oscillator_gain_amount;
+    float lfo_filter_amount;
     synth_adsr envelope;
     synth_filter filter;
     synth_filter right_filter;
@@ -70,6 +77,20 @@ void synth_set_second_oscillator_fine_tune(synth *s, float cents);
 void synth_set_filter_cutoff(synth *s, float cutoff_hz);
 // changes how many poles the synth filter uses.
 void synth_set_filter_poles(synth *s, int pole_count);
+// changes the global lfo rate in cycles per second.
+void synth_set_lfo_rate(synth *s, float frequency_hz);
+// changes the global lfo shape from sine through saw to square.
+void synth_set_lfo_shape_morph(synth *s, float morph);
+// changes the master multiplier applied to every lfo route.
+void synth_set_lfo_depth(synth *s, float depth);
+// changes how strongly the lfo moves both oscillator morph positions.
+void synth_set_lfo_morph_amount(synth *s, float amount);
+// changes how strongly the lfo modulates the primary oscillator level.
+void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount);
+// changes how strongly the lfo modulates the second oscillator level.
+void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount);
+// changes how strongly the lfo moves the shared filter cutoff.
+void synth_set_lfo_filter_amount(synth *s, float amount);
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output);
 // renders mono frames into a sample array.

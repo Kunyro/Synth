@@ -115,6 +115,68 @@ static void test_stereo_spread(void)
     expect_near(wide.stereo_spread, 1.0f, 0.0001f, "stereo spread clamps high");
 }
 
+static void test_global_lfo(void)
+{
+    synth continuous;
+    synth dry;
+    synth modulated;
+    const synth_adsr immediate_envelope = {0.0f, 0.0f, 1.0f, 0.0f};
+    float silence[20];
+    float dry_buffer[256];
+    float modulated_buffer[256];
+
+    synth_init(&continuous, 100.0f);
+    expect_near(continuous.lfo.frequency_hz, SYNTH_DEFAULT_LFO_RATE_HZ, 0.0001f, "lfo has a default rate");
+    expect_near(continuous.lfo_depth, 0.0f, 0.0001f, "lfo starts with no modulation depth");
+
+    synth_set_lfo_rate(&continuous, 2.0f);
+    synth_set_lfo_shape_morph(&continuous, 2.0f);
+    synth_set_lfo_depth(&continuous, 2.0f);
+    synth_set_lfo_morph_amount(&continuous, -1.0f);
+    synth_set_lfo_first_oscillator_gain_amount(&continuous, 2.0f);
+    synth_set_lfo_second_oscillator_gain_amount(&continuous, -1.0f);
+    synth_set_lfo_filter_amount(&continuous, 2.0f);
+    expect_near(continuous.lfo_depth, 1.0f, 0.0001f, "lfo depth clamps high");
+    expect_near(continuous.lfo.morph, 1.0f, 0.0001f, "lfo shape morph clamps high");
+    expect_near(continuous.lfo_morph_amount, 0.0f, 0.0001f, "lfo morph amount clamps low");
+    expect_near(continuous.lfo_first_oscillator_gain_amount, 1.0f, 0.0001f, "first oscillator lfo amount clamps high");
+    expect_near(continuous.lfo_second_oscillator_gain_amount, 0.0f, 0.0001f, "second oscillator lfo amount clamps low");
+    expect_near(continuous.lfo_filter_amount, 1.0f, 0.0001f, "filter lfo amount clamps high");
+
+    synth_render_mono(&continuous, silence, 20);
+    expect_near(continuous.lfo.phase, 0.4f, 0.0001f, "global lfo runs continuously without active voices");
+
+    synth_init(&dry, 1000.0f);
+    synth_init(&modulated, 1000.0f);
+    synth_set_adsr(&dry, immediate_envelope);
+    synth_set_adsr(&modulated, immediate_envelope);
+    synth_set_filter_cutoff(&dry, 200.0f);
+    synth_set_filter_cutoff(&modulated, 200.0f);
+    synth_set_oscillator_morph(&dry, 0.5f);
+    synth_set_oscillator_morph(&modulated, 0.5f);
+    synth_note_on_frequency(&dry, 100.0f, 1.0f);
+    synth_note_on_frequency(&modulated, 100.0f, 1.0f);
+    synth_set_lfo_rate(&modulated, 5.0f);
+    synth_set_lfo_shape_morph(&modulated, 0.5f);
+    synth_set_lfo_depth(&modulated, 1.0f);
+    synth_set_lfo_morph_amount(&modulated, 0.5f);
+    synth_set_lfo_first_oscillator_gain_amount(&modulated, 0.75f);
+    synth_set_lfo_second_oscillator_gain_amount(&modulated, 0.5f);
+    synth_set_lfo_filter_amount(&modulated, 0.25f);
+
+    synth_render_mono(&dry, dry_buffer, 256);
+    synth_render_mono(&modulated, modulated_buffer, 256);
+
+    expect_true(!buffers_match(dry_buffer, modulated_buffer, 256), "global lfo changes rendered audio");
+    expect_near(modulated.oscillator_morph, 0.5f, 0.0001f, "lfo preserves the base morph setting");
+    expect_near(modulated.filter.cutoff_hz, 200.0f, 0.0001f, "lfo preserves the base filter cutoff");
+    expect_near(
+        modulated.voices[0].oscillator.morph,
+        0.5f,
+        0.0001f,
+        "lfo preserves the voice oscillator base morph");
+}
+
 int main(void)
 {
     synth s;
@@ -309,6 +371,7 @@ int main(void)
     expect_true(buffers_match(left, right, 256), "stereo render starts centered");
 
     test_stereo_spread();
+    test_global_lfo();
 
     if (failures != 0) {
         fprintf(stderr, "%d voice test(s) failed\n", failures);

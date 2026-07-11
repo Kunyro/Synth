@@ -112,6 +112,10 @@ int main(void)
     synth_oscillator_set_morph(&oscillator, 2.0f);
     expect_near(oscillator.morph, 1.0f, 0.0001f, "morph clamps high");
 
+    synth_oscillator_set_morph(&oscillator, 0.25f);
+    synth_oscillator_render_with_morph(&oscillator, 48000.0f, 0.75f);
+    expect_near(oscillator.morph, 0.25f, 0.0001f, "render override preserves base morph");
+
     if (failures != 0) {
         fprintf(stderr, "%d oscillator test(s) failed\n", failures);
         return 1;

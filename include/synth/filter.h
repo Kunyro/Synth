@@ -25,5 +25,7 @@ void synth_filter_set_cutoff(synth_filter *filter, float cutoff_hz);
 void synth_filter_set_poles(synth_filter *filter, int pole_count);
 // runs one sample through the filter.
 float synth_filter_process(synth_filter *filter, float input);
+// runs one sample with a temporary cutoff without changing the stored cutoff.
+float synth_filter_process_with_cutoff(synth_filter *filter, float input, float cutoff_hz);
 
 #endif

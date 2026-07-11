@@ -142,6 +142,41 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
+    if (strcmp(name, "lfo_rate") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_RATE;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_shape_morph") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_depth") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_DEPTH;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_morph_amount") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_first_oscillator_gain_amount") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_second_oscillator_gain_amount") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_filter_amount") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT;
+        return 1;
+    }
+
     return 0;
 }
 
@@ -275,6 +310,27 @@ static float current_parameter_value(const synth *s, midi_mapping_parameter para
 
         case MIDI_MAPPING_PARAM_STEREO_SPREAD:
             return s->stereo_spread;
+
+        case MIDI_MAPPING_PARAM_LFO_RATE:
+            return s->lfo.frequency_hz;
+
+        case MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH:
+            return s->lfo.morph;
+
+        case MIDI_MAPPING_PARAM_LFO_DEPTH:
+            return s->lfo_depth;
+
+        case MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT:
+            return s->lfo_morph_amount;
+
+        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
+            return s->lfo_first_oscillator_gain_amount;
+
+        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT:
+            return s->lfo_second_oscillator_gain_amount;
+
+        case MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT:
+            return s->lfo_filter_amount;
 
         default:
             return 0.0f;
@@ -420,6 +476,34 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
         case MIDI_MAPPING_PARAM_STEREO_SPREAD:
             synth_set_stereo_spread(s, synth_value);
             break;
+
+        case MIDI_MAPPING_PARAM_LFO_RATE:
+            synth_set_lfo_rate(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH:
+            synth_set_lfo_shape_morph(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_DEPTH:
+            synth_set_lfo_depth(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT:
+            synth_set_lfo_morph_amount(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
+            synth_set_lfo_first_oscillator_gain_amount(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT:
+            synth_set_lfo_second_oscillator_gain_amount(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT:
+            synth_set_lfo_filter_amount(s, synth_value);
+            break;
     }
 
     if (should_set_adsr) {
@@ -564,6 +648,27 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 
         case MIDI_MAPPING_PARAM_STEREO_SPREAD:
             return "stereo_spread";
+
+        case MIDI_MAPPING_PARAM_LFO_RATE:
+            return "lfo_rate";
+
+        case MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH:
+            return "lfo_shape_morph";
+
+        case MIDI_MAPPING_PARAM_LFO_DEPTH:
+            return "lfo_depth";
+
+        case MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT:
+            return "lfo_morph_amount";
+
+        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
+            return "lfo_first_oscillator_gain_amount";
+
+        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT:
+            return "lfo_second_oscillator_gain_amount";
+
+        case MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT:
+            return "lfo_filter_amount";
 
         default:
             return "unknown";

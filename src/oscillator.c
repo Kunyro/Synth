@@ -49,6 +49,15 @@ void synth_oscillator_set_frequency(synth_oscillator *oscillator, float frequenc
 // renders one oscillator sample and moves its phase forward.
 float synth_oscillator_render(synth_oscillator *oscillator, float sample_rate)
 {
+    return synth_oscillator_render_with_morph(oscillator, sample_rate, oscillator->morph);
+}
+
+// renders with a temporary morph value without changing the stored base morph.
+float synth_oscillator_render_with_morph(
+    synth_oscillator *oscillator,
+    float sample_rate,
+    float morph)
+{
     float sample;
     float phase_step;
 
@@ -60,7 +69,7 @@ float synth_oscillator_render(synth_oscillator *oscillator, float sample_rate)
         oscillator->phase,
         oscillator->frequency,
         sample_rate,
-        oscillator->morph);
+        synth_clampf(morph, 0.0f, 1.0f));
 
     phase_step = oscillator->frequency / sample_rate;
     oscillator->phase = wrap_phase(oscillator->phase + phase_step);

@@ -60,7 +60,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 16, "akai mapping has sixteen bindings");
+    expect_true(mapping.binding_count == 23, "akai mapping has twenty-three bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -304,6 +304,66 @@ static void test_applies_stereo_spread_cc_value(void)
     expect_near(s.stereo_spread, 41.0f / 127.0f, 0.0001f, "stereo spread cc scales to normalized width");
 }
 
+static void test_applies_lfo_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    float expected_rate;
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for lfo test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 21, 0, 127);
+    expect_true(apply_cc_value(&mapping, &s, 21, 116, &result), "lfo rate cc applies");
+    expected_rate = expf(logf(0.05f) + ((116.0f / 127.0f) * (logf(20.0f) - logf(0.05f))));
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_RATE, "lfo rate cc reports rate parameter");
+    expect_near(s.lfo.frequency_hz, expected_rate, 0.0001f, "lfo rate cc uses logarithmic hz scaling");
+
+    pickup_cc(&mapping, &s, 22, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 22, 57, &result), "lfo depth cc applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo depth cc reports depth parameter");
+    expect_near(s.lfo_depth, 57.0f / 127.0f, 0.0001f, "lfo depth cc scales to normalized depth");
+
+    pickup_cc(&mapping, &s, 20, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 20, 21, &result), "lfo morph amount cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT,
+        "lfo morph cc reports morph amount parameter");
+    expect_near(s.lfo_morph_amount, 21.0f / 127.0f, 0.0001f, "lfo morph amount cc scales normally");
+
+    pickup_cc(&mapping, &s, 23, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 23, 21, &result), "lfo shape morph cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH,
+        "lfo shape cc reports shape morph parameter");
+    expect_near(s.lfo.morph, 21.0f / 127.0f, 0.0001f, "lfo shape morph cc scales normally");
+
+    pickup_cc(&mapping, &s, 17, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 17, 0, &result), "first oscillator lfo amount cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT,
+        "first oscillator lfo cc reports its route");
+    expect_near(s.lfo_first_oscillator_gain_amount, 0.0f, 0.0001f, "first oscillator lfo amount reaches zero");
+
+    pickup_cc(&mapping, &s, 18, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 18, 74, &result), "second oscillator lfo amount cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT,
+        "second oscillator lfo cc reports its route");
+    expect_near(s.lfo_second_oscillator_gain_amount, 74.0f / 127.0f, 0.0001f, "second oscillator lfo amount scales normally");
+
+    pickup_cc(&mapping, &s, 19, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 19, 75, &result), "filter lfo amount cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT,
+        "filter lfo cc reports its route");
+    expect_near(s.lfo_filter_amount, 75.0f / 127.0f, 0.0001f, "filter lfo amount scales normally");
+}
+
 static void test_waits_for_pickup_before_first_knob_change(void)
 {
     midi_mapping mapping;
@@ -339,6 +399,7 @@ int main(void)
     test_applies_second_oscillator_cc_values();
     test_applies_oscillator_mix_cc_values();
     test_applies_stereo_spread_cc_value();
+    test_applies_lfo_cc_values();
     test_waits_for_pickup_before_first_knob_change();
     printf("All MIDI mapping tests passed.\n");
     return 0;

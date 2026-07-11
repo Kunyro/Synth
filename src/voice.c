@@ -3,7 +3,7 @@
 #include "internal/synth_internal.h"
 
 static const float voice_oscillator_mix_gain = 0.5f;
-static const synth_voice_mix default_voice_mix = {1.0f, 1.0f, 0.0f};
+static const synth_voice_mix default_voice_mix = {1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
 
 // sets up both oscillators at the same pitch.
 static void init_oscillators(synth_voice *voice, synth_waveform waveform, float frequency)
@@ -31,9 +31,17 @@ static synth_stereo_sample render_oscillators_stereo(
     synth_voice_mix mix)
 {
     const float primary =
-        synth_oscillator_render(&voice->oscillator, sample_rate) * mix.first_oscillator_gain;
+        synth_oscillator_render_with_morph(
+            &voice->oscillator,
+            sample_rate,
+            voice->oscillator.morph + mix.first_oscillator_morph_offset) *
+        mix.first_oscillator_gain;
     const float secondary =
-        synth_oscillator_render(&voice->second_oscillator, sample_rate) * mix.second_oscillator_gain;
+        synth_oscillator_render_with_morph(
+            &voice->second_oscillator,
+            sample_rate,
+            voice->second_oscillator.morph + mix.second_oscillator_morph_offset) *
+        mix.second_oscillator_gain;
 
     return spread_oscillators(primary, secondary, mix.stereo_spread);
 }

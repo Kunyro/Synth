@@ -31,15 +31,47 @@ static float second_oscillator_frequency(const synth *s, float primary_frequency
     return primary_frequency * pitch_bend_ratio(second_oscillator_semitones(s));
 }
 
-// packages the current oscillator mix settings for voice rendering.
-static synth_voice_mix synth_voice_mix_from_state(const synth *s)
+// combines a route amount with the global lfo depth.
+static float lfo_route_depth(const synth *s, float amount)
+{
+    return s->lfo_depth * amount;
+}
+
+// turns a bipolar lfo into tremolo that moves from the base gain downwards.
+static float modulated_gain(float base_gain, float lfo_value, float depth)
+{
+    const float unipolar_lfo = (lfo_value + 1.0f) * 0.5f;
+
+    return base_gain * (1.0f - (unipolar_lfo * depth));
+}
+
+// packages base settings and the current lfo value for voice rendering.
+static synth_voice_mix synth_voice_mix_from_state(const synth *s, float lfo_value)
 {
     synth_voice_mix mix;
+    const float first_gain_depth =
+        lfo_route_depth(s, s->lfo_first_oscillator_gain_amount);
+    const float second_gain_depth =
+        lfo_route_depth(s, s->lfo_second_oscillator_gain_amount);
+    const float morph_depth = lfo_route_depth(s, s->lfo_morph_amount);
 
-    mix.first_oscillator_gain = s->first_oscillator_gain;
-    mix.second_oscillator_gain = s->second_oscillator_gain;
+    mix.first_oscillator_gain =
+        modulated_gain(s->first_oscillator_gain, lfo_value, first_gain_depth);
+    mix.second_oscillator_gain =
+        modulated_gain(s->second_oscillator_gain, lfo_value, second_gain_depth);
     mix.stereo_spread = s->stereo_spread;
+    mix.first_oscillator_morph_offset = lfo_value * morph_depth * 0.5f;
+    mix.second_oscillator_morph_offset = lfo_value * morph_depth * 0.5f;
     return mix;
+}
+
+// moves the base filter cutoff exponentially so both directions cover octaves.
+static float modulated_filter_cutoff(const synth *s, float lfo_value)
+{
+    const float depth_octaves =
+        lfo_route_depth(s, s->lfo_filter_amount) * SYNTH_LFO_FILTER_MAX_OCTAVES;
+
+    return s->filter.cutoff_hz * powf(2.0f, lfo_value * depth_octaves);
 }
 
 // finds the active voice that is playing a midi note.
@@ -116,6 +148,12 @@ void synth_init(synth *s, float sample_rate)
     s->second_oscillator_octave = 0;
     s->second_oscillator_pitch_semitones = 0;
     s->second_oscillator_fine_tune_cents = 0.0f;
+    synth_lfo_init(&s->lfo, SYNTH_DEFAULT_LFO_RATE_HZ);
+    s->lfo_depth = 0.0f;
+    s->lfo_morph_amount = 0.0f;
+    s->lfo_first_oscillator_gain_amount = 0.0f;
+    s->lfo_second_oscillator_gain_amount = 0.0f;
+    s->lfo_filter_amount = 0.0f;
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
     synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
@@ -298,10 +336,54 @@ void synth_set_filter_poles(synth *s, int pole_count)
     synth_filter_set_poles(&s->right_filter, pole_count);
 }
 
+// changes the global lfo rate in cycles per second.
+void synth_set_lfo_rate(synth *s, float frequency_hz)
+{
+    synth_lfo_set_frequency(&s->lfo, frequency_hz);
+}
+
+// changes the global lfo shape from sine through saw to square.
+void synth_set_lfo_shape_morph(synth *s, float morph)
+{
+    synth_lfo_set_morph(&s->lfo, morph);
+}
+
+// changes the master multiplier applied to every lfo route.
+void synth_set_lfo_depth(synth *s, float depth)
+{
+    s->lfo_depth = synth_clampf(depth, 0.0f, 1.0f);
+}
+
+// changes how strongly the lfo moves both oscillator morph positions.
+void synth_set_lfo_morph_amount(synth *s, float amount)
+{
+    s->lfo_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
+}
+
+// changes how strongly the lfo modulates the primary oscillator level.
+void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount)
+{
+    s->lfo_first_oscillator_gain_amount = synth_clampf(amount, 0.0f, 1.0f);
+}
+
+// changes how strongly the lfo modulates the second oscillator level.
+void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount)
+{
+    s->lfo_second_oscillator_gain_amount = synth_clampf(amount, 0.0f, 1.0f);
+}
+
+// changes how strongly the lfo moves the shared filter cutoff.
+void synth_set_lfo_filter_amount(synth *s, float amount)
+{
+    s->lfo_filter_amount = synth_clampf(amount, 0.0f, 1.0f);
+}
+
 // renders one mixed stereo sample through independent channel filter state.
 static synth_stereo_sample synth_render_stereo_sample(synth *s)
 {
-    const synth_voice_mix mix = synth_voice_mix_from_state(s);
+    const float lfo_value = synth_lfo_advance(&s->lfo, s->sample_rate);
+    const synth_voice_mix mix = synth_voice_mix_from_state(s, lfo_value);
+    const float filter_cutoff = modulated_filter_cutoff(s, lfo_value);
     synth_stereo_sample sample = {0.0f, 0.0f};
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
@@ -312,8 +394,14 @@ static synth_stereo_sample synth_render_stereo_sample(synth *s)
         sample.right += voice_sample.right;
     }
 
-    sample.left = synth_filter_process(&s->filter, sample.left * s->master_gain);
-    sample.right = synth_filter_process(&s->right_filter, sample.right * s->master_gain);
+    sample.left = synth_filter_process_with_cutoff(
+        &s->filter,
+        sample.left * s->master_gain,
+        filter_cutoff);
+    sample.right = synth_filter_process_with_cutoff(
+        &s->right_filter,
+        sample.right * s->master_gain,
+        filter_cutoff);
     return sample;
 }
 

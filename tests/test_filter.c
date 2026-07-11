@@ -49,6 +49,8 @@ static float measure_filtered_sine_peak(int pole_count)
 int main(void)
 {
     synth_filter filter;
+    synth_filter modulated_filter;
+    synth_filter reference_filter;
     float one_pole_peak;
     float four_pole_peak;
 
@@ -71,6 +73,19 @@ int main(void)
 
     synth_filter_set_poles(&filter, SYNTH_FILTER_MAX_POLES + 1);
     expect_true(filter.pole_count == SYNTH_FILTER_MAX_POLES, "filter clamps pole count high");
+
+    synth_filter_init(&modulated_filter, 48000.0f, 1000.0f);
+    synth_filter_init(&reference_filter, 48000.0f, 100.0f);
+    expect_near(
+        synth_filter_process_with_cutoff(&modulated_filter, 1.0f, 100.0f),
+        synth_filter_process(&reference_filter, 1.0f),
+        0.0001f,
+        "temporary cutoff uses the requested coefficient");
+    expect_near(
+        modulated_filter.cutoff_hz,
+        1000.0f,
+        0.0001f,
+        "temporary cutoff preserves the stored base cutoff");
 
     one_pole_peak = measure_filtered_sine_peak(1);
     four_pole_peak = measure_filtered_sine_peak(4);
