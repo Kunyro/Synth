@@ -157,8 +157,13 @@ static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
         return 1;
     }
 
-    if (strcmp(name, "lfo_morph_amount") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT;
+    if (strcmp(name, "lfo_first_oscillator_morph_amount") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT;
+        return 1;
+    }
+
+    if (strcmp(name, "lfo_second_oscillator_morph_amount") == 0) {
+        *parameter = MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT;
         return 1;
     }
 
@@ -320,8 +325,11 @@ static float current_parameter_value(const synth *s, midi_mapping_parameter para
         case MIDI_MAPPING_PARAM_LFO_DEPTH:
             return s->lfo_depth;
 
-        case MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT:
-            return s->lfo_morph_amount;
+        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT:
+            return s->lfo_first_oscillator_morph_amount;
+
+        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT:
+            return s->lfo_second_oscillator_morph_amount;
 
         case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
             return s->lfo_first_oscillator_gain_amount;
@@ -489,8 +497,12 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
             synth_set_lfo_depth(s, synth_value);
             break;
 
-        case MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT:
-            synth_set_lfo_morph_amount(s, synth_value);
+        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT:
+            synth_set_lfo_first_oscillator_morph_amount(s, synth_value);
+            break;
+
+        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT:
+            synth_set_lfo_second_oscillator_morph_amount(s, synth_value);
             break;
 
         case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
@@ -658,8 +670,11 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
         case MIDI_MAPPING_PARAM_LFO_DEPTH:
             return "lfo_depth";
 
-        case MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT:
-            return "lfo_morph_amount";
+        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT:
+            return "lfo_first_oscillator_morph_amount";
+
+        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT:
+            return "lfo_second_oscillator_morph_amount";
 
         case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
             return "lfo_first_oscillator_gain_amount";

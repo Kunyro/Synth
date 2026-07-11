@@ -132,13 +132,23 @@ static void test_global_lfo(void)
     synth_set_lfo_rate(&continuous, 2.0f);
     synth_set_lfo_shape_morph(&continuous, 2.0f);
     synth_set_lfo_depth(&continuous, 2.0f);
-    synth_set_lfo_morph_amount(&continuous, -1.0f);
+    synth_set_lfo_first_oscillator_morph_amount(&continuous, -1.0f);
+    synth_set_lfo_second_oscillator_morph_amount(&continuous, 2.0f);
     synth_set_lfo_first_oscillator_gain_amount(&continuous, 2.0f);
     synth_set_lfo_second_oscillator_gain_amount(&continuous, -1.0f);
     synth_set_lfo_filter_amount(&continuous, 2.0f);
     expect_near(continuous.lfo_depth, 1.0f, 0.0001f, "lfo depth clamps high");
     expect_near(continuous.lfo.morph, 1.0f, 0.0001f, "lfo shape morph clamps high");
-    expect_near(continuous.lfo_morph_amount, 0.0f, 0.0001f, "lfo morph amount clamps low");
+    expect_near(
+        continuous.lfo_first_oscillator_morph_amount,
+        0.0f,
+        0.0001f,
+        "first oscillator morph lfo amount clamps low");
+    expect_near(
+        continuous.lfo_second_oscillator_morph_amount,
+        1.0f,
+        0.0001f,
+        "second oscillator morph lfo amount clamps high");
     expect_near(continuous.lfo_first_oscillator_gain_amount, 1.0f, 0.0001f, "first oscillator lfo amount clamps high");
     expect_near(continuous.lfo_second_oscillator_gain_amount, 0.0f, 0.0001f, "second oscillator lfo amount clamps low");
     expect_near(continuous.lfo_filter_amount, 1.0f, 0.0001f, "filter lfo amount clamps high");
@@ -159,7 +169,8 @@ static void test_global_lfo(void)
     synth_set_lfo_rate(&modulated, 5.0f);
     synth_set_lfo_shape_morph(&modulated, 0.5f);
     synth_set_lfo_depth(&modulated, 1.0f);
-    synth_set_lfo_morph_amount(&modulated, 0.5f);
+    synth_set_lfo_first_oscillator_morph_amount(&modulated, 0.25f);
+    synth_set_lfo_second_oscillator_morph_amount(&modulated, 0.75f);
     synth_set_lfo_first_oscillator_gain_amount(&modulated, 0.75f);
     synth_set_lfo_second_oscillator_gain_amount(&modulated, 0.5f);
     synth_set_lfo_filter_amount(&modulated, 0.25f);
@@ -174,7 +185,12 @@ static void test_global_lfo(void)
         modulated.voices[0].oscillator.morph,
         0.5f,
         0.0001f,
-        "lfo preserves the voice oscillator base morph");
+        "lfo preserves the first voice oscillator base morph");
+    expect_near(
+        modulated.voices[0].second_oscillator.morph,
+        1.0f,
+        0.0001f,
+        "lfo preserves the second voice oscillator base morph");
 }
 
 int main(void)

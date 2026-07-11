@@ -27,7 +27,8 @@ typedef struct synth {
     float second_oscillator_fine_tune_cents;
     synth_lfo lfo;
     float lfo_depth;
-    float lfo_morph_amount;
+    float lfo_first_oscillator_morph_amount;
+    float lfo_second_oscillator_morph_amount;
     float lfo_first_oscillator_gain_amount;
     float lfo_second_oscillator_gain_amount;
     float lfo_filter_amount;
@@ -83,8 +84,10 @@ void synth_set_lfo_rate(synth *s, float frequency_hz);
 void synth_set_lfo_shape_morph(synth *s, float morph);
 // changes the master multiplier applied to every lfo route.
 void synth_set_lfo_depth(synth *s, float depth);
-// changes how strongly the lfo moves both oscillator morph positions.
-void synth_set_lfo_morph_amount(synth *s, float amount);
+// changes how strongly the lfo moves the primary oscillator morph.
+void synth_set_lfo_first_oscillator_morph_amount(synth *s, float amount);
+// changes how strongly the lfo moves the second oscillator morph.
+void synth_set_lfo_second_oscillator_morph_amount(synth *s, float amount);
 // changes how strongly the lfo modulates the primary oscillator level.
 void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount);
 // changes how strongly the lfo modulates the second oscillator level.

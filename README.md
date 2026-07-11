@@ -152,11 +152,12 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 16: master gain
 - CC 17: first oscillator LFO volume amount
 - CC 18: second oscillator LFO volume amount
-- CC 19: filter LFO amount
-- CC 20: oscillator morph LFO amount
+- CC 19: first oscillator morph LFO amount
+- CC 20: second oscillator morph LFO amount
 - CC 21: LFO rate
 - CC 22: global LFO depth
-- CC 23: LFO shape morph
+- CC 23: filter LFO amount
+- CC 24: LFO shape morph
 
 Run with another config, or disable config mapping:
 
@@ -192,7 +193,8 @@ Supported parameters:
 - `lfo_rate`
 - `lfo_shape_morph`
 - `lfo_depth`
-- `lfo_morph_amount`
+- `lfo_first_oscillator_morph_amount`
+- `lfo_second_oscillator_morph_amount`
 - `lfo_first_oscillator_gain_amount`
 - `lfo_second_oscillator_gain_amount`
 - `lfo_filter_amount`
@@ -239,7 +241,7 @@ The global LFO runs continuously, including while no voices are active. Its
 shape uses the same spectral wavetable morph as the audio oscillators:
 `0.0 = sine`, `0.5 = saw`, and `1.0 = square`. Its depth is a master multiplier
 for every route amount. Morph modulation moves both oscillator morph positions
-around their stored base values, oscillator volume modulation moves down from
-each stored base gain, and filter modulation moves the stored cutoff
-exponentially by up to eight octaves in either direction. Render-time
+independently around their stored base values, oscillator volume modulation
+moves down from each stored base gain, and filter modulation moves the stored
+cutoff exponentially by up to eight octaves in either direction. Render-time
 modulation does not overwrite the underlying knob settings.

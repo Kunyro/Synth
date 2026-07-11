@@ -60,7 +60,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 23, "akai mapping has twenty-three bindings");
+    expect_true(mapping.binding_count == 24, "akai mapping has twenty-four bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -328,15 +328,30 @@ static void test_applies_lfo_cc_values(void)
     expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo depth cc reports depth parameter");
     expect_near(s.lfo_depth, 57.0f / 127.0f, 0.0001f, "lfo depth cc scales to normalized depth");
 
-    pickup_cc(&mapping, &s, 20, 0, 0);
-    expect_true(apply_cc_value(&mapping, &s, 20, 21, &result), "lfo morph amount cc applies");
+    pickup_cc(&mapping, &s, 19, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 19, 75, &result), "first oscillator morph lfo amount cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_MORPH_AMOUNT,
-        "lfo morph cc reports morph amount parameter");
-    expect_near(s.lfo_morph_amount, 21.0f / 127.0f, 0.0001f, "lfo morph amount cc scales normally");
+        result.parameter == MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT,
+        "first oscillator morph lfo cc reports its route");
+    expect_near(
+        s.lfo_first_oscillator_morph_amount,
+        75.0f / 127.0f,
+        0.0001f,
+        "first oscillator morph lfo amount scales normally");
 
-    pickup_cc(&mapping, &s, 23, 0, 0);
-    expect_true(apply_cc_value(&mapping, &s, 23, 21, &result), "lfo shape morph cc applies");
+    pickup_cc(&mapping, &s, 20, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 20, 21, &result), "second oscillator morph lfo amount cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT,
+        "second oscillator morph lfo cc reports its route");
+    expect_near(
+        s.lfo_second_oscillator_morph_amount,
+        21.0f / 127.0f,
+        0.0001f,
+        "second oscillator morph lfo amount scales normally");
+
+    pickup_cc(&mapping, &s, 24, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 24, 21, &result), "lfo shape morph cc applies");
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH,
         "lfo shape cc reports shape morph parameter");
@@ -356,8 +371,8 @@ static void test_applies_lfo_cc_values(void)
         "second oscillator lfo cc reports its route");
     expect_near(s.lfo_second_oscillator_gain_amount, 74.0f / 127.0f, 0.0001f, "second oscillator lfo amount scales normally");
 
-    pickup_cc(&mapping, &s, 19, 0, 0);
-    expect_true(apply_cc_value(&mapping, &s, 19, 75, &result), "filter lfo amount cc applies");
+    pickup_cc(&mapping, &s, 23, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 23, 75, &result), "filter lfo amount cc applies");
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT,
         "filter lfo cc reports its route");

@@ -53,15 +53,18 @@ static synth_voice_mix synth_voice_mix_from_state(const synth *s, float lfo_valu
         lfo_route_depth(s, s->lfo_first_oscillator_gain_amount);
     const float second_gain_depth =
         lfo_route_depth(s, s->lfo_second_oscillator_gain_amount);
-    const float morph_depth = lfo_route_depth(s, s->lfo_morph_amount);
+    const float first_morph_depth =
+        lfo_route_depth(s, s->lfo_first_oscillator_morph_amount);
+    const float second_morph_depth =
+        lfo_route_depth(s, s->lfo_second_oscillator_morph_amount);
 
     mix.first_oscillator_gain =
         modulated_gain(s->first_oscillator_gain, lfo_value, first_gain_depth);
     mix.second_oscillator_gain =
         modulated_gain(s->second_oscillator_gain, lfo_value, second_gain_depth);
     mix.stereo_spread = s->stereo_spread;
-    mix.first_oscillator_morph_offset = lfo_value * morph_depth * 0.5f;
-    mix.second_oscillator_morph_offset = lfo_value * morph_depth * 0.5f;
+    mix.first_oscillator_morph_offset = lfo_value * first_morph_depth * 0.5f;
+    mix.second_oscillator_morph_offset = lfo_value * second_morph_depth * 0.5f;
     return mix;
 }
 
@@ -150,7 +153,8 @@ void synth_init(synth *s, float sample_rate)
     s->second_oscillator_fine_tune_cents = 0.0f;
     synth_lfo_init(&s->lfo, SYNTH_DEFAULT_LFO_RATE_HZ);
     s->lfo_depth = 0.0f;
-    s->lfo_morph_amount = 0.0f;
+    s->lfo_first_oscillator_morph_amount = 0.0f;
+    s->lfo_second_oscillator_morph_amount = 0.0f;
     s->lfo_first_oscillator_gain_amount = 0.0f;
     s->lfo_second_oscillator_gain_amount = 0.0f;
     s->lfo_filter_amount = 0.0f;
@@ -354,10 +358,16 @@ void synth_set_lfo_depth(synth *s, float depth)
     s->lfo_depth = synth_clampf(depth, 0.0f, 1.0f);
 }
 
-// changes how strongly the lfo moves both oscillator morph positions.
-void synth_set_lfo_morph_amount(synth *s, float amount)
+// changes how strongly the lfo moves the primary oscillator morph.
+void synth_set_lfo_first_oscillator_morph_amount(synth *s, float amount)
 {
-    s->lfo_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
+    s->lfo_first_oscillator_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
+}
+
+// changes how strongly the lfo moves the second oscillator morph.
+void synth_set_lfo_second_oscillator_morph_amount(synth *s, float amount)
+{
+    s->lfo_second_oscillator_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
 }
 
 // changes how strongly the lfo modulates the primary oscillator level.
