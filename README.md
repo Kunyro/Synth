@@ -1,9 +1,9 @@
 # Synth
 
-A small portable C synth engine with a desktop host for realtime audio and MIDI control.
+A portable C synth engine with a desktop host for realtime audio and MIDI control.
 
-The core synth lives in `include/synth/` and `src/`. Desktop audio, MIDI input,
-controller mappings, and runtime library loading live under `platform/desktop/`
+The core synth lives in `include/synth/` and `src/`. Desktop audio and MIDI input
+controller mappings live under `platform/desktop/`
 so the engine can stay independent of miniaudio and PortMidi.
 
 ## Project Layout
@@ -16,8 +16,7 @@ so the engine can stay independent of miniaudio and PortMidi.
 - `config/midi/`: controller mapping files
 - `tools/midi_monitor.c`: MIDI inspection utility
 - `tests/`: C test programs built by `make test`
-- `third_party/miniaudio/`: vendored miniaudio header
-- `third_party/portmidi/`: reserved for an optional local PortMidi copy
+- `third_party/`: reserved for third_party libraries
 - `platform/teensy/`: reserved for a future Teensy 4.1 port
 
 `tools/render_wav.c` is currently an empty placeholder.
