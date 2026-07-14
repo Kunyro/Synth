@@ -1,6 +1,8 @@
 #ifndef SYNTH_INTERNAL_H
 #define SYNTH_INTERNAL_H
 
+#include <math.h>
+
 #include "synth/envelope.h"
 #include "synth/oscillator.h"
 
@@ -28,6 +30,17 @@ static inline int synth_clampi(int value, int min_value, int max_value)
     }
 
     return value;
+}
+
+static inline float synth_wrap_phase(float phase)
+{
+    phase -= floorf(phase);
+
+    if (phase < 0.0f) {
+        phase += 1.0f;
+    }
+
+    return phase;
 }
 
 static inline float synth_waveform_to_morph(synth_waveform waveform)

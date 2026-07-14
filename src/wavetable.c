@@ -17,11 +17,13 @@
 #define SYNTH_WAVETABLE_PI 3.14159265358979323846f
 #define SYNTH_WAVETABLE_TAU 6.28318530717958647692f
 
+// one pitch range's version of a wavetable with unsafe harmonics removed.
 typedef struct synth_wavetable_mip {
     int harmonic_limit;
     float samples[SYNTH_WAVETABLE_GUARD_SIZE];
 } synth_wavetable_mip;
 
+// one stored point along the sine-to-saw-to-square morph path.
 typedef struct synth_wavetable_morph_frame {
     float morph;
     synth_wavetable_mip mips[SYNTH_WAVETABLE_MIP_LEVELS];
@@ -48,7 +50,7 @@ static float saw_harmonic_amplitude(int harmonic)
 // returns the square contribution for one harmonic.
 static float square_harmonic_amplitude(int harmonic)
 {
-    // since square is only odd harmonics
+    // square only uses odd harmonics.
     if ((harmonic % 2) == 0) {
         return 0.0f;
     }

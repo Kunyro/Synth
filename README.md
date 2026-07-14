@@ -19,8 +19,6 @@ so the engine can stay independent of miniaudio and PortMidi.
 - `third_party/`: reserved for third_party libraries
 - `platform/teensy/`: reserved for a future Teensy 4.1 port
 
-`tools/render_wav.c` is currently an empty placeholder.
-
 ## Build And Test
 
 Build the desktop synth:

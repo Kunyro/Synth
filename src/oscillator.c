@@ -1,21 +1,7 @@
 #include "synth/oscillator.h"
 
-#include <math.h>
-
 #include "internal/synth_internal.h"
 #include "internal/wavetable.h"
-
-// keeps the normalized phase inside one oscillator cycle.
-static float wrap_phase(float phase)
-{
-    phase -= floorf(phase);
-
-    if (phase < 0.0f) {
-        phase += 1.0f;
-    }
-
-    return phase;
-}
 
 // sets up an oscillator with a waveform and pitch.
 void synth_oscillator_init(synth_oscillator *oscillator, synth_waveform waveform, float frequency)
@@ -72,7 +58,7 @@ float synth_oscillator_render_with_morph(
         synth_clampf(morph, 0.0f, 1.0f));
 
     phase_step = oscillator->frequency / sample_rate;
-    oscillator->phase = wrap_phase(oscillator->phase + phase_step);
+    oscillator->phase = synth_wrap_phase(oscillator->phase + phase_step);
 
     return sample;
 }

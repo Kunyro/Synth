@@ -81,13 +81,13 @@ static void test_applies_adsr_cc_values(void)
         apply_cc_value(&mapping, &s, 1, 127, &result),
         "attack cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_ATTACK, "attack cc reports attack parameter");
-    expect_near(s.envelope.attack_seconds, 2.0f, 0.0001f, "attack cc scales to max attack");
+    expect_near(synth_get_adsr(&s).attack_seconds, 2.0f, 0.0001f, "attack cc scales to max attack");
 
     pickup_cc(&mapping, &s, 3, 127, 0);
     expect_true(
         apply_cc_value(&mapping, &s, 3, 64, &result),
         "sustain cc applies");
-    expect_near(s.envelope.sustain_level, 64.0f / 127.0f, 0.0001f, "sustain cc scales to normalized sustain");
+    expect_near(synth_get_adsr(&s).sustain_level, 64.0f / 127.0f, 0.0001f, "sustain cc scales to normalized sustain");
 
     expect_true(
         !midi_mapping_apply_short_message(&mapping, wrong_channel, sizeof(wrong_channel), &s, 0),
@@ -111,7 +111,7 @@ static void test_applies_master_gain_cc_value(void)
         apply_cc_value(&mapping, &s, 8, 64, &result),
         "master gain cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN, "master gain cc reports master gain parameter");
-    expect_near(s.master_gain, 64.0f / 127.0f, 0.0001f, "master gain cc scales to normalized gain");
+    expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "master gain cc scales to normalized gain");
 }
 
 static void test_applies_filter_cc_values(void)
@@ -136,7 +136,7 @@ static void test_applies_filter_cc_values(void)
         apply_cc_value(&mapping, &s, 5, 127, &result),
         "filter cutoff cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_FILTER_CUTOFF, "filter cutoff cc reports filter cutoff parameter");
-    expect_near(s.filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff cc scales to max cutoff");
+    expect_near(synth_get_filter_cutoff(&s), 20000.0f, 0.01f, "filter cutoff cc scales to max cutoff");
     expect_near(s.right_filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff keeps stereo filters in sync");
 
     pickup_cc(&mapping, &s, 6, 0, 127);
@@ -144,19 +144,19 @@ static void test_applies_filter_cc_values(void)
         apply_cc_value(&mapping, &s, 6, 75, &result),
         "filter poles cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_FILTER_POLES, "filter poles cc reports filter poles parameter");
-    expect_true(s.filter.pole_count == 5, "filter poles cc steps to five poles");
+    expect_true(synth_get_filter_poles(&s) == 5, "filter poles cc steps to five poles");
     expect_true(s.right_filter.pole_count == 5, "filter poles keep stereo filters in sync");
     expect_near(result.synth_value, 5.0f, 0.0001f, "filter poles result reports stepped value");
 
     expect_true(
         apply_cc_value(&mapping, &s, 6, 0, 0),
         "filter poles min applies");
-    expect_true(s.filter.pole_count == 1, "filter poles min steps to one pole");
+    expect_true(synth_get_filter_poles(&s) == 1, "filter poles min steps to one pole");
 
     expect_true(
         apply_cc_value(&mapping, &s, 6, 127, 0),
         "filter poles max applies");
-    expect_true(s.filter.pole_count == 8, "filter poles max steps to eight poles");
+    expect_true(synth_get_filter_poles(&s) == 8, "filter poles max steps to eight poles");
 }
 
 static void test_applies_oscillator_morph_cc_value(void)
@@ -179,7 +179,7 @@ static void test_applies_oscillator_morph_cc_value(void)
         result.parameter == MIDI_MAPPING_PARAM_OSCILLATOR_MORPH,
         "oscillator morph cc reports oscillator morph parameter");
     expect_near(result.synth_value, 76.0f / 127.0f, 0.0001f, "oscillator morph result reports normalized value");
-    expect_near(s.oscillator_morph, 76.0f / 127.0f, 0.0001f, "oscillator morph cc scales to normalized morph");
+    expect_near(synth_get_oscillator_morph(&s), 76.0f / 127.0f, 0.0001f, "oscillator morph cc scales to normalized morph");
 }
 
 static void test_applies_second_oscillator_cc_values(void)
@@ -201,7 +201,7 @@ static void test_applies_second_oscillator_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE,
         "second oscillator octave cc reports octave parameter");
-    expect_true(s.second_oscillator_octave == 0, "second oscillator octave cc 58 steps to zero");
+    expect_true(synth_get_second_oscillator_octave(&s) == 0, "second oscillator octave cc 58 steps to zero");
     expect_near(result.synth_value, 0.0f, 0.0001f, "second oscillator octave result reports stepped value");
 
     pickup_cc(&mapping, &s, 10, 0, 64);
@@ -211,7 +211,7 @@ static void test_applies_second_oscillator_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH,
         "second oscillator pitch cc reports pitch parameter");
-    expect_true(s.second_oscillator_pitch_semitones == 6, "second oscillator pitch cc 123 steps to plus six");
+    expect_true(synth_get_second_oscillator_pitch(&s) == 6, "second oscillator pitch cc 123 steps to plus six");
     expect_near(result.synth_value, 6.0f, 0.0001f, "second oscillator pitch result reports stepped value");
 
     pickup_cc(&mapping, &s, 11, 0, 64);
@@ -222,13 +222,13 @@ static void test_applies_second_oscillator_cc_values(void)
         result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE,
         "second oscillator fine tune cc reports fine tune parameter");
     expect_near(
-        s.second_oscillator_fine_tune_cents,
+        synth_get_second_oscillator_fine_tune(&s),
         -50.0f + ((76.0f / 127.0f) * 100.0f),
         0.0001f,
         "second oscillator fine tune cc scales to cents");
     expect_near(
         result.synth_value,
-        s.second_oscillator_fine_tune_cents,
+        synth_get_second_oscillator_fine_tune(&s),
         0.0001f,
         "second oscillator fine tune result reports cents");
 }
@@ -252,7 +252,7 @@ static void test_applies_oscillator_mix_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN,
         "first oscillator gain cc reports first oscillator gain parameter");
-    expect_near(s.first_oscillator_gain, 119.0f / 127.0f, 0.0001f, "first oscillator gain cc scales to normalized gain");
+    expect_near(synth_get_first_oscillator_gain(&s), 119.0f / 127.0f, 0.0001f, "first oscillator gain cc scales to normalized gain");
 
     pickup_cc(&mapping, &s, 14, 127, 59);
     expect_true(
@@ -261,7 +261,7 @@ static void test_applies_oscillator_mix_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN,
         "second oscillator gain cc reports second oscillator gain parameter");
-    expect_near(s.second_oscillator_gain, 59.0f / 127.0f, 0.0001f, "second oscillator gain cc scales to normalized gain");
+    expect_near(synth_get_second_oscillator_gain(&s), 59.0f / 127.0f, 0.0001f, "second oscillator gain cc scales to normalized gain");
 
     pickup_cc(&mapping, &s, 15, 127, 117);
     expect_true(
@@ -270,7 +270,7 @@ static void test_applies_oscillator_mix_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH,
         "second oscillator morph cc reports second oscillator morph parameter");
-    expect_near(s.second_oscillator_morph, 117.0f / 127.0f, 0.0001f, "second oscillator morph cc scales to normalized morph");
+    expect_near(synth_get_second_oscillator_morph(&s), 117.0f / 127.0f, 0.0001f, "second oscillator morph cc scales to normalized morph");
 
     pickup_cc(&mapping, &s, 16, 0, 32);
     expect_true(
@@ -279,7 +279,7 @@ static void test_applies_oscillator_mix_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN,
         "second master gain cc reports master gain parameter");
-    expect_near(s.master_gain, 29.0f / 127.0f, 0.0001f, "second master gain cc scales to normalized gain");
+    expect_near(synth_get_master_gain(&s), 29.0f / 127.0f, 0.0001f, "second master gain cc scales to normalized gain");
 }
 
 static void test_applies_stereo_spread_cc_value(void)
@@ -301,7 +301,7 @@ static void test_applies_stereo_spread_cc_value(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_STEREO_SPREAD,
         "stereo spread cc reports stereo spread parameter");
-    expect_near(s.stereo_spread, 41.0f / 127.0f, 0.0001f, "stereo spread cc scales to normalized width");
+    expect_near(synth_get_stereo_spread(&s), 41.0f / 127.0f, 0.0001f, "stereo spread cc scales to normalized width");
 }
 
 static void test_applies_lfo_cc_values(void)
@@ -321,12 +321,12 @@ static void test_applies_lfo_cc_values(void)
     expect_true(apply_cc_value(&mapping, &s, 21, 116, &result), "lfo rate cc applies");
     expected_rate = expf(logf(0.05f) + ((116.0f / 127.0f) * (logf(20.0f) - logf(0.05f))));
     expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_RATE, "lfo rate cc reports rate parameter");
-    expect_near(s.lfo.frequency_hz, expected_rate, 0.0001f, "lfo rate cc uses logarithmic hz scaling");
+    expect_near(synth_get_lfo_rate(&s), expected_rate, 0.0001f, "lfo rate cc uses logarithmic hz scaling");
 
     pickup_cc(&mapping, &s, 22, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 22, 57, &result), "lfo depth cc applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo depth cc reports depth parameter");
-    expect_near(s.lfo_depth, 57.0f / 127.0f, 0.0001f, "lfo depth cc scales to normalized depth");
+    expect_near(synth_get_lfo_depth(&s), 57.0f / 127.0f, 0.0001f, "lfo depth cc scales to normalized depth");
 
     pickup_cc(&mapping, &s, 19, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 19, 75, &result), "first oscillator morph lfo amount cc applies");
@@ -334,7 +334,7 @@ static void test_applies_lfo_cc_values(void)
         result.parameter == MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT,
         "first oscillator morph lfo cc reports its route");
     expect_near(
-        s.lfo_first_oscillator_morph_amount,
+        synth_get_lfo_first_oscillator_morph_amount(&s),
         75.0f / 127.0f,
         0.0001f,
         "first oscillator morph lfo amount scales normally");
@@ -345,7 +345,7 @@ static void test_applies_lfo_cc_values(void)
         result.parameter == MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT,
         "second oscillator morph lfo cc reports its route");
     expect_near(
-        s.lfo_second_oscillator_morph_amount,
+        synth_get_lfo_second_oscillator_morph_amount(&s),
         21.0f / 127.0f,
         0.0001f,
         "second oscillator morph lfo amount scales normally");
@@ -355,28 +355,28 @@ static void test_applies_lfo_cc_values(void)
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH,
         "lfo shape cc reports shape morph parameter");
-    expect_near(s.lfo.morph, 21.0f / 127.0f, 0.0001f, "lfo shape morph cc scales normally");
+    expect_near(synth_get_lfo_shape_morph(&s), 21.0f / 127.0f, 0.0001f, "lfo shape morph cc scales normally");
 
     pickup_cc(&mapping, &s, 17, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 17, 0, &result), "first oscillator lfo amount cc applies");
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT,
         "first oscillator lfo cc reports its route");
-    expect_near(s.lfo_first_oscillator_gain_amount, 0.0f, 0.0001f, "first oscillator lfo amount reaches zero");
+    expect_near(synth_get_lfo_first_oscillator_gain_amount(&s), 0.0f, 0.0001f, "first oscillator lfo amount reaches zero");
 
     pickup_cc(&mapping, &s, 18, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 18, 74, &result), "second oscillator lfo amount cc applies");
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT,
         "second oscillator lfo cc reports its route");
-    expect_near(s.lfo_second_oscillator_gain_amount, 74.0f / 127.0f, 0.0001f, "second oscillator lfo amount scales normally");
+    expect_near(synth_get_lfo_second_oscillator_gain_amount(&s), 74.0f / 127.0f, 0.0001f, "second oscillator lfo amount scales normally");
 
     pickup_cc(&mapping, &s, 23, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 23, 75, &result), "filter lfo amount cc applies");
     expect_true(
         result.parameter == MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT,
         "filter lfo cc reports its route");
-    expect_near(s.lfo_filter_amount, 75.0f / 127.0f, 0.0001f, "filter lfo amount scales normally");
+    expect_near(synth_get_lfo_filter_amount(&s), 75.0f / 127.0f, 0.0001f, "filter lfo amount scales normally");
 }
 
 static void test_waits_for_pickup_before_first_knob_change(void)
@@ -392,16 +392,16 @@ static void test_waits_for_pickup_before_first_knob_change(void)
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
     expect_true(!apply_cc_value(&mapping, &s, 8, 127, &result), "first far-away gain cc waits for pickup");
-    expect_near(s.master_gain, SYNTH_DEFAULT_MASTER_GAIN, 0.0001f, "waiting cc leaves master gain unchanged");
+    expect_near(synth_get_master_gain(&s), SYNTH_DEFAULT_MASTER_GAIN, 0.0001f, "waiting cc leaves master gain unchanged");
 
     expect_true(!apply_cc_value(&mapping, &s, 8, 64, &result), "same-side gain cc still waits for pickup");
-    expect_near(s.master_gain, SYNTH_DEFAULT_MASTER_GAIN, 0.0001f, "same-side waiting cc leaves master gain unchanged");
+    expect_near(synth_get_master_gain(&s), SYNTH_DEFAULT_MASTER_GAIN, 0.0001f, "same-side waiting cc leaves master gain unchanged");
 
     expect_true(apply_cc_value(&mapping, &s, 8, 25, &result), "gain cc applies when it reaches pickup");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN, "pickup reports master gain parameter");
 
     expect_true(apply_cc_value(&mapping, &s, 8, 64, &result), "picked-up gain cc keeps applying");
-    expect_near(s.master_gain, 64.0f / 127.0f, 0.0001f, "picked-up gain cc updates normally");
+    expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "picked-up gain cc updates normally");
 }
 
 int main(void)

@@ -94,6 +94,28 @@ void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount);
 void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount);
 // changes how strongly the lfo moves the shared filter cutoff.
 void synth_set_lfo_filter_amount(synth *s, float amount);
+
+// reads current synth values without exposing where they are stored.
+float synth_get_master_gain(const synth *s);
+float synth_get_oscillator_morph(const synth *s);
+float synth_get_first_oscillator_gain(const synth *s);
+float synth_get_second_oscillator_gain(const synth *s);
+float synth_get_stereo_spread(const synth *s);
+float synth_get_second_oscillator_morph(const synth *s);
+int synth_get_second_oscillator_octave(const synth *s);
+int synth_get_second_oscillator_pitch(const synth *s);
+float synth_get_second_oscillator_fine_tune(const synth *s);
+float synth_get_filter_cutoff(const synth *s);
+int synth_get_filter_poles(const synth *s);
+float synth_get_lfo_rate(const synth *s);
+float synth_get_lfo_shape_morph(const synth *s);
+float synth_get_lfo_depth(const synth *s);
+float synth_get_lfo_first_oscillator_morph_amount(const synth *s);
+float synth_get_lfo_second_oscillator_morph_amount(const synth *s);
+float synth_get_lfo_first_oscillator_gain_amount(const synth *s);
+float synth_get_lfo_second_oscillator_gain_amount(const synth *s);
+float synth_get_lfo_filter_amount(const synth *s);
+
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output);
 // renders mono frames into a sample array.

@@ -64,125 +64,233 @@ static void copy_string(char *target, size_t target_size, const char *source)
     snprintf(target, target_size, "%s", source);
 }
 
-// parses a synth parameter name from a config key.
-static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
+typedef float (*midi_mapping_parameter_getter)(const synth *s);
+typedef void (*midi_mapping_parameter_setter)(synth *s, float value);
+
+typedef struct midi_mapping_parameter_entry {
+    midi_mapping_parameter parameter;
+    const char *name;
+    midi_mapping_parameter_getter get;
+    midi_mapping_parameter_setter set;
+} midi_mapping_parameter_entry;
+
+static float get_attack(const synth *s)
 {
-    if (strcmp(name, "attack") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_ATTACK;
-        return 1;
-    }
+    return synth_get_adsr(s).attack_seconds;
+}
 
-    if (strcmp(name, "decay") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_DECAY;
-        return 1;
-    }
+static float get_decay(const synth *s)
+{
+    return synth_get_adsr(s).decay_seconds;
+}
 
-    if (strcmp(name, "sustain") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_SUSTAIN;
-        return 1;
-    }
+static float get_sustain(const synth *s)
+{
+    return synth_get_adsr(s).sustain_level;
+}
 
-    if (strcmp(name, "release") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_RELEASE;
-        return 1;
-    }
+static float get_release(const synth *s)
+{
+    return synth_get_adsr(s).release_seconds;
+}
 
-    if (strcmp(name, "master_gain") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_MASTER_GAIN;
-        return 1;
-    }
+// adsr routes update one field, then hand the whole envelope back to the synth.
+static void set_attack(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_adsr(s);
 
-    if (strcmp(name, "filter_cutoff") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_FILTER_CUTOFF;
-        return 1;
-    }
+    adsr.attack_seconds = value;
+    synth_set_adsr(s, adsr);
+}
 
-    if (strcmp(name, "filter_poles") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_FILTER_POLES;
-        return 1;
-    }
+static void set_decay(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_adsr(s);
 
-    if (strcmp(name, "oscillator_morph") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_OSCILLATOR_MORPH;
-        return 1;
-    }
+    adsr.decay_seconds = value;
+    synth_set_adsr(s, adsr);
+}
 
-    if (strcmp(name, "first_oscillator_gain") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN;
-        return 1;
-    }
+static void set_sustain(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_adsr(s);
 
-    if (strcmp(name, "second_oscillator_gain") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN;
-        return 1;
-    }
+    adsr.sustain_level = value;
+    synth_set_adsr(s, adsr);
+}
 
-    if (strcmp(name, "second_oscillator_morph") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH;
-        return 1;
-    }
+static void set_release(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_adsr(s);
 
-    if (strcmp(name, "second_oscillator_octave") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE;
-        return 1;
-    }
+    adsr.release_seconds = value;
+    synth_set_adsr(s, adsr);
+}
 
-    if (strcmp(name, "second_oscillator_pitch") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH;
-        return 1;
-    }
+static float get_second_oscillator_octave(const synth *s)
+{
+    return (float)synth_get_second_oscillator_octave(s);
+}
 
-    if (strcmp(name, "second_oscillator_fine_tune") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE;
-        return 1;
-    }
+static float get_second_oscillator_pitch(const synth *s)
+{
+    return (float)synth_get_second_oscillator_pitch(s);
+}
 
-    if (strcmp(name, "stereo_spread") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_STEREO_SPREAD;
-        return 1;
-    }
+static float get_filter_poles(const synth *s)
+{
+    return (float)synth_get_filter_poles(s);
+}
 
-    if (strcmp(name, "lfo_rate") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_RATE;
-        return 1;
-    }
+static void set_filter_poles(synth *s, float value)
+{
+    synth_set_filter_poles(s, (int)value);
+}
 
-    if (strcmp(name, "lfo_shape_morph") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH;
-        return 1;
-    }
+static void set_second_oscillator_octave(synth *s, float value)
+{
+    synth_set_second_oscillator_octave(s, (int)value);
+}
 
-    if (strcmp(name, "lfo_depth") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_DEPTH;
-        return 1;
-    }
+static void set_second_oscillator_pitch(synth *s, float value)
+{
+    synth_set_second_oscillator_pitch(s, (int)value);
+}
 
-    if (strcmp(name, "lfo_first_oscillator_morph_amount") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT;
-        return 1;
+static const midi_mapping_parameter_entry parameter_entries[] = {
+    {MIDI_MAPPING_PARAM_ATTACK, "attack", get_attack, set_attack},
+    {MIDI_MAPPING_PARAM_DECAY, "decay", get_decay, set_decay},
+    {MIDI_MAPPING_PARAM_SUSTAIN, "sustain", get_sustain, set_sustain},
+    {MIDI_MAPPING_PARAM_RELEASE, "release", get_release, set_release},
+    {MIDI_MAPPING_PARAM_MASTER_GAIN, "master_gain", synth_get_master_gain, synth_set_master_gain},
+    {
+        MIDI_MAPPING_PARAM_FILTER_CUTOFF,
+        "filter_cutoff",
+        synth_get_filter_cutoff,
+        synth_set_filter_cutoff
+    },
+    {MIDI_MAPPING_PARAM_FILTER_POLES, "filter_poles", get_filter_poles, set_filter_poles},
+    {
+        MIDI_MAPPING_PARAM_OSCILLATOR_MORPH,
+        "oscillator_morph",
+        synth_get_oscillator_morph,
+        synth_set_oscillator_morph
+    },
+    {
+        MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN,
+        "first_oscillator_gain",
+        synth_get_first_oscillator_gain,
+        synth_set_first_oscillator_gain
+    },
+    {
+        MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN,
+        "second_oscillator_gain",
+        synth_get_second_oscillator_gain,
+        synth_set_second_oscillator_gain
+    },
+    {
+        MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH,
+        "second_oscillator_morph",
+        synth_get_second_oscillator_morph,
+        synth_set_second_oscillator_morph
+    },
+    {
+        MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE,
+        "second_oscillator_octave",
+        get_second_oscillator_octave,
+        set_second_oscillator_octave
+    },
+    {
+        MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH,
+        "second_oscillator_pitch",
+        get_second_oscillator_pitch,
+        set_second_oscillator_pitch
+    },
+    {
+        MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE,
+        "second_oscillator_fine_tune",
+        synth_get_second_oscillator_fine_tune,
+        synth_set_second_oscillator_fine_tune
+    },
+    {
+        MIDI_MAPPING_PARAM_STEREO_SPREAD,
+        "stereo_spread",
+        synth_get_stereo_spread,
+        synth_set_stereo_spread
+    },
+    {MIDI_MAPPING_PARAM_LFO_RATE, "lfo_rate", synth_get_lfo_rate, synth_set_lfo_rate},
+    {
+        MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH,
+        "lfo_shape_morph",
+        synth_get_lfo_shape_morph,
+        synth_set_lfo_shape_morph
+    },
+    {MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo_depth", synth_get_lfo_depth, synth_set_lfo_depth},
+    {
+        MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT,
+        "lfo_first_oscillator_morph_amount",
+        synth_get_lfo_first_oscillator_morph_amount,
+        synth_set_lfo_first_oscillator_morph_amount
+    },
+    {
+        MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT,
+        "lfo_second_oscillator_morph_amount",
+        synth_get_lfo_second_oscillator_morph_amount,
+        synth_set_lfo_second_oscillator_morph_amount
+    },
+    {
+        MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT,
+        "lfo_first_oscillator_gain_amount",
+        synth_get_lfo_first_oscillator_gain_amount,
+        synth_set_lfo_first_oscillator_gain_amount
+    },
+    {
+        MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT,
+        "lfo_second_oscillator_gain_amount",
+        synth_get_lfo_second_oscillator_gain_amount,
+        synth_set_lfo_second_oscillator_gain_amount
+    },
+    {
+        MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT,
+        "lfo_filter_amount",
+        synth_get_lfo_filter_amount,
+        synth_set_lfo_filter_amount
     }
+};
 
-    if (strcmp(name, "lfo_second_oscillator_morph_amount") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT;
-        return 1;
-    }
-
-    if (strcmp(name, "lfo_first_oscillator_gain_amount") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT;
-        return 1;
-    }
-
-    if (strcmp(name, "lfo_second_oscillator_gain_amount") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT;
-        return 1;
-    }
-
-    if (strcmp(name, "lfo_filter_amount") == 0) {
-        *parameter = MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT;
-        return 1;
+static const midi_mapping_parameter_entry *find_parameter_by_name(const char *name)
+{
+    for (size_t i = 0; i < sizeof(parameter_entries) / sizeof(parameter_entries[0]); ++i) {
+        if (strcmp(parameter_entries[i].name, name) == 0) {
+            return &parameter_entries[i];
+        }
     }
 
     return 0;
+}
+
+static const midi_mapping_parameter_entry *find_parameter(midi_mapping_parameter parameter)
+{
+    for (size_t i = 0; i < sizeof(parameter_entries) / sizeof(parameter_entries[0]); ++i) {
+        if (parameter_entries[i].parameter == parameter) {
+            return &parameter_entries[i];
+        }
+    }
+
+    return 0;
+}
+
+// parses a synth parameter name from a config key.
+static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
+{
+    const midi_mapping_parameter_entry *entry = find_parameter_by_name(name);
+
+    if (entry == 0) {
+        return 0;
+    }
+
+    *parameter = entry->parameter;
+    return 1;
 }
 
 // parses the source kind from a config value.
@@ -253,11 +361,14 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
     switch (binding->scale) {
         case MIDI_MAPPING_SCALE_LOG:
             // log scaling gives knobs more room in the low frequency range.
-            return expf(logf(binding->min_value) + (normalized * (logf(binding->max_value) - logf(binding->min_value))));
+            return expf(
+                logf(binding->min_value) +
+                (normalized * (logf(binding->max_value) - logf(binding->min_value))));
 
         case MIDI_MAPPING_SCALE_STEP:
             // step scaling snaps continuous midi values to whole-number choices.
-            return binding->min_value + (float)(int)((normalized * (binding->max_value - binding->min_value)) + 0.5f);
+            return binding->min_value +
+                (float)(int)((normalized * (binding->max_value - binding->min_value)) + 0.5f);
 
         case MIDI_MAPPING_SCALE_LINEAR:
         default:
@@ -268,81 +379,13 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
 // returns the current synth-side value for a mapped parameter.
 static float current_parameter_value(const synth *s, midi_mapping_parameter parameter)
 {
-    const synth_adsr adsr = synth_get_adsr(s);
+    const midi_mapping_parameter_entry *entry = find_parameter(parameter);
 
-    switch (parameter) {
-        case MIDI_MAPPING_PARAM_ATTACK:
-            return adsr.attack_seconds;
-
-        case MIDI_MAPPING_PARAM_DECAY:
-            return adsr.decay_seconds;
-
-        case MIDI_MAPPING_PARAM_SUSTAIN:
-            return adsr.sustain_level;
-
-        case MIDI_MAPPING_PARAM_RELEASE:
-            return adsr.release_seconds;
-
-        case MIDI_MAPPING_PARAM_MASTER_GAIN:
-            return s->master_gain;
-
-        case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
-            return s->filter.cutoff_hz;
-
-        case MIDI_MAPPING_PARAM_FILTER_POLES:
-            return (float)s->filter.pole_count;
-
-        case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
-            return s->oscillator_morph;
-
-        case MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN:
-            return s->first_oscillator_gain;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN:
-            return s->second_oscillator_gain;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH:
-            return s->second_oscillator_morph;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
-            return (float)s->second_oscillator_octave;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH:
-            return (float)s->second_oscillator_pitch_semitones;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
-            return s->second_oscillator_fine_tune_cents;
-
-        case MIDI_MAPPING_PARAM_STEREO_SPREAD:
-            return s->stereo_spread;
-
-        case MIDI_MAPPING_PARAM_LFO_RATE:
-            return s->lfo.frequency_hz;
-
-        case MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH:
-            return s->lfo.morph;
-
-        case MIDI_MAPPING_PARAM_LFO_DEPTH:
-            return s->lfo_depth;
-
-        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT:
-            return s->lfo_first_oscillator_morph_amount;
-
-        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT:
-            return s->lfo_second_oscillator_morph_amount;
-
-        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
-            return s->lfo_first_oscillator_gain_amount;
-
-        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT:
-            return s->lfo_second_oscillator_gain_amount;
-
-        case MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT:
-            return s->lfo_filter_amount;
-
-        default:
-            return 0.0f;
+    if (entry == 0 || entry->get == 0) {
+        return 0.0f;
     }
+
+    return entry->get(s);
 }
 
 // converts the current synth value back into the midi range for pickup checks.
@@ -365,7 +408,9 @@ static float synth_value_to_midi_value(const midi_mapping_binding *binding, floa
         case MIDI_MAPPING_SCALE_STEP:
         case MIDI_MAPPING_SCALE_LINEAR:
         default:
-            normalized = (bounded_value - binding->min_value) / (binding->max_value - binding->min_value);
+            normalized =
+                (bounded_value - binding->min_value) /
+                (binding->max_value - binding->min_value);
             break;
     }
 
@@ -373,7 +418,10 @@ static float synth_value_to_midi_value(const midi_mapping_binding *binding, floa
 }
 
 // checks whether a new midi value has reached or crossed the pickup point.
-static int midi_value_reaches_pickup(const midi_mapping_pickup *pickup, float pickup_midi_value, int midi_value)
+static int midi_value_reaches_pickup(
+    const midi_mapping_pickup *pickup,
+    float pickup_midi_value,
+    int midi_value)
 {
     const float current = (float)midi_value;
 
@@ -416,115 +464,21 @@ static int binding_has_pickup(midi_mapping_binding *binding, const synth *s, int
 // writes one mapped value into the synth.
 static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float synth_value)
 {
-    // adsr is updated as one struct so the unchanged parts stay intact.
-    synth_adsr adsr = synth_get_adsr(s);
-    int should_set_adsr = 0;
+    const midi_mapping_parameter_entry *entry = find_parameter(parameter);
 
-    switch (parameter) {
-        case MIDI_MAPPING_PARAM_ATTACK:
-            adsr.attack_seconds = synth_value;
-            should_set_adsr = 1;
-            break;
-
-        case MIDI_MAPPING_PARAM_DECAY:
-            adsr.decay_seconds = synth_value;
-            should_set_adsr = 1;
-            break;
-
-        case MIDI_MAPPING_PARAM_SUSTAIN:
-            adsr.sustain_level = synth_value;
-            should_set_adsr = 1;
-            break;
-
-        case MIDI_MAPPING_PARAM_RELEASE:
-            adsr.release_seconds = synth_value;
-            should_set_adsr = 1;
-            break;
-
-        case MIDI_MAPPING_PARAM_MASTER_GAIN:
-            synth_set_master_gain(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
-            synth_set_filter_cutoff(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_FILTER_POLES:
-            synth_set_filter_poles(s, (int)synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
-            synth_set_oscillator_morph(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN:
-            synth_set_first_oscillator_gain(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN:
-            synth_set_second_oscillator_gain(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH:
-            synth_set_second_oscillator_morph(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
-            synth_set_second_oscillator_octave(s, (int)synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH:
-            synth_set_second_oscillator_pitch(s, (int)synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
-            synth_set_second_oscillator_fine_tune(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_STEREO_SPREAD:
-            synth_set_stereo_spread(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_RATE:
-            synth_set_lfo_rate(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH:
-            synth_set_lfo_shape_morph(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_DEPTH:
-            synth_set_lfo_depth(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT:
-            synth_set_lfo_first_oscillator_morph_amount(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT:
-            synth_set_lfo_second_oscillator_morph_amount(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
-            synth_set_lfo_first_oscillator_gain_amount(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT:
-            synth_set_lfo_second_oscillator_gain_amount(s, synth_value);
-            break;
-
-        case MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT:
-            synth_set_lfo_filter_amount(s, synth_value);
-            break;
-    }
-
-    if (should_set_adsr) {
-        synth_set_adsr(s, adsr);
+    if (entry != 0 && entry->set != 0) {
+        entry->set(s, synth_value);
     }
 }
 
 // adds one binding from a config line.
-static int add_binding(midi_mapping *mapping, const char *key, char *value, char *error, size_t error_size, int line_number)
+static int add_binding(
+    midi_mapping *mapping,
+    const char *key,
+    char *value,
+    char *error,
+    size_t error_size,
+    int line_number)
 {
     char *source_name;
     char *channel_text;
@@ -553,7 +507,12 @@ static int add_binding(midi_mapping *mapping, const char *key, char *value, char
     min_text = strtok(0, ":");
     max_text = strtok(0, ":");
 
-    if (source_name == 0 || channel_text == 0 || control_text == 0 || scale_name == 0 || min_text == 0 || max_text == 0) {
+    if (source_name == 0 ||
+        channel_text == 0 ||
+        control_text == 0 ||
+        scale_name == 0 ||
+        min_text == 0 ||
+        max_text == 0) {
         set_error(error, error_size, line_number, "expected cc:channel:control:scale:min:max");
         return 0;
     }
@@ -585,7 +544,8 @@ static int add_binding(midi_mapping *mapping, const char *key, char *value, char
         return 0;
     }
 
-    if (!parse_float_value(min_text, &binding.min_value) || !parse_float_value(max_text, &binding.max_value)) {
+    if (!parse_float_value(min_text, &binding.min_value) ||
+        !parse_float_value(max_text, &binding.max_value)) {
         set_error(error, error_size, line_number, "min and max must be numbers");
         return 0;
     }
@@ -595,7 +555,8 @@ static int add_binding(midi_mapping *mapping, const char *key, char *value, char
         return 0;
     }
 
-    if (binding.scale == MIDI_MAPPING_SCALE_LOG && (binding.min_value <= 0.0f || binding.max_value <= 0.0f)) {
+    if (binding.scale == MIDI_MAPPING_SCALE_LOG &&
+        (binding.min_value <= 0.0f || binding.max_value <= 0.0f)) {
         set_error(error, error_size, line_number, "log scale min and max must be above zero");
         return 0;
     }
@@ -615,79 +576,9 @@ void midi_mapping_init(midi_mapping *mapping)
 // returns the readable name for a mapped synth parameter.
 const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 {
-    switch (parameter) {
-        case MIDI_MAPPING_PARAM_ATTACK:
-            return "attack";
+    const midi_mapping_parameter_entry *entry = find_parameter(parameter);
 
-        case MIDI_MAPPING_PARAM_DECAY:
-            return "decay";
-
-        case MIDI_MAPPING_PARAM_SUSTAIN:
-            return "sustain";
-
-        case MIDI_MAPPING_PARAM_RELEASE:
-            return "release";
-
-        case MIDI_MAPPING_PARAM_MASTER_GAIN:
-            return "master_gain";
-
-        case MIDI_MAPPING_PARAM_FILTER_CUTOFF:
-            return "filter_cutoff";
-
-        case MIDI_MAPPING_PARAM_FILTER_POLES:
-            return "filter_poles";
-
-        case MIDI_MAPPING_PARAM_OSCILLATOR_MORPH:
-            return "oscillator_morph";
-
-        case MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN:
-            return "first_oscillator_gain";
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN:
-            return "second_oscillator_gain";
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH:
-            return "second_oscillator_morph";
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE:
-            return "second_oscillator_octave";
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH:
-            return "second_oscillator_pitch";
-
-        case MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE:
-            return "second_oscillator_fine_tune";
-
-        case MIDI_MAPPING_PARAM_STEREO_SPREAD:
-            return "stereo_spread";
-
-        case MIDI_MAPPING_PARAM_LFO_RATE:
-            return "lfo_rate";
-
-        case MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH:
-            return "lfo_shape_morph";
-
-        case MIDI_MAPPING_PARAM_LFO_DEPTH:
-            return "lfo_depth";
-
-        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT:
-            return "lfo_first_oscillator_morph_amount";
-
-        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT:
-            return "lfo_second_oscillator_morph_amount";
-
-        case MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT:
-            return "lfo_first_oscillator_gain_amount";
-
-        case MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT:
-            return "lfo_second_oscillator_gain_amount";
-
-        case MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT:
-            return "lfo_filter_amount";
-
-        default:
-            return "unknown";
-    }
+    return entry != 0 ? entry->name : "unknown";
 }
 
 // loads a midi mapping from a config file.

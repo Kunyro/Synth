@@ -1,21 +1,7 @@
 #include "synth/lfo.h"
 
-#include <math.h>
-
 #include "internal/synth_internal.h"
 #include "internal/wavetable.h"
-
-// keeps a normalized phase inside one cycle.
-static float wrap_phase(float phase)
-{
-    phase -= floorf(phase);
-
-    if (phase < 0.0f) {
-        phase += 1.0f;
-    }
-
-    return phase;
-}
 
 // starts a sine lfo at phase zero.
 void synth_lfo_init(synth_lfo *lfo, float frequency_hz)
@@ -41,7 +27,7 @@ void synth_lfo_set_morph(synth_lfo *lfo, float morph)
 // moves the lfo to a normalized phase, where one cycle is 0 through 1.
 void synth_lfo_reset(synth_lfo *lfo, float phase)
 {
-    lfo->phase = wrap_phase(phase);
+    lfo->phase = synth_wrap_phase(phase);
 }
 
 // returns the current bipolar value and advances the lfo by one sample.
@@ -54,7 +40,7 @@ float synth_lfo_advance(synth_lfo *lfo, float sample_rate)
         lfo->morph);
 
     if (sample_rate > 0.0f) {
-        lfo->phase = wrap_phase(lfo->phase + (lfo->frequency_hz / sample_rate));
+        lfo->phase = synth_wrap_phase(lfo->phase + (lfo->frequency_hz / sample_rate));
     }
 
     return value;
