@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "synth/audio_types.h"
+#include "synth/effect_chain.h"
 #include "synth/filter.h"
 #include "synth/lfo.h"
 #include "synth/midi_types.h"
@@ -35,6 +36,7 @@ typedef struct synth {
     synth_adsr envelope;
     synth_filter filter;
     synth_filter right_filter;
+    synth_effect_chain effects;
     synth_voice voices[SYNTH_MAX_VOICES];
 } synth;
 
@@ -94,6 +96,10 @@ void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount);
 void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount);
 // changes how strongly the lfo moves the shared filter cutoff.
 void synth_set_lfo_filter_amount(synth *s, float amount);
+// changes the input gain feeding the post-filter distortion.
+void synth_set_distortion_drive(synth *s, float drive);
+// changes the wet/dry mix for post-filter distortion.
+void synth_set_distortion_mix(synth *s, float mix);
 
 // reads current synth values without exposing where they are stored.
 float synth_get_master_gain(const synth *s);
@@ -115,6 +121,8 @@ float synth_get_lfo_second_oscillator_morph_amount(const synth *s);
 float synth_get_lfo_first_oscillator_gain_amount(const synth *s);
 float synth_get_lfo_second_oscillator_gain_amount(const synth *s);
 float synth_get_lfo_filter_amount(const synth *s);
+float synth_get_distortion_drive(const synth *s);
+float synth_get_distortion_mix(const synth *s);
 
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output);

@@ -193,6 +193,42 @@ static void test_global_lfo(void)
         "lfo preserves the second voice oscillator base morph");
 }
 
+static void test_master_gain_scales_after_effects(void)
+{
+    synth full_gain;
+    synth half_gain;
+    const synth_adsr immediate_envelope = {0.0f, 0.0f, 1.0f, 0.0f};
+    float full_left[256];
+    float full_right[256];
+    float half_left[256];
+    float half_right[256];
+    synth_audio_buffer full_buffer = {full_left, full_right, 256};
+    synth_audio_buffer half_buffer = {half_left, half_right, 256};
+
+    synth_init(&full_gain, 48000.0f);
+    synth_init(&half_gain, 48000.0f);
+    synth_set_adsr(&full_gain, immediate_envelope);
+    synth_set_adsr(&half_gain, immediate_envelope);
+    synth_set_filter_cutoff(&full_gain, 24000.0f);
+    synth_set_filter_cutoff(&half_gain, 24000.0f);
+    synth_set_distortion_drive(&full_gain, 16.0f);
+    synth_set_distortion_drive(&half_gain, 16.0f);
+    synth_set_distortion_mix(&full_gain, 1.0f);
+    synth_set_distortion_mix(&half_gain, 1.0f);
+    synth_set_master_gain(&full_gain, 1.0f);
+    synth_set_master_gain(&half_gain, 0.5f);
+    synth_note_on_frequency(&full_gain, 110.0f, 1.0f);
+    synth_note_on_frequency(&half_gain, 110.0f, 1.0f);
+
+    synth_render_stereo(&full_gain, &full_buffer);
+    synth_render_stereo(&half_gain, &half_buffer);
+
+    for (size_t i = 0; i < 256; ++i) {
+        expect_near(half_left[i], full_left[i] * 0.5f, 0.0001f, "master gain scales left after effects");
+        expect_near(half_right[i], full_right[i] * 0.5f, 0.0001f, "master gain scales right after effects");
+    }
+}
+
 int main(void)
 {
     synth s;
@@ -388,6 +424,7 @@ int main(void)
 
     test_stereo_spread();
     test_global_lfo();
+    test_master_gain_scales_after_effects();
 
     if (failures != 0) {
         fprintf(stderr, "%d voice test(s) failed\n", failures);

@@ -10,6 +10,7 @@ so the engine can stay independent of miniaudio and PortMidi.
 
 - `include/synth/`: public synth engine headers
 - `src/`: portable synth engine implementation
+- `src/effects/`: portable post-filter effect implementations
 - `src/internal/`: private engine helpers and wavetable internals
 - `platform/desktop/audio/`: miniaudio desktop audio adapter
 - `platform/desktop/midi/`: PortMidi transport and MIDI CC mapping layer
@@ -33,7 +34,7 @@ Run the test suite:
 make test
 ```
 
-This builds and runs tests for the oscillator, LFO, envelope, filter,
+This builds and runs tests for the oscillator, LFO, envelope, filter, distortion,
 voice/synth behavior, MIDI parsing, and MIDI mapping.
 
 Clean build artifacts:
@@ -195,6 +196,8 @@ Supported parameters:
 - `lfo_first_oscillator_gain_amount`
 - `lfo_second_oscillator_gain_amount`
 - `lfo_filter_amount`
+- `distortion_drive`
+- `distortion_mix`
 
 Supported scales:
 
@@ -230,6 +233,7 @@ Implemented so far:
 - desktop MIDI input through runtime-loaded PortMidi
 - config-driven MIDI CC mapping for synth parameters
 - continuous global morphable LFO with morph, oscillator volume, and filter routes
+- post-filter distortion with drive and wet/dry mix
 
 The filter cutoff is clamped to the valid audio range. Each filter pole adds
 roughly `6 dB/oct` of low-pass slope.
@@ -242,3 +246,7 @@ independently around their stored base values, oscillator volume modulation
 moves down from each stored base gain, and filter modulation moves the stored
 cutoff exponentially by up to eight octaves in either direction. Render-time
 modulation does not overwrite the underlying knob settings.
+
+Distortion runs after the synth filter and before final master gain. The effect
+defaults to a dry mix, so existing patches render unchanged until distortion mix
+is raised.

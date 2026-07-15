@@ -181,6 +181,7 @@ void synth_init(synth *s, float sample_rate)
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
     synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
+    synth_effect_chain_init(&s->effects);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice_init(&s->voices[i], s->envelope);
@@ -363,6 +364,16 @@ void synth_set_lfo_filter_amount(synth *s, float amount)
     s->lfo_filter_amount = synth_clampf(amount, 0.0f, 1.0f);
 }
 
+void synth_set_distortion_drive(synth *s, float drive)
+{
+    synth_distortion_set_drive(&s->effects.distortion, drive);
+}
+
+void synth_set_distortion_mix(synth *s, float mix)
+{
+    synth_distortion_set_mix(&s->effects.distortion, mix);
+}
+
 float synth_get_master_gain(const synth *s)
 {
     return s->master_gain;
@@ -458,6 +469,23 @@ float synth_get_lfo_filter_amount(const synth *s)
     return s->lfo_filter_amount;
 }
 
+float synth_get_distortion_drive(const synth *s)
+{
+    return synth_distortion_get_drive(&s->effects.distortion);
+}
+
+float synth_get_distortion_mix(const synth *s)
+{
+    return synth_distortion_get_mix(&s->effects.distortion);
+}
+
+static synth_stereo_sample apply_master_gain(synth_stereo_sample sample, float master_gain)
+{
+    sample.left *= master_gain;
+    sample.right *= master_gain;
+    return sample;
+}
+
 // renders one mixed stereo sample through independent channel filter state.
 static synth_stereo_sample synth_render_stereo_sample(synth *s)
 {
@@ -476,13 +504,14 @@ static synth_stereo_sample synth_render_stereo_sample(synth *s)
 
     sample.left = synth_filter_process_with_cutoff(
         &s->filter,
-        sample.left * s->master_gain,
+        sample.left,
         filter_cutoff);
     sample.right = synth_filter_process_with_cutoff(
         &s->right_filter,
-        sample.right * s->master_gain,
+        sample.right,
         filter_cutoff);
-    return sample;
+    sample = synth_effect_chain_process(&s->effects, sample);
+    return apply_master_gain(sample, s->master_gain);
 }
 
 void synth_render_stereo(synth *s, synth_audio_buffer *output)

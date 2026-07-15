@@ -255,6 +255,18 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
         "lfo_filter_amount",
         synth_get_lfo_filter_amount,
         synth_set_lfo_filter_amount
+    },
+    {
+        MIDI_MAPPING_PARAM_DISTORTION_DRIVE,
+        "distortion_drive",
+        synth_get_distortion_drive,
+        synth_set_distortion_drive
+    },
+    {
+        MIDI_MAPPING_PARAM_DISTORTION_MIX,
+        "distortion_mix",
+        synth_get_distortion_mix,
+        synth_set_distortion_mix
     }
 };
 

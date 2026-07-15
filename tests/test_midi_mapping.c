@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void expect_true(int condition, const char *message)
 {
@@ -60,7 +61,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 24, "akai mapping has twenty-four bindings");
+    expect_true(mapping.binding_count == 25, "akai mapping has twenty-five bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -404,6 +405,41 @@ static void test_waits_for_pickup_before_first_knob_change(void)
     expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "picked-up gain cc updates normally");
 }
 
+static void test_names_distortion_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DISTORTION_DRIVE), "distortion_drive") == 0,
+        "distortion drive has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DISTORTION_MIX), "distortion_mix") == 0,
+        "distortion mix has a midi mapping name");
+}
+
+static void test_applies_distortion_mix_cc_value(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for distortion mix test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 25, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 25, 44, &result), "distortion mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_DISTORTION_MIX,
+        "distortion mix cc reports distortion mix parameter");
+    expect_near(
+        synth_get_distortion_mix(&s),
+        44.0f / 127.0f,
+        0.0001f,
+        "distortion mix cc scales to normalized dry wet");
+    expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "distortion mix result reports normalized value");
+}
+
 int main(void)
 {
     test_loads_akai_mapping();
@@ -416,6 +452,8 @@ int main(void)
     test_applies_stereo_spread_cc_value();
     test_applies_lfo_cc_values();
     test_waits_for_pickup_before_first_knob_change();
+    test_names_distortion_parameters();
+    test_applies_distortion_mix_cc_value();
     printf("All MIDI mapping tests passed.\n");
     return 0;
 }
