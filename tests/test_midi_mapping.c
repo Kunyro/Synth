@@ -61,7 +61,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 25, "akai mapping has twenty-five bindings");
+    expect_true(mapping.binding_count == 26, "akai mapping has twenty-six bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -440,6 +440,32 @@ static void test_applies_distortion_mix_cc_value(void)
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "distortion mix result reports normalized value");
 }
 
+static void test_applies_distortion_drive_cc_value(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_drive = 1.0f + ((96.0f / 127.0f) * 31.0f);
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for distortion drive test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 26, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 26, 96, &result), "distortion drive cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_DISTORTION_DRIVE,
+        "distortion drive cc reports distortion drive parameter");
+    expect_near(
+        synth_get_distortion_drive(&s),
+        expected_drive,
+        0.0001f,
+        "distortion drive cc scales to the drive range");
+    expect_near(result.synth_value, expected_drive, 0.0001f, "distortion drive result reports scaled value");
+}
+
 int main(void)
 {
     test_loads_akai_mapping();
@@ -454,6 +480,7 @@ int main(void)
     test_waits_for_pickup_before_first_knob_change();
     test_names_distortion_parameters();
     test_applies_distortion_mix_cc_value();
+    test_applies_distortion_drive_cc_value();
     printf("All MIDI mapping tests passed.\n");
     return 0;
 }
