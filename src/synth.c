@@ -165,7 +165,7 @@ void synth_init(synth *s, float sample_rate)
     s->waveform = SYNTH_WAVEFORM_SINE;
     s->oscillator_morph = synth_waveform_to_morph(s->waveform);
     s->first_oscillator_gain = 1.0f;
-    s->second_oscillator_gain = 1.0f;
+    s->second_oscillator_gain = 0.0f;
     s->stereo_spread = 0.0f;
     s->second_oscillator_morph = synth_waveform_to_morph(SYNTH_WAVEFORM_SQUARE);
     s->second_oscillator_octave = 0;
