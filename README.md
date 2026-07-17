@@ -35,7 +35,7 @@ make test
 ```
 
 This builds and runs tests for the oscillator, LFO, envelope, filter, distortion,
-voice/synth behavior, MIDI parsing, and MIDI mapping.
+delay, voice/synth behavior, MIDI parsing, and MIDI mapping.
 
 Clean build artifacts:
 
@@ -156,6 +156,8 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 22: global LFO depth
 - CC 23: filter LFO amount
 - CC 24: LFO shape morph
+- CC 25: distortion dry/wet
+- CC 26: distortion drive
 
 Run with another config, or disable config mapping:
 
@@ -198,6 +200,9 @@ Supported parameters:
 - `lfo_filter_amount`
 - `distortion_drive`
 - `distortion_mix`
+- `delay_time`
+- `delay_feedback`
+- `delay_mix`
 
 Supported scales:
 
@@ -234,6 +239,7 @@ Implemented so far:
 - config-driven MIDI CC mapping for synth parameters
 - continuous global morphable LFO with morph, oscillator volume, and filter routes
 - post-filter distortion with drive and wet/dry mix
+- post-distortion delay with time, feedback, and wet/dry mix
 
 The filter cutoff is clamped to the valid audio range. Each filter pole adds
 roughly `6 dB/oct` of low-pass slope.
@@ -250,3 +256,7 @@ modulation does not overwrite the underlying knob settings.
 Distortion runs after the synth filter and before final master gain. The effect
 defaults to a dry mix, so existing patches render unchanged until distortion mix
 is raised.
+
+Delay runs after distortion and before final master gain. Its time is clamped to
+the available delay line, feedback stays below unity, and the effect defaults to
+a dry mix.
