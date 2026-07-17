@@ -181,7 +181,7 @@ void synth_init(synth *s, float sample_rate)
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
     synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
-    synth_effect_chain_init(&s->effects);
+    synth_effect_chain_init(&s->effects, sample_rate);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice_init(&s->voices[i], s->envelope);
@@ -374,6 +374,21 @@ void synth_set_distortion_mix(synth *s, float mix)
     synth_distortion_set_mix(&s->effects.distortion, mix);
 }
 
+void synth_set_delay_time(synth *s, float seconds)
+{
+    synth_delay_set_time(&s->effects.delay, seconds);
+}
+
+void synth_set_delay_feedback(synth *s, float feedback)
+{
+    synth_delay_set_feedback(&s->effects.delay, feedback);
+}
+
+void synth_set_delay_mix(synth *s, float mix)
+{
+    synth_delay_set_mix(&s->effects.delay, mix);
+}
+
 float synth_get_master_gain(const synth *s)
 {
     return s->master_gain;
@@ -477,6 +492,21 @@ float synth_get_distortion_drive(const synth *s)
 float synth_get_distortion_mix(const synth *s)
 {
     return synth_distortion_get_mix(&s->effects.distortion);
+}
+
+float synth_get_delay_time(const synth *s)
+{
+    return synth_delay_get_time(&s->effects.delay);
+}
+
+float synth_get_delay_feedback(const synth *s)
+{
+    return synth_delay_get_feedback(&s->effects.delay);
+}
+
+float synth_get_delay_mix(const synth *s)
+{
+    return synth_delay_get_mix(&s->effects.delay);
 }
 
 static synth_stereo_sample apply_master_gain(synth_stereo_sample sample, float master_gain)

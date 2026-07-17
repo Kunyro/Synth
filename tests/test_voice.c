@@ -229,6 +229,27 @@ static void test_master_gain_scales_after_effects(void)
     }
 }
 
+static void test_delay_controls(void)
+{
+    synth delay_synth;
+
+    synth_init(&delay_synth, 48000.0f);
+    expect_near(
+        synth_get_delay_time(&delay_synth),
+        SYNTH_DELAY_DEFAULT_TIME_SECONDS,
+        0.0001f,
+        "synth delay starts at default time");
+    expect_near(synth_get_delay_feedback(&delay_synth), 0.0f, 0.0001f, "synth delay starts with no feedback");
+    expect_near(synth_get_delay_mix(&delay_synth), 0.0f, 0.0001f, "synth delay starts dry");
+
+    synth_set_delay_time(&delay_synth, 10.0f);
+    synth_set_delay_feedback(&delay_synth, 2.0f);
+    synth_set_delay_mix(&delay_synth, -1.0f);
+    expect_near(synth_get_delay_time(&delay_synth), SYNTH_DELAY_MAX_TIME_SECONDS, 0.0001f, "synth delay time clamps high");
+    expect_near(synth_get_delay_feedback(&delay_synth), SYNTH_DELAY_MAX_FEEDBACK, 0.0001f, "synth delay feedback clamps high");
+    expect_near(synth_get_delay_mix(&delay_synth), 0.0f, 0.0001f, "synth delay mix clamps low");
+}
+
 int main(void)
 {
     synth s;
@@ -425,6 +446,7 @@ int main(void)
     test_stereo_spread();
     test_global_lfo();
     test_master_gain_scales_after_effects();
+    test_delay_controls();
 
     if (failures != 0) {
         fprintf(stderr, "%d voice test(s) failed\n", failures);

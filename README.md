@@ -158,6 +158,9 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 24: LFO shape morph
 - CC 25: distortion dry/wet
 - CC 26: distortion drive
+- CC 27: delay dry/wet
+- CC 28: delay time
+- CC 29: delay feedback
 
 Run with another config, or disable config mapping:
 

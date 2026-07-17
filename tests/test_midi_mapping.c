@@ -61,7 +61,7 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 26, "akai mapping has twenty-six bindings");
+    expect_true(mapping.binding_count == 29, "akai mapping has twenty-nine bindings");
 }
 
 static void test_applies_adsr_cc_values(void)
@@ -415,6 +415,19 @@ static void test_names_distortion_parameters(void)
         "distortion mix has a midi mapping name");
 }
 
+static void test_names_delay_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DELAY_TIME), "delay_time") == 0,
+        "delay time has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DELAY_FEEDBACK), "delay_feedback") == 0,
+        "delay feedback has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DELAY_MIX), "delay_mix") == 0,
+        "delay mix has a midi mapping name");
+}
+
 static void test_applies_distortion_mix_cc_value(void)
 {
     midi_mapping mapping;
@@ -466,6 +479,45 @@ static void test_applies_distortion_drive_cc_value(void)
     expect_near(result.synth_value, expected_drive, 0.0001f, "distortion drive result reports scaled value");
 }
 
+static void test_applies_delay_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_time = 0.001f + ((64.0f / 127.0f) * (2.0f - 0.001f));
+    const float expected_feedback = (96.0f / 127.0f) * 0.95f;
+
+    expect_true(
+        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
+        "akai mapping loads for delay test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 27, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 27, 44, &result), "delay mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_DELAY_MIX,
+        "delay mix cc reports delay mix parameter");
+    expect_near(synth_get_delay_mix(&s), 44.0f / 127.0f, 0.0001f, "delay mix cc scales to normalized dry wet");
+    expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "delay mix result reports normalized value");
+
+    pickup_cc(&mapping, &s, 28, 0, 16);
+    expect_true(apply_cc_value(&mapping, &s, 28, 64, &result), "delay time cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME,
+        "delay time cc reports delay time parameter");
+    expect_near(synth_get_delay_time(&s), expected_time, 0.0001f, "delay time cc scales to seconds");
+    expect_near(result.synth_value, expected_time, 0.0001f, "delay time result reports seconds");
+
+    pickup_cc(&mapping, &s, 29, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 29, 96, &result), "delay feedback cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_DELAY_FEEDBACK,
+        "delay feedback cc reports delay feedback parameter");
+    expect_near(synth_get_delay_feedback(&s), expected_feedback, 0.0001f, "delay feedback cc scales to bounded feedback");
+    expect_near(result.synth_value, expected_feedback, 0.0001f, "delay feedback result reports scaled value");
+}
+
 int main(void)
 {
     test_loads_akai_mapping();
@@ -479,8 +531,10 @@ int main(void)
     test_applies_lfo_cc_values();
     test_waits_for_pickup_before_first_knob_change();
     test_names_distortion_parameters();
+    test_names_delay_parameters();
     test_applies_distortion_mix_cc_value();
     test_applies_distortion_drive_cc_value();
+    test_applies_delay_cc_values();
     printf("All MIDI mapping tests passed.\n");
     return 0;
 }

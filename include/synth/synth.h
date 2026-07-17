@@ -100,6 +100,12 @@ void synth_set_lfo_filter_amount(synth *s, float amount);
 void synth_set_distortion_drive(synth *s, float drive);
 // changes the wet/dry mix for post-filter distortion.
 void synth_set_distortion_mix(synth *s, float mix);
+// changes the delay time in seconds.
+void synth_set_delay_time(synth *s, float seconds);
+// changes how much delayed signal feeds back into the delay line.
+void synth_set_delay_feedback(synth *s, float feedback);
+// changes the wet/dry mix for delay.
+void synth_set_delay_mix(synth *s, float mix);
 
 // reads current synth values without exposing where they are stored.
 float synth_get_master_gain(const synth *s);
@@ -123,6 +129,9 @@ float synth_get_lfo_second_oscillator_gain_amount(const synth *s);
 float synth_get_lfo_filter_amount(const synth *s);
 float synth_get_distortion_drive(const synth *s);
 float synth_get_distortion_mix(const synth *s);
+float synth_get_delay_time(const synth *s);
+float synth_get_delay_feedback(const synth *s);
+float synth_get_delay_mix(const synth *s);
 
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output);

@@ -103,7 +103,7 @@ static void test_effect_chain_runs_distortion_stage(void)
     synth_stereo_sample dry;
     synth_stereo_sample wet;
 
-    synth_effect_chain_init(&chain);
+    synth_effect_chain_init(&chain, 48000.0f);
     dry = synth_effect_chain_process(&chain, input);
     expect_sample_near(dry, input, 0.0001f, "effect chain defaults to dry");
 

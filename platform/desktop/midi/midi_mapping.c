@@ -267,6 +267,24 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
         "distortion_mix",
         synth_get_distortion_mix,
         synth_set_distortion_mix
+    },
+    {
+        MIDI_MAPPING_PARAM_DELAY_TIME,
+        "delay_time",
+        synth_get_delay_time,
+        synth_set_delay_time
+    },
+    {
+        MIDI_MAPPING_PARAM_DELAY_FEEDBACK,
+        "delay_feedback",
+        synth_get_delay_feedback,
+        synth_set_delay_feedback
+    },
+    {
+        MIDI_MAPPING_PARAM_DELAY_MIX,
+        "delay_mix",
+        synth_get_delay_mix,
+        synth_set_delay_mix
     }
 };
 
