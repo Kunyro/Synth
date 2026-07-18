@@ -263,3 +263,6 @@ is raised.
 Delay runs after distortion and before final master gain. Its time is clamped to
 the available delay line, feedback stays below unity, and the effect defaults to
 a dry mix.
+
+## Know Bugs
+- Issue when changing delay speed on high feedbacks
