@@ -265,4 +265,4 @@ the available delay line, feedback stays below unity, and the effect defaults to
 a dry mix.
 
 ## Know Bugs
-- Issue when changing delay speed on high feedbacks
+- Spamming the same note very fast causes artifacts
