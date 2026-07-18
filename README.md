@@ -265,4 +265,5 @@ the available delay line, feedback stays below unity, and the effect defaults to
 a dry mix.
 
 ## Know Bugs
+
 - Spamming the same note very fast causes artifacts
