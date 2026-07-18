@@ -4,6 +4,7 @@
 
 #include "../internal/synth_internal.h"
 
+// tanh gives a soft clipping curve instead of a hard cutoff.
 static float distort_sample(float input, float drive)
 {
     const float ceiling = tanhf(drive);
@@ -15,6 +16,7 @@ static float distort_sample(float input, float drive)
     return tanhf(input * drive) / ceiling;
 }
 
+// blends from clean signal to fully distorted signal.
 static float mix_sample(float dry, float wet, float mix)
 {
     return dry + ((wet - dry) * mix);
