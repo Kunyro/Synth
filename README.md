@@ -35,7 +35,7 @@ make test
 ```
 
 This builds and runs tests for the oscillator, LFO, envelope, filter, distortion,
-delay, voice/synth behavior, MIDI parsing, and MIDI mapping.
+bitcrusher, delay, voice/synth behavior, MIDI parsing, and MIDI mapping.
 
 Clean build artifacts:
 
@@ -158,9 +158,12 @@ It maps Akai MPK Mini MK2-style CC knobs on channel 1:
 - CC 24: LFO shape morph
 - CC 25: distortion dry/wet
 - CC 26: distortion drive
-- CC 27: delay dry/wet
-- CC 28: delay time
-- CC 29: delay feedback
+- CC 27: bitcrusher dry/wet
+- CC 28: bitcrusher sample rate
+- CC 29: bitcrusher bits
+- CC 30: delay dry/wet
+- CC 31: delay time
+- CC 32: delay feedback
 
 Run with another config, or disable config mapping:
 
@@ -203,6 +206,9 @@ Supported parameters:
 - `lfo_filter_amount`
 - `distortion_drive`
 - `distortion_mix`
+- `bitcrusher_sample_rate`
+- `bitcrusher_bits`
+- `bitcrusher_mix`
 - `delay_time`
 - `delay_feedback`
 - `delay_mix`
@@ -242,6 +248,7 @@ Implemented so far:
 - config-driven MIDI CC mapping for synth parameters
 - continuous global morphable LFO with morph, oscillator volume, and filter routes
 - post-filter distortion with drive and wet/dry mix
+- bitcrusher with reduced sample rate, bit depth, and wet/dry mix
 - post-distortion delay with time, feedback, and wet/dry mix
 
 The filter cutoff is clamped to the valid audio range. Each filter pole adds
@@ -260,8 +267,12 @@ Distortion runs after the synth filter and before final master gain. The effect
 defaults to a dry mix, so existing patches render unchanged until distortion mix
 is raised.
 
-Delay runs after distortion and before final master gain. Its time is clamped to
-the available delay line, feedback stays below unity, and the effect defaults to
-a dry mix.
+Bitcrusher runs after distortion and before delay. Its sample rate is clamped to
+the host render rate, bits are clamped to `1..16`, and the effect defaults to a
+dry mix.
+
+Delay runs after distortion and bitcrusher, before final master gain. Its time is
+clamped to the available delay line, feedback stays below unity, and the effect
+defaults to a dry mix.
 
 ## Know Bugs

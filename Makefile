@@ -17,6 +17,7 @@ OSCILLATOR_TEST_TARGET := build/test_oscillator
 ENVELOPE_TEST_TARGET := build/test_envelope
 FILTER_TEST_TARGET := build/test_filter
 DISTORTION_TEST_TARGET := build/test_distortion
+BITCRUSHER_TEST_TARGET := build/test_bitcrusher
 DELAY_TEST_TARGET := build/test_delay
 LFO_TEST_TARGET := build/test_lfo
 VOICE_TEST_TARGET := build/test_voice
@@ -31,6 +32,7 @@ CORE_SOURCES := \
 	src/voice.c \
 	src/filter.c \
 	src/effects/distortion.c \
+	src/effects/bitcrusher.c \
 	src/effects/delay.c \
 	src/effects/effect_chain.c \
 	src/synth.c \
@@ -54,11 +56,12 @@ run: $(TARGET)
 midi-monitor: $(MIDI_MONITOR_TARGET)
 	./$(MIDI_MONITOR_TARGET)
 
-test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(DELAY_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET)
+test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(DELAY_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET)
 	./$(OSCILLATOR_TEST_TARGET)
 	./$(ENVELOPE_TEST_TARGET)
 	./$(FILTER_TEST_TARGET)
 	./$(DISTORTION_TEST_TARGET)
+	./$(BITCRUSHER_TEST_TARGET)
 	./$(DELAY_TEST_TARGET)
 	./$(LFO_TEST_TARGET)
 	./$(VOICE_TEST_TARGET)
@@ -80,10 +83,13 @@ $(ENVELOPE_TEST_TARGET): tests/test_envelope.c src/envelope.c | build
 $(FILTER_TEST_TARGET): tests/test_filter.c src/filter.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(DISTORTION_TEST_TARGET): tests/test_distortion.c src/effects/distortion.c src/effects/effect_chain.c src/effects/delay.c | build
+$(DISTORTION_TEST_TARGET): tests/test_distortion.c src/effects/distortion.c src/effects/effect_chain.c src/effects/bitcrusher.c src/effects/delay.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(DELAY_TEST_TARGET): tests/test_delay.c src/effects/delay.c src/effects/distortion.c src/effects/effect_chain.c | build
+$(BITCRUSHER_TEST_TARGET): tests/test_bitcrusher.c src/effects/bitcrusher.c src/effects/effect_chain.c src/effects/distortion.c src/effects/delay.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(DELAY_TEST_TARGET): tests/test_delay.c src/effects/delay.c src/effects/distortion.c src/effects/bitcrusher.c src/effects/effect_chain.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(LFO_TEST_TARGET): tests/test_lfo.c src/lfo.c src/wavetable.c | build

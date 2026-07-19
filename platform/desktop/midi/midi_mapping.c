@@ -157,6 +157,16 @@ static void set_second_oscillator_pitch(synth *s, float value)
     synth_set_second_oscillator_pitch(s, (int)value);
 }
 
+static float get_bitcrusher_bits(const synth *s)
+{
+    return (float)synth_get_bitcrusher_bits(s);
+}
+
+static void set_bitcrusher_bits(synth *s, float value)
+{
+    synth_set_bitcrusher_bits(s, (int)value);
+}
+
 static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_ATTACK, "attack", get_attack, set_attack},
     {MIDI_MAPPING_PARAM_DECAY, "decay", get_decay, set_decay},
@@ -267,6 +277,24 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
         "distortion_mix",
         synth_get_distortion_mix,
         synth_set_distortion_mix
+    },
+    {
+        MIDI_MAPPING_PARAM_BITCRUSHER_SAMPLE_RATE,
+        "bitcrusher_sample_rate",
+        synth_get_bitcrusher_sample_rate,
+        synth_set_bitcrusher_sample_rate
+    },
+    {
+        MIDI_MAPPING_PARAM_BITCRUSHER_BITS,
+        "bitcrusher_bits",
+        get_bitcrusher_bits,
+        set_bitcrusher_bits
+    },
+    {
+        MIDI_MAPPING_PARAM_BITCRUSHER_MIX,
+        "bitcrusher_mix",
+        synth_get_bitcrusher_mix,
+        synth_set_bitcrusher_mix
     },
     {
         MIDI_MAPPING_PARAM_DELAY_TIME,

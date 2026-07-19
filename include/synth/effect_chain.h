@@ -2,11 +2,13 @@
 #define SYNTH_EFFECT_CHAIN_H
 
 #include "synth/audio_types.h"
+#include "synth/bitcrusher.h"
 #include "synth/delay.h"
 #include "synth/distortion.h"
 
 typedef struct synth_effect_chain {
     synth_distortion distortion;
+    synth_bitcrusher bitcrusher;
     synth_delay delay;
 } synth_effect_chain;
 

@@ -377,6 +377,21 @@ void synth_set_distortion_mix(synth *s, float mix)
     synth_distortion_set_mix(&s->effects.distortion, mix);
 }
 
+void synth_set_bitcrusher_sample_rate(synth *s, float sample_rate)
+{
+    synth_bitcrusher_set_sample_rate(&s->effects.bitcrusher, sample_rate);
+}
+
+void synth_set_bitcrusher_bits(synth *s, int bits)
+{
+    synth_bitcrusher_set_bits(&s->effects.bitcrusher, bits);
+}
+
+void synth_set_bitcrusher_mix(synth *s, float mix)
+{
+    synth_bitcrusher_set_mix(&s->effects.bitcrusher, mix);
+}
+
 void synth_set_delay_time(synth *s, float seconds)
 {
     synth_delay_set_time(&s->effects.delay, seconds);
@@ -495,6 +510,21 @@ float synth_get_distortion_drive(const synth *s)
 float synth_get_distortion_mix(const synth *s)
 {
     return synth_distortion_get_mix(&s->effects.distortion);
+}
+
+float synth_get_bitcrusher_sample_rate(const synth *s)
+{
+    return synth_bitcrusher_get_sample_rate(&s->effects.bitcrusher);
+}
+
+int synth_get_bitcrusher_bits(const synth *s)
+{
+    return synth_bitcrusher_get_bits(&s->effects.bitcrusher);
+}
+
+float synth_get_bitcrusher_mix(const synth *s)
+{
+    return synth_bitcrusher_get_mix(&s->effects.bitcrusher);
 }
 
 float synth_get_delay_time(const synth *s)

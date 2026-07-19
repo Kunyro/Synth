@@ -100,6 +100,12 @@ void synth_set_lfo_filter_amount(synth *s, float amount);
 void synth_set_distortion_drive(synth *s, float drive);
 // changes the wet/dry mix for post-filter distortion.
 void synth_set_distortion_mix(synth *s, float mix);
+// changes the reduced sample rate for the bitcrusher.
+void synth_set_bitcrusher_sample_rate(synth *s, float sample_rate);
+// changes the bit depth for the bitcrusher.
+void synth_set_bitcrusher_bits(synth *s, int bits);
+// changes the wet/dry mix for the bitcrusher.
+void synth_set_bitcrusher_mix(synth *s, float mix);
 // changes the delay time in seconds.
 void synth_set_delay_time(synth *s, float seconds);
 // changes how much delayed signal feeds back into the delay line.
@@ -129,6 +135,9 @@ float synth_get_lfo_second_oscillator_gain_amount(const synth *s);
 float synth_get_lfo_filter_amount(const synth *s);
 float synth_get_distortion_drive(const synth *s);
 float synth_get_distortion_mix(const synth *s);
+float synth_get_bitcrusher_sample_rate(const synth *s);
+int synth_get_bitcrusher_bits(const synth *s);
+float synth_get_bitcrusher_mix(const synth *s);
 float synth_get_delay_time(const synth *s);
 float synth_get_delay_feedback(const synth *s);
 float synth_get_delay_mix(const synth *s);
