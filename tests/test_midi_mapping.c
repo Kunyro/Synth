@@ -255,7 +255,7 @@ static void test_applies_oscillator_mix_cc_values(void)
         "first oscillator gain cc reports first oscillator gain parameter");
     expect_near(synth_get_first_oscillator_gain(&s), 119.0f / 127.0f, 0.0001f, "first oscillator gain cc scales to normalized gain");
 
-    pickup_cc(&mapping, &s, 14, 127, 59);
+    pickup_cc(&mapping, &s, 14, 0, 59);
     expect_true(
         apply_cc_value(&mapping, &s, 14, 59, &result),
         "second oscillator gain cc applies");

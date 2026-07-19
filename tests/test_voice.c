@@ -75,6 +75,36 @@ static synth_voice *find_voice_by_note(synth *s, int midi_note)
     return 0;
 }
 
+static int count_voices_by_note_and_stage(synth *s, int midi_note, synth_envelope_stage stage)
+{
+    int count = 0;
+
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice *voice = &s->voices[i];
+
+        if (voice->active && voice->midi_note == midi_note && voice->envelope.stage == stage) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+static int count_held_voices_by_note(synth *s, int midi_note)
+{
+    int count = 0;
+
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice *voice = &s->voices[i];
+
+        if (voice->active && voice->midi_note == midi_note && voice->envelope.stage != SYNTH_ENV_RELEASE) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
 static void test_stereo_spread(void)
 {
     synth centered;
@@ -193,6 +223,39 @@ static void test_global_lfo(void)
         "lfo preserves the second voice oscillator base morph");
 }
 
+static void test_fast_same_note_retrigger_keeps_release_tail(void)
+{
+    synth s;
+    const synth_adsr short_release = {0.0f, 0.0f, 1.0f, 0.05f};
+    float buffer[16];
+
+    synth_init(&s, 48000.0f);
+    synth_set_adsr(&s, short_release);
+
+    synth_note_on(&s, 69, 1.0f);
+    synth_render_mono(&s, buffer, 8);
+    synth_note_off(&s, 69);
+    expect_true(
+        count_voices_by_note_and_stage(&s, 69, SYNTH_ENV_RELEASE) == 1,
+        "same-note test starts with one release tail");
+
+    synth_note_on(&s, 69, 1.0f);
+    expect_true(
+        count_voices_by_note_and_stage(&s, 69, SYNTH_ENV_RELEASE) == 1,
+        "same-note retrigger keeps the old release tail");
+    expect_true(
+        count_held_voices_by_note(&s, 69) == 1,
+        "same-note retrigger starts one fresh held voice");
+
+    synth_note_off(&s, 69);
+    expect_true(
+        count_held_voices_by_note(&s, 69) == 0,
+        "same-note note-off releases the fresh held voice");
+    expect_true(
+        count_voices_by_note_and_stage(&s, 69, SYNTH_ENV_RELEASE) == 2,
+        "same-note note-off leaves both notes releasing");
+}
+
 static void test_master_gain_scales_after_effects(void)
 {
     synth full_gain;
@@ -266,6 +329,7 @@ int main(void)
     synth_audio_buffer stereo_buffer = {left, right, 256};
     int active_count = 0;
 
+    test_fast_same_note_retrigger_keeps_release_tail();
     synth_init(&s, 48000.0f);
     memset(buffer, 1, sizeof(buffer));
     synth_render_mono(&s, buffer, 128);
@@ -386,7 +450,7 @@ int main(void)
         0.0001f,
         "second oscillator fine tune defaults to zero");
     expect_near(second_tune_synth.first_oscillator_gain, 1.0f, 0.0001f, "first oscillator gain defaults to full");
-    expect_near(second_tune_synth.second_oscillator_gain, 1.0f, 0.0001f, "second oscillator gain defaults to full");
+    expect_near(second_tune_synth.second_oscillator_gain, 0.0f, 0.0001f, "second oscillator gain defaults to quiet");
     expect_near(second_tune_synth.second_oscillator_morph, 1.0f, 0.0001f, "second oscillator morph defaults to square");
 
     synth_note_on_frequency(&second_tune_synth, 440.0f, 1.0f);

@@ -77,13 +77,20 @@ static float modulated_filter_cutoff(const synth *s, float lfo_value)
     return s->filter.cutoff_hz * powf(2.0f, lfo_value * depth_octaves);
 }
 
-// finds the active voice that is playing a midi note.
-static synth_voice *find_voice_for_note(synth *s, int midi_note)
+static int voice_is_releasable_for_note(const synth_voice *voice, int midi_note)
+{
+    return voice->active &&
+        voice->midi_note == midi_note &&
+        voice->envelope.stage != SYNTH_ENV_RELEASE;
+}
+
+// finds the held voice that should respond to a midi note-off.
+static synth_voice *find_releasable_voice_for_note(synth *s, int midi_note)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice *voice = &s->voices[i];
 
-        if (voice->active && voice->midi_note == midi_note) {
+        if (voice_is_releasable_for_note(voice, midi_note)) {
             return voice;
         }
     }
@@ -190,12 +197,8 @@ void synth_init(synth *s, float sample_rate)
 
 void synth_note_on(synth *s, int midi_note, float velocity)
 {
-    synth_voice *voice = find_voice_for_note(s, midi_note);
+    synth_voice *voice = find_available_voice(s);
     const float base_frequency = synth_midi_note_to_frequency(midi_note);
-
-    if (voice == 0) {
-        voice = find_available_voice(s);
-    }
 
     start_voice(s, voice, midi_note, base_frequency, velocity);
 }
@@ -209,7 +212,7 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
 
 void synth_note_off(synth *s, int midi_note)
 {
-    synth_voice *voice = find_voice_for_note(s, midi_note);
+    synth_voice *voice = find_releasable_voice_for_note(s, midi_note);
 
     if (voice != 0) {
         synth_voice_note_off(voice);
