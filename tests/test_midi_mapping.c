@@ -64,6 +64,34 @@ static void test_loads_akai_mapping(void)
     expect_true(mapping.binding_count == 32, "akai mapping has thirty-two bindings");
 }
 
+static void test_parameter_metadata(void)
+{
+    const midi_mapping_parameter_info *cutoff_info;
+    const midi_mapping_parameter_info *bits_info;
+    midi_mapping_scale scale;
+
+    expect_true(midi_mapping_parameter_count() == 31, "metadata lists every mappable parameter");
+
+    cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
+    expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
+    expect_true(cutoff_info->parameter == MIDI_MAPPING_PARAM_FILTER_CUTOFF, "filter cutoff metadata names parameter");
+    expect_true(cutoff_info->default_scale == MIDI_MAPPING_SCALE_LOG, "filter cutoff defaults to log scale");
+    expect_near(cutoff_info->default_min_value, 20.0f, 0.0001f, "filter cutoff metadata min");
+    expect_near(cutoff_info->default_max_value, 20000.0f, 0.0001f, "filter cutoff metadata max");
+
+    bits_info = midi_mapping_parameter_info_at(26);
+    expect_true(bits_info != 0, "bitcrusher bits metadata is findable by index");
+    expect_true(
+        strcmp(bits_info->name, "bitcrusher_bits") == 0,
+        "bitcrusher bits metadata has config name");
+    expect_true(bits_info->default_scale == MIDI_MAPPING_SCALE_STEP, "bitcrusher bits defaults to step scale");
+
+    expect_true(strcmp(midi_mapping_scale_name(MIDI_MAPPING_SCALE_LINEAR), "linear") == 0, "linear scale has name");
+    expect_true(midi_mapping_parse_scale_name("log", &scale), "log scale parses");
+    expect_true(scale == MIDI_MAPPING_SCALE_LOG, "log scale parse result");
+    expect_true(!midi_mapping_parse_scale_name("curve", &scale), "unknown scale does not parse");
+}
+
 static void test_applies_adsr_cc_values(void)
 {
     midi_mapping mapping;
@@ -581,6 +609,7 @@ static void test_applies_delay_cc_values(void)
 int main(void)
 {
     test_loads_akai_mapping();
+    test_parameter_metadata();
     test_applies_adsr_cc_values();
     test_applies_master_gain_cc_value();
     test_applies_filter_cc_values();

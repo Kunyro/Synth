@@ -72,6 +72,9 @@ typedef struct midi_mapping_parameter_entry {
     const char *name;
     midi_mapping_parameter_getter get;
     midi_mapping_parameter_setter set;
+    midi_mapping_scale default_scale;
+    float default_min_value;
+    float default_max_value;
 } midi_mapping_parameter_entry;
 
 static float get_attack(const synth *s)
@@ -168,151 +171,228 @@ static void set_bitcrusher_bits(synth *s, float value)
 }
 
 static const midi_mapping_parameter_entry parameter_entries[] = {
-    {MIDI_MAPPING_PARAM_ATTACK, "attack", get_attack, set_attack},
-    {MIDI_MAPPING_PARAM_DECAY, "decay", get_decay, set_decay},
-    {MIDI_MAPPING_PARAM_SUSTAIN, "sustain", get_sustain, set_sustain},
-    {MIDI_MAPPING_PARAM_RELEASE, "release", get_release, set_release},
-    {MIDI_MAPPING_PARAM_MASTER_GAIN, "master_gain", synth_get_master_gain, synth_set_master_gain},
+    {MIDI_MAPPING_PARAM_ATTACK, "attack", get_attack, set_attack, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 2.0f},
+    {MIDI_MAPPING_PARAM_DECAY, "decay", get_decay, set_decay, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 2.0f},
+    {MIDI_MAPPING_PARAM_SUSTAIN, "sustain", get_sustain, set_sustain, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_RELEASE, "release", get_release, set_release, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 3.0f},
+    {
+        MIDI_MAPPING_PARAM_MASTER_GAIN,
+        "master_gain",
+        synth_get_master_gain,
+        synth_set_master_gain,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
+    },
     {
         MIDI_MAPPING_PARAM_FILTER_CUTOFF,
         "filter_cutoff",
         synth_get_filter_cutoff,
-        synth_set_filter_cutoff
+        synth_set_filter_cutoff,
+        MIDI_MAPPING_SCALE_LOG,
+        20.0f,
+        20000.0f
     },
-    {MIDI_MAPPING_PARAM_FILTER_POLES, "filter_poles", get_filter_poles, set_filter_poles},
+    {MIDI_MAPPING_PARAM_FILTER_POLES, "filter_poles", get_filter_poles, set_filter_poles, MIDI_MAPPING_SCALE_STEP, 1.0f, 8.0f},
     {
         MIDI_MAPPING_PARAM_OSCILLATOR_MORPH,
         "oscillator_morph",
         synth_get_oscillator_morph,
-        synth_set_oscillator_morph
+        synth_set_oscillator_morph,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN,
         "first_oscillator_gain",
         synth_get_first_oscillator_gain,
-        synth_set_first_oscillator_gain
+        synth_set_first_oscillator_gain,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN,
         "second_oscillator_gain",
         synth_get_second_oscillator_gain,
-        synth_set_second_oscillator_gain
+        synth_set_second_oscillator_gain,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH,
         "second_oscillator_morph",
         synth_get_second_oscillator_morph,
-        synth_set_second_oscillator_morph
+        synth_set_second_oscillator_morph,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE,
         "second_oscillator_octave",
         get_second_oscillator_octave,
-        set_second_oscillator_octave
+        set_second_oscillator_octave,
+        MIDI_MAPPING_SCALE_STEP,
+        -1.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH,
         "second_oscillator_pitch",
         get_second_oscillator_pitch,
-        set_second_oscillator_pitch
+        set_second_oscillator_pitch,
+        MIDI_MAPPING_SCALE_STEP,
+        -6.0f,
+        6.0f
     },
     {
         MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE,
         "second_oscillator_fine_tune",
         synth_get_second_oscillator_fine_tune,
-        synth_set_second_oscillator_fine_tune
+        synth_set_second_oscillator_fine_tune,
+        MIDI_MAPPING_SCALE_LINEAR,
+        -50.0f,
+        50.0f
     },
     {
         MIDI_MAPPING_PARAM_STEREO_SPREAD,
         "stereo_spread",
         synth_get_stereo_spread,
-        synth_set_stereo_spread
+        synth_set_stereo_spread,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
-    {MIDI_MAPPING_PARAM_LFO_RATE, "lfo_rate", synth_get_lfo_rate, synth_set_lfo_rate},
+    {MIDI_MAPPING_PARAM_LFO_RATE, "lfo_rate", synth_get_lfo_rate, synth_set_lfo_rate, MIDI_MAPPING_SCALE_LOG, 0.05f, 20.0f},
     {
         MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH,
         "lfo_shape_morph",
         synth_get_lfo_shape_morph,
-        synth_set_lfo_shape_morph
+        synth_set_lfo_shape_morph,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
-    {MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo_depth", synth_get_lfo_depth, synth_set_lfo_depth},
+    {MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo_depth", synth_get_lfo_depth, synth_set_lfo_depth, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
     {
         MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT,
         "lfo_first_oscillator_morph_amount",
         synth_get_lfo_first_oscillator_morph_amount,
-        synth_set_lfo_first_oscillator_morph_amount
+        synth_set_lfo_first_oscillator_morph_amount,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT,
         "lfo_second_oscillator_morph_amount",
         synth_get_lfo_second_oscillator_morph_amount,
-        synth_set_lfo_second_oscillator_morph_amount
+        synth_set_lfo_second_oscillator_morph_amount,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT,
         "lfo_first_oscillator_gain_amount",
         synth_get_lfo_first_oscillator_gain_amount,
-        synth_set_lfo_first_oscillator_gain_amount
+        synth_set_lfo_first_oscillator_gain_amount,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT,
         "lfo_second_oscillator_gain_amount",
         synth_get_lfo_second_oscillator_gain_amount,
-        synth_set_lfo_second_oscillator_gain_amount
+        synth_set_lfo_second_oscillator_gain_amount,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT,
         "lfo_filter_amount",
         synth_get_lfo_filter_amount,
-        synth_set_lfo_filter_amount
+        synth_set_lfo_filter_amount,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_DISTORTION_DRIVE,
         "distortion_drive",
         synth_get_distortion_drive,
-        synth_set_distortion_drive
+        synth_set_distortion_drive,
+        MIDI_MAPPING_SCALE_LINEAR,
+        1.0f,
+        32.0f
     },
     {
         MIDI_MAPPING_PARAM_DISTORTION_MIX,
         "distortion_mix",
         synth_get_distortion_mix,
-        synth_set_distortion_mix
+        synth_set_distortion_mix,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_BITCRUSHER_SAMPLE_RATE,
         "bitcrusher_sample_rate",
         synth_get_bitcrusher_sample_rate,
-        synth_set_bitcrusher_sample_rate
+        synth_set_bitcrusher_sample_rate,
+        MIDI_MAPPING_SCALE_LOG,
+        100.0f,
+        48000.0f
     },
     {
         MIDI_MAPPING_PARAM_BITCRUSHER_BITS,
         "bitcrusher_bits",
         get_bitcrusher_bits,
-        set_bitcrusher_bits
+        set_bitcrusher_bits,
+        MIDI_MAPPING_SCALE_STEP,
+        1.0f,
+        16.0f
     },
     {
         MIDI_MAPPING_PARAM_BITCRUSHER_MIX,
         "bitcrusher_mix",
         synth_get_bitcrusher_mix,
-        synth_set_bitcrusher_mix
+        synth_set_bitcrusher_mix,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     },
     {
         MIDI_MAPPING_PARAM_DELAY_TIME,
         "delay_time",
         synth_get_delay_time,
-        synth_set_delay_time
+        synth_set_delay_time,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.001f,
+        2.0f
     },
     {
         MIDI_MAPPING_PARAM_DELAY_FEEDBACK,
         "delay_feedback",
         synth_get_delay_feedback,
-        synth_set_delay_feedback
+        synth_set_delay_feedback,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        0.95f
     },
     {
         MIDI_MAPPING_PARAM_DELAY_MIX,
         "delay_mix",
         synth_get_delay_mix,
-        synth_set_delay_mix
+        synth_set_delay_mix,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
     }
 };
 
@@ -336,6 +416,17 @@ static const midi_mapping_parameter_entry *find_parameter(midi_mapping_parameter
     }
 
     return 0;
+}
+
+static void fill_parameter_info(
+    const midi_mapping_parameter_entry *entry,
+    midi_mapping_parameter_info *info)
+{
+    info->parameter = entry->parameter;
+    info->name = entry->name;
+    info->default_scale = entry->default_scale;
+    info->default_min_value = entry->default_min_value;
+    info->default_max_value = entry->default_max_value;
 }
 
 // parses a synth parameter name from a config key.
@@ -365,22 +456,7 @@ static int parse_source_type(const char *name, midi_mapping_source_type *source_
 // parses the scaling mode from a config value.
 static int parse_scale(const char *name, midi_mapping_scale *scale)
 {
-    if (strcmp(name, "linear") == 0) {
-        *scale = MIDI_MAPPING_SCALE_LINEAR;
-        return 1;
-    }
-
-    if (strcmp(name, "step") == 0) {
-        *scale = MIDI_MAPPING_SCALE_STEP;
-        return 1;
-    }
-
-    if (strcmp(name, "log") == 0) {
-        *scale = MIDI_MAPPING_SCALE_LOG;
-        return 1;
-    }
-
-    return 0;
+    return midi_mapping_parse_scale_name(name, scale);
 }
 
 // parses an integer token inside an allowed range.
@@ -631,12 +707,82 @@ void midi_mapping_init(midi_mapping *mapping)
     copy_string(mapping->name, sizeof(mapping->name), "unnamed midi controller");
 }
 
+// returns how many synth parameters can be mapped.
+size_t midi_mapping_parameter_count(void)
+{
+    return sizeof(parameter_entries) / sizeof(parameter_entries[0]);
+}
+
+// returns metadata for a mappable synth parameter by index.
+const midi_mapping_parameter_info *midi_mapping_parameter_info_at(size_t index)
+{
+    static midi_mapping_parameter_info info;
+
+    if (index >= midi_mapping_parameter_count()) {
+        return 0;
+    }
+
+    fill_parameter_info(&parameter_entries[index], &info);
+    return &info;
+}
+
+// returns metadata for a mappable synth parameter by name.
+const midi_mapping_parameter_info *midi_mapping_parameter_info_by_name(const char *name)
+{
+    static midi_mapping_parameter_info info;
+    const midi_mapping_parameter_entry *entry = find_parameter_by_name(name);
+
+    if (entry == 0) {
+        return 0;
+    }
+
+    fill_parameter_info(entry, &info);
+    return &info;
+}
+
 // returns the readable name for a mapped synth parameter.
 const char *midi_mapping_parameter_name(midi_mapping_parameter parameter)
 {
     const midi_mapping_parameter_entry *entry = find_parameter(parameter);
 
     return entry != 0 ? entry->name : "unknown";
+}
+
+// returns the config spelling for a scale.
+const char *midi_mapping_scale_name(midi_mapping_scale scale)
+{
+    switch (scale) {
+        case MIDI_MAPPING_SCALE_LOG:
+            return "log";
+
+        case MIDI_MAPPING_SCALE_STEP:
+            return "step";
+
+        case MIDI_MAPPING_SCALE_LINEAR:
+        default:
+            return "linear";
+    }
+}
+
+// parses the config spelling for a scale.
+int midi_mapping_parse_scale_name(const char *name, midi_mapping_scale *scale)
+{
+    if (strcmp(name, "linear") == 0) {
+        *scale = MIDI_MAPPING_SCALE_LINEAR;
+        return 1;
+    }
+
+    if (strcmp(name, "step") == 0) {
+        *scale = MIDI_MAPPING_SCALE_STEP;
+        return 1;
+    }
+
+    if (strcmp(name, "log") == 0) {
+        *scale = MIDI_MAPPING_SCALE_LOG;
+        return 1;
+    }
+
+    return 0;
 }
 
 // loads a midi mapping from a config file.

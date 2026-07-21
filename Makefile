@@ -71,7 +71,7 @@ test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(
 $(TARGET): $(SOURCES) third_party/miniaudio/miniaudio.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@ $(LDLIBS)
 
-$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/midi_portmidi.c src/midi_types.c | build
+$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/midi_mapping.c platform/desktop/midi/midi_portmidi.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c src/wavetable.c | build

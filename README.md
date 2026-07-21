@@ -118,7 +118,21 @@ make midi-monitor
 Touch one controller at a time and the monitor prints the incoming MIDI message,
 including channel, message type, values, and raw bytes. It recognizes note
 on/off, control change, pitch bend, program change, channel pressure, poly
-pressure, common system messages, and realtime messages.
+pressure, common system messages, and realtime messages. The same binary also
+has controller mapping helpers:
+
+```sh
+./build/midi_monitor show --config config/midi/akai_mpk_mini_mk2.conf
+./build/midi_monitor validate --config config/midi/akai_mpk_mini_mk2.conf
+./build/midi_monitor learn --output config/midi/my_controller.conf
+./build/midi_monitor learn --edit config/midi/akai_mpk_mini_mk2.conf
+```
+
+`learn` starts an interactive MIDI-learn prompt. Use `list` to see mappable
+synth parameters, `bind <name|number>` to move a knob or fader and assign it,
+`unbind <name|number>` to clear a binding, `name <text>` to rename the config,
+and `save` to write the file. Editing an existing config writes a `.bak` backup
+the first time you save.
 
 Pitch bend messages are parsed by the portable MIDI parser. A full-up message such as `e0 7f 7f` becomes value `8191`, normalized to `+1.0`. The synth maps the wheel to a two-semitone span: `-1` semitone at full down, center at `0`, and `+1` semitone at full up.
 

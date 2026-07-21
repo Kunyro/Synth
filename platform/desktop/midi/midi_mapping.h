@@ -61,6 +61,15 @@ typedef enum midi_mapping_scale {
     MIDI_MAPPING_SCALE_STEP
 } midi_mapping_scale;
 
+// editable defaults for one synth parameter in the midi learn utility.
+typedef struct midi_mapping_parameter_info {
+    midi_mapping_parameter parameter;
+    const char *name;
+    midi_mapping_scale default_scale;
+    float default_min_value;
+    float default_max_value;
+} midi_mapping_parameter_info;
+
 // runtime state for soft takeover on one midi control.
 typedef struct midi_mapping_pickup {
     int picked_up;
@@ -98,8 +107,18 @@ typedef struct midi_mapping_apply_result {
 
 // clears a midi mapping and gives it a fallback name.
 void midi_mapping_init(midi_mapping *mapping);
+// returns how many synth parameters can be mapped.
+size_t midi_mapping_parameter_count(void);
+// returns metadata for a mappable synth parameter by index.
+const midi_mapping_parameter_info *midi_mapping_parameter_info_at(size_t index);
+// returns metadata for a mappable synth parameter by name.
+const midi_mapping_parameter_info *midi_mapping_parameter_info_by_name(const char *name);
 // returns the readable name for a mapped synth parameter.
 const char *midi_mapping_parameter_name(midi_mapping_parameter parameter);
+// returns the config spelling for a scale.
+const char *midi_mapping_scale_name(midi_mapping_scale scale);
+// parses the config spelling for a scale.
+int midi_mapping_parse_scale_name(const char *name, midi_mapping_scale *scale);
 // loads a midi mapping from a config file.
 int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size_t error_size);
 // applies a raw midi message to the synth when it matches a binding.
