@@ -130,9 +130,11 @@ has controller mapping helpers:
 
 `learn` starts an interactive MIDI-learn prompt. Use `list` to see mappable
 synth parameters, `bind <name|number>` to move a knob or fader and assign it,
-`unbind <name|number>` to clear a binding, `name <text>` to rename the config,
-and `save` to write the file. Editing an existing config writes a `.bak` backup
-the first time you save.
+`map-all` to step through every parameter in order, `unbind <name|number>` to
+clear a binding, `name <text>` to rename the config, and `save` to write the
+file. In `map-all`, move a control to bind the current parameter, press Enter to
+skip it, or type `done`, `quit`, `exit`, or `cancel` to leave the mode. Editing
+an existing config writes a `.bak` backup the first time you save.
 
 Pitch bend messages are parsed by the portable MIDI parser. A full-up message such as `e0 7f 7f` becomes value `8191`, normalized to `+1.0`. The synth maps the wheel to a two-semitone span: `-1` semitone at full down, center at `0`, and `+1` semitone at full up.
 

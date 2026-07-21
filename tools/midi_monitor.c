@@ -11,6 +11,9 @@
 
 #define MIDI_MONITOR_LINE_LENGTH 256
 #define MIDI_MONITOR_PATH_LENGTH 512
+#define MIDI_LEARN_POLL_SLEEP_US 5000
+#define MIDI_LEARN_DRAIN_QUIET_MS 80
+#define MIDI_LEARN_DRAIN_MAX_MS 600
 
 typedef struct learn_capture {
     int has_cc;
@@ -21,7 +24,22 @@ typedef struct learn_capture {
 
 typedef struct learn_context {
     learn_capture capture;
+    int capture_enabled;
+    unsigned long ignored_message_count;
 } learn_context;
+
+typedef enum learn_capture_result {
+    LEARN_CAPTURE_GOT_CC = 0,
+    LEARN_CAPTURE_SKIPPED,
+    LEARN_CAPTURE_CANCELLED,
+    LEARN_CAPTURE_ENDED
+} learn_capture_result;
+
+typedef enum learn_bind_result {
+    LEARN_BIND_UNCHANGED = 0,
+    LEARN_BIND_CHANGED,
+    LEARN_BIND_EXITED
+} learn_bind_result;
 
 // checks whether stdin has a line ready.
 static int stdin_has_line(void)
@@ -254,7 +272,20 @@ static void print_short_message(void *user_data, const unsigned char *data, unsi
 static void capture_cc_message(void *user_data, const unsigned char *data, unsigned short length)
 {
     learn_context *context = (learn_context *)user_data;
-    const unsigned char status = data[0] & 0xF0;
+    unsigned char status;
+
+    if (length == 0) {
+        return;
+    }
+
+    if (!context->capture_enabled) {
+        if (data[0] != 0xFE) {
+            context->ignored_message_count += 1;
+        }
+        return;
+    }
+
+    status = data[0] & 0xF0;
 
     if (length < 3 || context->capture.has_cc) {
         return;
@@ -466,7 +497,7 @@ static int parse_float_input(const char *text, float *value)
     return 1;
 }
 
-static int prompt_scale_and_range(midi_mapping_binding *binding)
+static learn_capture_result prompt_scale_and_range(midi_mapping_binding *binding)
 {
     char line[MIDI_MONITOR_LINE_LENGTH];
 
@@ -479,15 +510,20 @@ static int prompt_scale_and_range(midi_mapping_binding *binding)
         fflush(stdout);
 
         if (!read_line(line, sizeof(line))) {
-            return 0;
+            return LEARN_CAPTURE_ENDED;
         }
 
         if (line[0] == '\0' || strcmp(line, "y") == 0 || strcmp(line, "yes") == 0) {
-            return 1;
+            return LEARN_CAPTURE_GOT_CC;
         }
 
-        if (strcmp(line, "cancel") == 0 || strcmp(line, "n") == 0 || strcmp(line, "no") == 0) {
-            return 0;
+        if (strcmp(line, "cancel") == 0 ||
+            strcmp(line, "done") == 0 ||
+            strcmp(line, "quit") == 0 ||
+            strcmp(line, "exit") == 0 ||
+            strcmp(line, "n") == 0 ||
+            strcmp(line, "no") == 0) {
+            return LEARN_CAPTURE_CANCELLED;
         }
 
         if (strcmp(line, "edit") != 0) {
@@ -530,48 +566,98 @@ static int prompt_scale_and_range(midi_mapping_binding *binding)
     }
 }
 
-static int wait_for_control_change(midi_portmidi_input *midi, learn_context *context)
+// consumes queued midi after a bind so one knob twist cannot bind the next row too.
+static void drain_midi_learn_input(midi_portmidi_input *midi, learn_context *context)
+{
+    unsigned int elapsed_ms = 0;
+    unsigned int quiet_ms = 0;
+    unsigned long seen_message_count;
+
+    context->capture_enabled = 0;
+    context->capture.has_cc = 0;
+    seen_message_count = context->ignored_message_count;
+
+    while (elapsed_ms < MIDI_LEARN_DRAIN_MAX_MS && quiet_ms < MIDI_LEARN_DRAIN_QUIET_MS) {
+        midi_portmidi_poll(midi);
+
+        if (context->ignored_message_count != seen_message_count) {
+            seen_message_count = context->ignored_message_count;
+            quiet_ms = 0;
+        } else {
+            quiet_ms += MIDI_LEARN_POLL_SLEEP_US / 1000;
+        }
+
+        usleep(MIDI_LEARN_POLL_SLEEP_US);
+        elapsed_ms += MIDI_LEARN_POLL_SLEEP_US / 1000;
+    }
+
+    context->capture.has_cc = 0;
+}
+
+static learn_capture_result wait_for_control_change(
+    midi_portmidi_input *midi,
+    learn_context *context,
+    int allow_skip)
 {
     char line[MIDI_MONITOR_LINE_LENGTH];
 
     context->capture.has_cc = 0;
-    printf("move the knob or fader to bind. type cancel and press enter to abort.\n");
+    context->capture_enabled = 1;
+    if (allow_skip) {
+        printf("move the knob or fader to bind. press enter to skip, or type done to leave map-all.\n");
+    } else {
+        printf("move the knob or fader to bind. type cancel and press enter to abort.\n");
+    }
     fflush(stdout);
 
     while (!context->capture.has_cc) {
         midi_portmidi_poll(midi);
 
-        if (stdin_has_line()) {
-            if (!read_line(line, sizeof(line))) {
-                return 0;
-            }
-
-            if (strcmp(line, "cancel") == 0) {
-                return 0;
-            }
-
-            printf("waiting for midi control change; type cancel to abort.\n");
+        if (context->capture.has_cc) {
+            break;
         }
 
-        usleep(5000);
+        if (stdin_has_line()) {
+            if (!read_line(line, sizeof(line))) {
+                context->capture_enabled = 0;
+                return LEARN_CAPTURE_ENDED;
+            }
+
+            if (line[0] == '\0') {
+                context->capture_enabled = 0;
+                return allow_skip ? LEARN_CAPTURE_SKIPPED : LEARN_CAPTURE_CANCELLED;
+            }
+
+            if (strcmp(line, "cancel") == 0 ||
+                strcmp(line, "done") == 0 ||
+                strcmp(line, "quit") == 0 ||
+                strcmp(line, "exit") == 0) {
+                context->capture_enabled = 0;
+                return LEARN_CAPTURE_CANCELLED;
+            }
+
+            if (allow_skip) {
+                printf("waiting for midi control change; enter skips, done exits map-all.\n");
+            } else {
+                printf("waiting for midi control change; type cancel to abort.\n");
+            }
+        }
+
+        usleep(MIDI_LEARN_POLL_SLEEP_US);
     }
 
-    return 1;
+    context->capture_enabled = 0;
+    return LEARN_CAPTURE_GOT_CC;
 }
 
-static int bind_parameter(
+static learn_bind_result store_captured_binding(
     midi_mapping *mapping,
-    midi_portmidi_input *midi,
     learn_context *context,
     const midi_mapping_parameter_info *info)
 {
     midi_mapping_binding binding;
     const midi_mapping_binding *existing = find_first_binding(mapping, info->parameter);
-
-    if (!wait_for_control_change(midi, context)) {
-        printf("bind cancelled.\n");
-        return 0;
-    }
+    learn_capture_result prompt_result;
 
     memset(&binding, 0, sizeof(binding));
     binding.parameter = info->parameter;
@@ -591,15 +677,16 @@ static int bind_parameter(
 
     (void)control_is_already_bound(mapping, binding.channel, binding.control, binding.parameter);
 
-    if (!prompt_scale_and_range(&binding)) {
+    prompt_result = prompt_scale_and_range(&binding);
+    if (prompt_result == LEARN_CAPTURE_CANCELLED || prompt_result == LEARN_CAPTURE_ENDED) {
         printf("bind cancelled.\n");
-        return 0;
+        return prompt_result == LEARN_CAPTURE_CANCELLED ? LEARN_BIND_EXITED : LEARN_BIND_UNCHANGED;
     }
 
     remove_bindings_for_parameter(mapping, info->parameter);
     if (mapping->binding_count >= MIDI_MAPPING_MAX_BINDINGS) {
         printf("could not bind: too many midi bindings.\n");
-        return 0;
+        return LEARN_BIND_UNCHANGED;
     }
 
     mapping->bindings[mapping->binding_count] = binding;
@@ -608,7 +695,78 @@ static int bind_parameter(
     printf("%s=", info->name);
     print_binding(&binding);
     printf("\n");
-    return 1;
+    return LEARN_BIND_CHANGED;
+}
+
+static int bind_parameter(
+    midi_mapping *mapping,
+    midi_portmidi_input *midi,
+    learn_context *context,
+    const midi_mapping_parameter_info *info)
+{
+    learn_capture_result capture_result = wait_for_control_change(midi, context, 0);
+    learn_bind_result bind_result;
+
+    if (capture_result != LEARN_CAPTURE_GOT_CC) {
+        printf("bind cancelled.\n");
+        return 0;
+    }
+
+    bind_result = store_captured_binding(mapping, context, info);
+    drain_midi_learn_input(midi, context);
+    return bind_result == LEARN_BIND_CHANGED;
+}
+
+static int map_all_parameters(
+    midi_mapping *mapping,
+    midi_portmidi_input *midi,
+    learn_context *context)
+{
+    int changed = 0;
+
+    printf("map-all started. parameters are visited in the same order as list.\n");
+
+    for (size_t i = 0; i < midi_mapping_parameter_count(); ++i) {
+        const midi_mapping_parameter_info *info = midi_mapping_parameter_info_at(i);
+        learn_capture_result capture_result;
+
+        printf("\n%zu/%zu  %s\n", i + 1, midi_mapping_parameter_count(), info->name);
+        capture_result = wait_for_control_change(midi, context, 1);
+
+        switch (capture_result) {
+            case LEARN_CAPTURE_GOT_CC:
+            {
+                const learn_bind_result bind_result = store_captured_binding(mapping, context, info);
+
+                if (bind_result == LEARN_BIND_CHANGED) {
+                    changed = 1;
+                } else if (bind_result == LEARN_BIND_EXITED) {
+                    printf("map-all stopped.\n");
+                    return changed;
+                }
+
+                drain_midi_learn_input(midi, context);
+                break;
+            }
+
+            case LEARN_CAPTURE_SKIPPED:
+                printf("skipped %s\n", info->name);
+                drain_midi_learn_input(midi, context);
+                break;
+
+            case LEARN_CAPTURE_CANCELLED:
+                printf("map-all stopped.\n");
+                return changed;
+
+            case LEARN_CAPTURE_ENDED:
+            default:
+                printf("map-all ended.\n");
+                return changed;
+        }
+    }
+
+    printf("map-all complete.\n");
+    return changed;
 }
 
 static int save_mapping_file(const char *path, const midi_mapping *mapping)
@@ -766,6 +924,7 @@ static void print_learn_help(void)
     printf("commands:\n");
     printf("  list                 show parameters and current bindings\n");
     printf("  bind <name|number>   learn a cc binding for one parameter\n");
+    printf("  map-all              walk every parameter and bind them in order\n");
     printf("  unbind <name|number> remove a parameter binding\n");
     printf("  name <text>          rename the controller in this config\n");
     printf("  save                 write the config file\n");
@@ -883,6 +1042,15 @@ static int run_learn_command(int argc, char **argv)
             }
 
             if (bind_parameter(&mapping, &midi, &context, info)) {
+                dirty = 1;
+            }
+        } else if (strcmp(command, "map-all") == 0 || strcmp(command, "mapall") == 0) {
+            if (!has_midi_input) {
+                printf("no midi input stream is open, so map-all cannot learn controls.\n");
+                continue;
+            }
+
+            if (map_all_parameters(&mapping, &midi, &context)) {
                 dirty = 1;
             }
         } else if (strcmp(command, "unbind") == 0) {

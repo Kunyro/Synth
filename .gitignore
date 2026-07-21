@@ -57,3 +57,7 @@ dkms.conf
 
 # vscode
 .vscode/
+
+# midi config files
+config/midi/*
+!config/midi/akai_mpk_mini_mk2.conf
