@@ -35,15 +35,22 @@ Start the desktop app:
 make run
 ```
 
-Run the tests:
-
-```sh
-make test
-```
-
 With no MIDI controller connected, `make run` plays a default test note until
 you press Enter. With a MIDI input source connected, the app starts silent and
 waits for MIDI notes.
+
+Bind MIDI controls:
+
+```sh
+make midi-monitor
+./build/midi_monitor learn --output config/midi/my_keyboard.conf
+./build/synth --midi-config config/midi/my_keyboard.conf
+```
+
+In the learn prompt, type `list` to see synth parameters, then use
+`bind <name|number>` and move a knob, fader, or other control on your MIDI
+keyboard. Type `save` when you are done. More detail is available in
+[MIDI controller mapping](config/midi/README.md).
 
 ## Requirements
 
