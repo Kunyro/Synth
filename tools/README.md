@@ -48,9 +48,9 @@ Useful commands:
 | Command | Description |
 | --- | --- |
 | `list` | Show mappable parameters and current bindings |
-| `bind <name|number>` | Move a knob or fader and assign it to one parameter |
+| `bind <name\|number>` | Move a knob or fader and assign it to one parameter |
 | `map-all` | Step through every parameter in order |
-| `unbind <name|number>` | Clear a binding |
+| `unbind <name\|number>` | Clear a binding |
 | `name <text>` | Rename the config |
 | `save` | Write the config file |
 | `help` | Show learn-mode help |
