@@ -61,3 +61,4 @@ dkms.conf
 # midi config files
 config/midi/*
 !config/midi/akai_mpk_mini_mk2.conf
+!config/midi/README.md
