@@ -59,3 +59,7 @@ Useful commands:
 In `map-all`, move a control to bind the current parameter, press Enter to skip
 it, or type `done`, `quit`, `exit`, or `cancel` to leave the mode. Editing an
 existing config writes a `.bak` backup the first time you save.
+
+Saturation is available in learn mode as `saturation_drive` and
+`saturation_mix`, so you can bind them directly with
+`bind saturation_drive` or `bind saturation_mix`.

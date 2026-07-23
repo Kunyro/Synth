@@ -5,8 +5,10 @@
 #include "synth/bitcrusher.h"
 #include "synth/delay.h"
 #include "synth/distortion.h"
+#include "synth/saturation.h"
 
 typedef struct synth_effect_chain {
+    synth_saturation saturation;
     synth_distortion distortion;
     synth_bitcrusher bitcrusher;
     synth_delay delay;

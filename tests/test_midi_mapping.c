@@ -68,9 +68,10 @@ static void test_parameter_metadata(void)
 {
     const midi_mapping_parameter_info *cutoff_info;
     const midi_mapping_parameter_info *bits_info;
+    const midi_mapping_parameter_info *saturation_drive_info;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 31, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 33, "metadata lists every mappable parameter");
 
     cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -79,7 +80,26 @@ static void test_parameter_metadata(void)
     expect_near(cutoff_info->default_min_value, 20.0f, 0.0001f, "filter cutoff metadata min");
     expect_near(cutoff_info->default_max_value, 20000.0f, 0.0001f, "filter cutoff metadata max");
 
-    bits_info = midi_mapping_parameter_info_at(26);
+    saturation_drive_info = midi_mapping_parameter_info_by_name("saturation_drive");
+    expect_true(saturation_drive_info != 0, "saturation drive metadata is findable");
+    expect_true(
+        saturation_drive_info->parameter == MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        "saturation drive metadata names parameter");
+    expect_true(
+        saturation_drive_info->default_scale == MIDI_MAPPING_SCALE_LINEAR,
+        "saturation drive defaults to linear scale");
+    expect_near(
+        saturation_drive_info->default_min_value,
+        SYNTH_SATURATION_MIN_DRIVE,
+        0.0001f,
+        "saturation drive metadata min");
+    expect_near(
+        saturation_drive_info->default_max_value,
+        SYNTH_SATURATION_MAX_DRIVE,
+        0.0001f,
+        "saturation drive metadata max");
+
+    bits_info = midi_mapping_parameter_info_at(28);
     expect_true(bits_info != 0, "bitcrusher bits metadata is findable by index");
     expect_true(
         strcmp(bits_info->name, "bitcrusher_bits") == 0,
@@ -443,6 +463,16 @@ static void test_names_distortion_parameters(void)
         "distortion mix has a midi mapping name");
 }
 
+static void test_names_saturation_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_SATURATION_DRIVE), "saturation_drive") == 0,
+        "saturation drive has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_SATURATION_MIX), "saturation_mix") == 0,
+        "saturation mix has a midi mapping name");
+}
+
 static void test_names_delay_parameters(void)
 {
     expect_true(
@@ -518,6 +548,58 @@ static void test_applies_distortion_drive_cc_value(void)
         0.0001f,
         "distortion drive cc scales to the drive range");
     expect_near(result.synth_value, expected_drive, 0.0001f, "distortion drive result reports scaled value");
+}
+
+static void test_applies_saturation_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    const float expected_drive =
+        SYNTH_SATURATION_MIN_DRIVE +
+        ((96.0f / 127.0f) * (SYNTH_SATURATION_MAX_DRIVE - SYNTH_SATURATION_MIN_DRIVE));
+
+    midi_mapping_init(&mapping);
+    mapping.binding_count = 2;
+    mapping.bindings[0].parameter = MIDI_MAPPING_PARAM_SATURATION_MIX;
+    mapping.bindings[0].source_type = MIDI_MAPPING_SOURCE_CC;
+    mapping.bindings[0].channel = 1;
+    mapping.bindings[0].control = 33;
+    mapping.bindings[0].scale = MIDI_MAPPING_SCALE_LINEAR;
+    mapping.bindings[0].min_value = 0.0f;
+    mapping.bindings[0].max_value = 1.0f;
+    mapping.bindings[0].pickup.picked_up = 1;
+    mapping.bindings[1].parameter = MIDI_MAPPING_PARAM_SATURATION_DRIVE;
+    mapping.bindings[1].source_type = MIDI_MAPPING_SOURCE_CC;
+    mapping.bindings[1].channel = 1;
+    mapping.bindings[1].control = 34;
+    mapping.bindings[1].scale = MIDI_MAPPING_SCALE_LINEAR;
+    mapping.bindings[1].min_value = SYNTH_SATURATION_MIN_DRIVE;
+    mapping.bindings[1].max_value = SYNTH_SATURATION_MAX_DRIVE;
+    mapping.bindings[1].pickup.picked_up = 1;
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    expect_true(apply_cc_value(&mapping, &s, 33, 44, &result), "saturation mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX,
+        "saturation mix cc reports saturation mix parameter");
+    expect_near(
+        synth_get_saturation_mix(&s),
+        44.0f / 127.0f,
+        0.0001f,
+        "saturation mix cc scales to normalized dry wet");
+    expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "saturation mix result reports normalized value");
+
+    expect_true(apply_cc_value(&mapping, &s, 34, 96, &result), "saturation drive cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        "saturation drive cc reports saturation drive parameter");
+    expect_near(
+        synth_get_saturation_drive(&s),
+        expected_drive,
+        0.0001f,
+        "saturation drive cc scales to the drive range");
+    expect_near(result.synth_value, expected_drive, 0.0001f, "saturation drive result reports scaled value");
 }
 
 static void test_applies_bitcrusher_cc_values(void)
@@ -619,11 +701,13 @@ int main(void)
     test_applies_stereo_spread_cc_value();
     test_applies_lfo_cc_values();
     test_waits_for_pickup_before_first_knob_change();
+    test_names_saturation_parameters();
     test_names_distortion_parameters();
     test_names_bitcrusher_parameters();
     test_names_delay_parameters();
     test_applies_distortion_mix_cc_value();
     test_applies_distortion_drive_cc_value();
+    test_applies_saturation_cc_values();
     test_applies_bitcrusher_cc_values();
     test_applies_delay_cc_values();
     printf("All MIDI mapping tests passed.\n");

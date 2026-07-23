@@ -313,6 +313,36 @@ static void test_delay_controls(void)
     expect_near(synth_get_delay_mix(&delay_synth), 0.0f, 0.0001f, "synth delay mix clamps low");
 }
 
+static void test_saturation_controls(void)
+{
+    synth saturation_synth;
+
+    synth_init(&saturation_synth, 48000.0f);
+    expect_near(
+        synth_get_saturation_drive(&saturation_synth),
+        SYNTH_SATURATION_DEFAULT_DRIVE,
+        0.0001f,
+        "synth saturation starts at default drive");
+    expect_near(
+        synth_get_saturation_mix(&saturation_synth),
+        0.0f,
+        0.0001f,
+        "synth saturation starts dry");
+
+    synth_set_saturation_drive(&saturation_synth, 100.0f);
+    synth_set_saturation_mix(&saturation_synth, -1.0f);
+    expect_near(
+        synth_get_saturation_drive(&saturation_synth),
+        SYNTH_SATURATION_MAX_DRIVE,
+        0.0001f,
+        "synth saturation drive clamps high");
+    expect_near(
+        synth_get_saturation_mix(&saturation_synth),
+        0.0f,
+        0.0001f,
+        "synth saturation mix clamps low");
+}
+
 int main(void)
 {
     synth s;
@@ -510,6 +540,7 @@ int main(void)
     test_stereo_spread();
     test_global_lfo();
     test_master_gain_scales_after_effects();
+    test_saturation_controls();
     test_delay_controls();
 
     if (failures != 0) {

@@ -15,6 +15,7 @@ The current suite covers:
 - LFO behavior
 - ADSR envelope behavior
 - Filter behavior
+- Saturation
 - Distortion
 - Bitcrusher
 - Delay

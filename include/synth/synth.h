@@ -96,6 +96,10 @@ void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount);
 void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount);
 // changes how strongly the lfo moves the shared filter cutoff.
 void synth_set_lfo_filter_amount(synth *s, float amount);
+// changes the input gain feeding the warm post-filter saturation.
+void synth_set_saturation_drive(synth *s, float drive);
+// changes the wet/dry mix for warm post-filter saturation.
+void synth_set_saturation_mix(synth *s, float mix);
 // changes the input gain feeding the post-filter distortion.
 void synth_set_distortion_drive(synth *s, float drive);
 // changes the wet/dry mix for post-filter distortion.
@@ -133,6 +137,8 @@ float synth_get_lfo_second_oscillator_morph_amount(const synth *s);
 float synth_get_lfo_first_oscillator_gain_amount(const synth *s);
 float synth_get_lfo_second_oscillator_gain_amount(const synth *s);
 float synth_get_lfo_filter_amount(const synth *s);
+float synth_get_saturation_drive(const synth *s);
+float synth_get_saturation_mix(const synth *s);
 float synth_get_distortion_drive(const synth *s);
 float synth_get_distortion_mix(const synth *s);
 float synth_get_bitcrusher_sample_rate(const synth *s);

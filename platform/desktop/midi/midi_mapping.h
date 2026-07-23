@@ -46,7 +46,9 @@ typedef enum midi_mapping_parameter {
     MIDI_MAPPING_PARAM_BITCRUSHER_MIX,
     MIDI_MAPPING_PARAM_DELAY_TIME,
     MIDI_MAPPING_PARAM_DELAY_FEEDBACK,
-    MIDI_MAPPING_PARAM_DELAY_MIX
+    MIDI_MAPPING_PARAM_DELAY_MIX,
+    MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+    MIDI_MAPPING_PARAM_SATURATION_MIX
 } midi_mapping_parameter;
 
 // the kind of midi source a binding listens for.

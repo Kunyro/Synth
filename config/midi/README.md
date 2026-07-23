@@ -75,6 +75,8 @@ make midi-monitor
 - `lfo_first_oscillator_gain_amount`
 - `lfo_second_oscillator_gain_amount`
 - `lfo_filter_amount`
+- `saturation_drive`
+- `saturation_mix`
 - `distortion_drive`
 - `distortion_mix`
 - `bitcrusher_sample_rate`

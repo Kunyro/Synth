@@ -367,6 +367,16 @@ void synth_set_lfo_filter_amount(synth *s, float amount)
     s->lfo_filter_amount = synth_clampf(amount, 0.0f, 1.0f);
 }
 
+void synth_set_saturation_drive(synth *s, float drive)
+{
+    synth_saturation_set_drive(&s->effects.saturation, drive);
+}
+
+void synth_set_saturation_mix(synth *s, float mix)
+{
+    synth_saturation_set_mix(&s->effects.saturation, mix);
+}
+
 void synth_set_distortion_drive(synth *s, float drive)
 {
     synth_distortion_set_drive(&s->effects.distortion, drive);
@@ -500,6 +510,16 @@ float synth_get_lfo_second_oscillator_gain_amount(const synth *s)
 float synth_get_lfo_filter_amount(const synth *s)
 {
     return s->lfo_filter_amount;
+}
+
+float synth_get_saturation_drive(const synth *s)
+{
+    return synth_saturation_get_drive(&s->effects.saturation);
+}
+
+float synth_get_saturation_mix(const synth *s)
+{
+    return synth_saturation_get_mix(&s->effects.saturation);
 }
 
 float synth_get_distortion_drive(const synth *s)

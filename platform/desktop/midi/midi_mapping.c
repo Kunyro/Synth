@@ -323,6 +323,24 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
         1.0f
     },
     {
+        MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        "saturation_drive",
+        synth_get_saturation_drive,
+        synth_set_saturation_drive,
+        MIDI_MAPPING_SCALE_LINEAR,
+        SYNTH_SATURATION_MIN_DRIVE,
+        SYNTH_SATURATION_MAX_DRIVE
+    },
+    {
+        MIDI_MAPPING_PARAM_SATURATION_MIX,
+        "saturation_mix",
+        synth_get_saturation_mix,
+        synth_set_saturation_mix,
+        MIDI_MAPPING_SCALE_LINEAR,
+        0.0f,
+        1.0f
+    },
+    {
         MIDI_MAPPING_PARAM_DISTORTION_DRIVE,
         "distortion_drive",
         synth_get_distortion_drive,

@@ -16,7 +16,7 @@ feeds it note/control events and asks it to render audio buffers.
 | `filter.c` | Chained one-pole low-pass filter |
 | `lfo.c` | Global morphable LFO |
 | `midi_types.c` | Portable MIDI note, note off, and pitch bend parsing |
-| `effects/` | Distortion, bitcrusher, delay, and effect-chain code |
+| `effects/` | Saturation, distortion, bitcrusher, delay, and effect-chain code |
 | `internal/` | Private headers used by the engine implementation |
 
 ## Public API
@@ -42,6 +42,7 @@ before master gain is applied.
 
 Current post-filter effects:
 
+- Saturation with drive, even-harmonic emphasis, and wet/dry mix
 - Distortion with drive and wet/dry mix
 - Bitcrusher with reduced sample rate, bit depth, and wet/dry mix
 - Delay with time, feedback, and wet/dry mix
