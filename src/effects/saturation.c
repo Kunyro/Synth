@@ -7,7 +7,9 @@
 
 #define SYNTH_SATURATION_TWO_PI 6.28318530717958647692f
 #define SYNTH_SATURATION_MIN_BIAS 0.08f
-#define SYNTH_SATURATION_MAX_BIAS 0.40f
+#define SYNTH_SATURATION_MAX_BIAS 1.20f
+#define SYNTH_SATURATION_MAX_CURVE_DRIVE 5.0f
+#define SYNTH_SATURATION_MAX_MAKEUP_GAIN 1.12f
 
 // blends from clean signal to fully saturated signal.
 static float mix_sample(float dry, float wet, float mix)
@@ -21,13 +23,35 @@ static float normalized_drive(float drive)
         (SYNTH_SATURATION_MAX_DRIVE - SYNTH_SATURATION_MIN_DRIVE);
 }
 
+static float drive_amount(float drive)
+{
+    return synth_clampf(normalized_drive(drive), 0.0f, 1.0f);
+}
+
+// maps the large user-facing drive range into a warmer soft-clip range.
+static float curve_drive_for_drive(float drive)
+{
+    const float amount = powf(drive_amount(drive), 0.85f);
+
+    return SYNTH_SATURATION_MIN_DRIVE +
+        ((SYNTH_SATURATION_MAX_CURVE_DRIVE - SYNTH_SATURATION_MIN_DRIVE) * amount);
+}
+
 // raises the curve bias as drive increases, which strengthens even harmonics.
 static float harmonic_bias_for_drive(float drive)
 {
-    const float amount = synth_clampf(normalized_drive(drive), 0.0f, 1.0f);
+    const float amount = drive_amount(drive);
 
     return SYNTH_SATURATION_MIN_BIAS +
         ((SYNTH_SATURATION_MAX_BIAS - SYNTH_SATURATION_MIN_BIAS) * amount);
+}
+
+// restores a little level after saturation and dc blocking reduce dynamic range.
+static float makeup_gain_for_drive(float drive)
+{
+    const float amount = powf(drive_amount(drive), 0.7f);
+
+    return 1.0f + ((SYNTH_SATURATION_MAX_MAKEUP_GAIN - 1.0f) * amount);
 }
 
 // converts a cutoff into the feedback coefficient for a one-pole dc blocker.
@@ -58,22 +82,28 @@ static float block_dc(
     return output;
 }
 
-// tanh gives soft saturation; the positive bias makes the + and - halves bend
-// differently, emphasizing even harmonics like a warm asymmetric analog stage.
+// tanh gives soft saturation; bias is added after drive so even-harmonic
+// asymmetry can grow without forcing the zero point into hard saturation.
 static float saturate_sample(float input, float drive)
 {
+    const float curve_drive = curve_drive_for_drive(drive);
     const float bias = harmonic_bias_for_drive(drive);
-    const float zero_offset = tanhf(bias * drive);
-    const float positive_span = tanhf((1.0f + bias) * drive) - zero_offset;
-    const float negative_span = zero_offset - tanhf((-1.0f + bias) * drive);
+    const float zero_offset = tanhf(bias);
+    const float positive_span = tanhf(curve_drive + bias) - zero_offset;
+    const float negative_span = zero_offset - tanhf(-curve_drive + bias);
     const float ceiling = fmaxf(positive_span, negative_span);
-    const float shaped = tanhf((input + bias) * drive) - zero_offset;
+    const float shaped = tanhf((input * curve_drive) + bias) - zero_offset;
 
     if (ceiling <= 0.0f) {
         return input;
     }
 
     return synth_clampf(shaped / ceiling, -1.0f, 1.0f);
+}
+
+static float apply_makeup(float input, float drive)
+{
+    return synth_clampf(input * makeup_gain_for_drive(drive), -1.0f, 1.0f);
 }
 
 static void reset_channels(synth_saturation *saturation)
@@ -135,14 +165,18 @@ synth_stereo_sample synth_saturation_process(
         return input;
     }
 
-    wet.left = block_dc(
-        &saturation->left,
-        saturate_sample(input.left, saturation->drive),
-        saturation->dc_block_coefficient);
-    wet.right = block_dc(
-        &saturation->right,
-        saturate_sample(input.right, saturation->drive),
-        saturation->dc_block_coefficient);
+    wet.left = apply_makeup(
+        block_dc(
+            &saturation->left,
+            saturate_sample(input.left, saturation->drive),
+            saturation->dc_block_coefficient),
+        saturation->drive);
+    wet.right = apply_makeup(
+        block_dc(
+            &saturation->right,
+            saturate_sample(input.right, saturation->drive),
+            saturation->dc_block_coefficient),
+        saturation->drive);
 
     output.left = mix_sample(input.left, wet.left, saturation->mix);
     output.right = mix_sample(input.right, wet.right, saturation->mix);

@@ -185,6 +185,67 @@ static void test_saturation_emphasizes_second_harmonic(void)
     }
 }
 
+static float sine_rms_after_saturation(float drive)
+{
+    synth_saturation saturation;
+    const int frame_count = 4096;
+    const int warmup_frames = frame_count;
+    const int fundamental_bin = 8;
+    float sum_squares = 0.0f;
+
+    synth_saturation_init(&saturation, 48000.0f);
+    synth_saturation_set_drive(&saturation, drive);
+    synth_saturation_set_mix(&saturation, 1.0f);
+
+    for (int frame = 0; frame < warmup_frames; ++frame) {
+        const float phase =
+            2.0f * TEST_PI * (float)(fundamental_bin * frame) / (float)frame_count;
+        const float input = 0.45f * sinf(phase);
+
+        synth_saturation_process(&saturation, (synth_stereo_sample){input, input});
+    }
+
+    for (int frame = 0; frame < frame_count; ++frame) {
+        const float phase =
+            2.0f * TEST_PI * (float)(fundamental_bin * frame) / (float)frame_count;
+        const float input = 0.45f * sinf(phase);
+        const synth_stereo_sample output =
+            synth_saturation_process(&saturation, (synth_stereo_sample){input, input});
+
+        sum_squares += output.left * output.left;
+    }
+
+    return sqrtf(sum_squares / (float)frame_count);
+}
+
+static float dry_sine_rms(void)
+{
+    const int frame_count = 4096;
+    const int fundamental_bin = 8;
+    float sum_squares = 0.0f;
+
+    for (int frame = 0; frame < frame_count; ++frame) {
+        const float phase =
+            2.0f * TEST_PI * (float)(fundamental_bin * frame) / (float)frame_count;
+        const float input = 0.45f * sinf(phase);
+
+        sum_squares += input * input;
+    }
+
+    return sqrtf(sum_squares / (float)frame_count);
+}
+
+static void test_high_drive_saturation_keeps_steady_level(void)
+{
+    const float dry_rms = dry_sine_rms();
+    const float saturated_rms =
+        sine_rms_after_saturation(SYNTH_SATURATION_MAX_DRIVE);
+
+    expect_true(
+        saturated_rms >= dry_rms,
+        "high drive saturation keeps steady sine rms from dropping below dry");
+}
+
 static void test_effect_chain_runs_saturation_stage(void)
 {
     synth_effect_chain chain;
@@ -210,6 +271,7 @@ int main(void)
     test_saturation_mixes_dry_and_wet();
     test_saturation_uses_asymmetric_curve();
     test_saturation_emphasizes_second_harmonic();
+    test_high_drive_saturation_keeps_steady_level();
     test_effect_chain_runs_saturation_stage();
 
     if (failures != 0) {
