@@ -346,8 +346,8 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
         synth_get_distortion_drive,
         synth_set_distortion_drive,
         MIDI_MAPPING_SCALE_LINEAR,
-        1.0f,
-        32.0f
+        SYNTH_DISTORTION_MIN_DRIVE,
+        SYNTH_DISTORTION_MAX_DRIVE
     },
     {
         MIDI_MAPPING_PARAM_DISTORTION_MIX,

@@ -3,8 +3,9 @@
 
 #include "synth/audio_types.h"
 
-#define SYNTH_DISTORTION_MIN_DRIVE 1.0f
+#define SYNTH_DISTORTION_MIN_DRIVE 0.0f
 #define SYNTH_DISTORTION_MAX_DRIVE 32.0f
+#define SYNTH_DISTORTION_DEFAULT_DRIVE SYNTH_DISTORTION_MIN_DRIVE
 
 typedef struct synth_distortion {
     float drive;

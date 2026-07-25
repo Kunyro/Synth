@@ -52,7 +52,7 @@ static float mix_sample(float dry, float wet, float mix)
 
 void synth_distortion_init(synth_distortion *distortion)
 {
-    distortion->drive = SYNTH_DISTORTION_MIN_DRIVE;
+    distortion->drive = SYNTH_DISTORTION_DEFAULT_DRIVE;
     distortion->mix = 0.0f;
 }
 

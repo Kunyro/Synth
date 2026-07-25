@@ -45,9 +45,9 @@ static void test_distortion_defaults_to_bypass(void)
 
     expect_near(
         synth_distortion_get_drive(&distortion),
-        SYNTH_DISTORTION_MIN_DRIVE,
+        SYNTH_DISTORTION_DEFAULT_DRIVE,
         0.0001f,
-        "distortion starts at minimum drive");
+        "distortion starts at default drive");
     expect_near(synth_distortion_get_mix(&distortion), 0.0f, 0.0001f, "distortion starts dry");
     expect_sample_near(output, input, 0.0001f, "dry distortion returns the input");
 }
@@ -64,6 +64,13 @@ static void test_distortion_parameters_are_bounded(void)
         SYNTH_DISTORTION_MIN_DRIVE,
         0.0001f,
         "distortion drive clamps low");
+
+    synth_distortion_set_mix(&distortion, 1.0f);
+    expect_sample_near(
+        synth_distortion_process(&distortion, (synth_stereo_sample){0.25f, -0.25f}),
+        (synth_stereo_sample){0.25f, -0.25f},
+        0.0001f,
+        "zero distortion drive is neutral");
 
     synth_distortion_set_drive(&distortion, 100.0f);
     expect_near(

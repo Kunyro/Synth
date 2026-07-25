@@ -530,7 +530,9 @@ static void test_applies_distortion_drive_cc_value(void)
     synth s;
     midi_mapping_apply_result result;
     char error[MIDI_MAPPING_ERROR_LENGTH];
-    const float expected_drive = 1.0f + ((96.0f / 127.0f) * 31.0f);
+    const float expected_drive =
+        SYNTH_DISTORTION_MIN_DRIVE +
+        ((96.0f / 127.0f) * (SYNTH_DISTORTION_MAX_DRIVE - SYNTH_DISTORTION_MIN_DRIVE));
 
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
