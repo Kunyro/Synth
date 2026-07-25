@@ -4,8 +4,23 @@
 
 #include "../internal/synth_internal.h"
 
-// tanh gives a soft clipping curve instead of a hard cutoff.
-static float distort_sample(float input, float drive)
+#define SYNTH_DISTORTION_MAX_ODD_BITE 0.12f
+
+static float normalized_drive(float drive)
+{
+    return (drive - SYNTH_DISTORTION_MIN_DRIVE) /
+        (SYNTH_DISTORTION_MAX_DRIVE - SYNTH_DISTORTION_MIN_DRIVE);
+}
+
+static float odd_bite_for_drive(float drive)
+{
+    const float amount = synth_clampf(normalized_drive(drive), 0.0f, 1.0f);
+
+    return SYNTH_DISTORTION_MAX_ODD_BITE * powf(amount, 0.75f);
+}
+
+// tanh gives a symmetric soft clip, so it naturally produces odd harmonics.
+static float soft_clip_sample(float input, float drive)
 {
     const float ceiling = tanhf(drive);
 
@@ -14,6 +29,19 @@ static float distort_sample(float input, float drive)
     }
 
     return tanhf(input * drive) / ceiling;
+}
+
+// a small cubic boost keeps the curve odd-symmetric while adding metallic bite.
+static float add_odd_harmonic_bite(float input, float drive)
+{
+    const float amount = odd_bite_for_drive(drive);
+
+    return synth_clampf(input + (amount * input * input * input), -1.0f, 1.0f);
+}
+
+static float distort_sample(float input, float drive)
+{
+    return add_odd_harmonic_bite(soft_clip_sample(input, drive), drive);
 }
 
 // blends from clean signal to fully distorted signal.
