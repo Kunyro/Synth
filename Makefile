@@ -1,29 +1,43 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -O2
 CPPFLAGS ?= -Iinclude -Iplatform/desktop -Ithird_party
-LDLIBS ?= -lm -lpthread
+LDLIBS ?= -lm
 
-UNAME_S := $(shell uname -s)
+UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
+HOST_OS := $(UNAME_S)
+EXEEXT :=
 
-ifeq ($(UNAME_S),Darwin)
-LDLIBS += -framework CoreFoundation -framework CoreAudio -framework AudioToolbox -framework AudioUnit
-else ifeq ($(UNAME_S),Linux)
-LDLIBS += -ldl
+ifeq ($(OS),Windows_NT)
+HOST_OS := Windows
+endif
+ifneq (,$(findstring MINGW,$(UNAME_S)))
+HOST_OS := Windows
+endif
+ifneq (,$(findstring MSYS,$(UNAME_S)))
+HOST_OS := Windows
 endif
 
-TARGET := build/synth
-MIDI_MONITOR_TARGET := build/midi_monitor
-OSCILLATOR_TEST_TARGET := build/test_oscillator
-ENVELOPE_TEST_TARGET := build/test_envelope
-FILTER_TEST_TARGET := build/test_filter
-DISTORTION_TEST_TARGET := build/test_distortion
-SATURATION_TEST_TARGET := build/test_saturation
-BITCRUSHER_TEST_TARGET := build/test_bitcrusher
-DELAY_TEST_TARGET := build/test_delay
-LFO_TEST_TARGET := build/test_lfo
-VOICE_TEST_TARGET := build/test_voice
-MIDI_TYPES_TEST_TARGET := build/test_midi_types
-MIDI_MAPPING_TEST_TARGET := build/test_midi_mapping
+ifeq ($(HOST_OS),Darwin)
+LDLIBS += -lpthread -framework CoreFoundation -framework CoreAudio -framework AudioToolbox -framework AudioUnit
+else ifeq ($(HOST_OS),Linux)
+LDLIBS += -lpthread -ldl
+else ifeq ($(HOST_OS),Windows)
+EXEEXT := .exe
+endif
+
+TARGET := build/synth$(EXEEXT)
+MIDI_MONITOR_TARGET := build/midi_monitor$(EXEEXT)
+OSCILLATOR_TEST_TARGET := build/test_oscillator$(EXEEXT)
+ENVELOPE_TEST_TARGET := build/test_envelope$(EXEEXT)
+FILTER_TEST_TARGET := build/test_filter$(EXEEXT)
+DISTORTION_TEST_TARGET := build/test_distortion$(EXEEXT)
+SATURATION_TEST_TARGET := build/test_saturation$(EXEEXT)
+BITCRUSHER_TEST_TARGET := build/test_bitcrusher$(EXEEXT)
+DELAY_TEST_TARGET := build/test_delay$(EXEEXT)
+LFO_TEST_TARGET := build/test_lfo$(EXEEXT)
+VOICE_TEST_TARGET := build/test_voice$(EXEEXT)
+MIDI_TYPES_TEST_TARGET := build/test_midi_types$(EXEEXT)
+MIDI_MAPPING_TEST_TARGET := build/test_midi_mapping$(EXEEXT)
 
 CORE_SOURCES := \
 	src/midi_types.c \
@@ -44,7 +58,8 @@ DESKTOP_SOURCES := \
 	platform/desktop/main.c \
 	platform/desktop/audio/audio_miniaudio.c \
 	platform/desktop/midi/midi_mapping.c \
-	platform/desktop/midi/midi_portmidi.c
+	platform/desktop/midi/midi_portmidi.c \
+	platform/desktop/system/desktop_system.c
 
 SOURCES := $(CORE_SOURCES) $(DESKTOP_SOURCES)
 
@@ -74,7 +89,7 @@ test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(
 $(TARGET): $(SOURCES) third_party/miniaudio/miniaudio.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@ $(LDLIBS)
 
-$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/midi_mapping.c platform/desktop/midi/midi_portmidi.c $(CORE_SOURCES) | build
+$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/midi_mapping.c platform/desktop/midi/midi_portmidi.c platform/desktop/system/desktop_system.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c src/wavetable.c | build

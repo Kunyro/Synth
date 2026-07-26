@@ -56,7 +56,7 @@ keyboard. Type `save` when you are done. More detail is available in
 
 - A C99 compiler
 - `make`
-- macOS or Linux for the desktop host
+- macOS, Linux, or Windows with a MinGW/MSYS2-style GNU Make toolchain for the desktop host
 - Optional: PortMidi for MIDI input
 
 miniaudio is vendored under `third_party/miniaudio/`. PortMidi is loaded
@@ -68,6 +68,9 @@ On macOS, PortMidi can be installed with:
 ```sh
 brew install portmidi
 ```
+
+On Windows, place `portmidi.dll` next to `build/synth.exe` or somewhere on
+`PATH`. Without it, the synth still runs, but MIDI input is disabled.
 
 ## Common Commands
 

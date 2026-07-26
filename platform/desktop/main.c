@@ -1,14 +1,13 @@
 #include "audio/audio_miniaudio.h"
 #include "midi/midi_mapping.h"
 #include "midi/midi_portmidi.h"
+#include "system/desktop_system.h"
 #include "synth/synth.h"
 #include "synth/synth_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
-#include <unistd.h>
 
 // the desktop app asks for stereo output.
 #define DESKTOP_CHANNEL_COUNT 2
@@ -166,20 +165,6 @@ static void on_midi_short_message(void *user_data, const unsigned char *data, un
     }
 }
 
-// checks whether stdin has a line ready.
-static int stdin_has_line(void)
-{
-    fd_set read_fds;
-    struct timeval timeout;
-
-    FD_ZERO(&read_fds);
-    FD_SET(STDIN_FILENO, &read_fds);
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
-
-    return select(STDIN_FILENO + 1, &read_fds, 0, 0, &timeout) > 0;
-}
-
 // polls midi while waiting for a fixed number of seconds.
 static void run_for_seconds(midi_portmidi_input *midi, double seconds)
 {
@@ -189,7 +174,7 @@ static void run_for_seconds(midi_portmidi_input *midi, double seconds)
         const unsigned int sleep_ms = remaining_ms > 5 ? 5 : remaining_ms;
 
         midi_portmidi_poll(midi);
-        audio_miniaudio_sleep(sleep_ms);
+        desktop_sleep_ms(sleep_ms);
         remaining_ms -= sleep_ms;
     }
 }
@@ -197,12 +182,15 @@ static void run_for_seconds(midi_portmidi_input *midi, double seconds)
 // polls midi until the user presses enter.
 static void run_until_enter(midi_portmidi_input *midi)
 {
-    while (!stdin_has_line()) {
+    while (!desktop_stdin_line_ready()) {
         midi_portmidi_poll(midi);
-        audio_miniaudio_sleep(5);
+        desktop_sleep_ms(5);
     }
 
-    (void)getchar();
+    {
+        char line[8];
+        (void)desktop_read_stdin_line(line, sizeof(line));
+    }
 }
 
 // starts the desktop synth app.

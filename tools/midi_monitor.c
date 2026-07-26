@@ -1,13 +1,12 @@
 #include "midi/midi_mapping.h"
 #include "midi/midi_portmidi.h"
+#include "system/desktop_system.h"
 
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
-#include <unistd.h>
 
 #define MIDI_MONITOR_LINE_LENGTH 256
 #define MIDI_MONITOR_PATH_LENGTH 512
@@ -41,20 +40,6 @@ typedef enum learn_bind_result {
     LEARN_BIND_EXITED
 } learn_bind_result;
 
-// checks whether stdin has a line ready.
-static int stdin_has_line(void)
-{
-    fd_set read_fds;
-    struct timeval timeout;
-
-    FD_ZERO(&read_fds);
-    FD_SET(STDIN_FILENO, &read_fds);
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
-
-    return select(STDIN_FILENO + 1, &read_fds, 0, 0, &timeout) > 0;
-}
-
 // trims whitespace from both ends of a mutable string.
 static char *trim(char *text)
 {
@@ -82,7 +67,7 @@ static int read_line(char *line, size_t line_size)
 {
     char *trimmed;
 
-    if (fgets(line, line_size, stdin) == 0) {
+    if (!desktop_read_stdin_line(line, line_size)) {
         return 0;
     }
 
@@ -354,12 +339,15 @@ static int run_monitor(void)
         return stream_count < 0 ? 1 : 0;
     }
 
-    while (!stdin_has_line()) {
+    while (!desktop_stdin_line_ready()) {
         midi_portmidi_poll(&midi);
-        usleep(5000);
+        desktop_sleep_us(5000);
     }
 
-    (void)getchar();
+    {
+        char line[MIDI_MONITOR_LINE_LENGTH];
+        (void)desktop_read_stdin_line(line, sizeof(line));
+    }
     midi_portmidi_uninit(&midi);
     return 0;
 }
@@ -587,7 +575,7 @@ static void drain_midi_learn_input(midi_portmidi_input *midi, learn_context *con
             quiet_ms += MIDI_LEARN_POLL_SLEEP_US / 1000;
         }
 
-        usleep(MIDI_LEARN_POLL_SLEEP_US);
+        desktop_sleep_us(MIDI_LEARN_POLL_SLEEP_US);
         elapsed_ms += MIDI_LEARN_POLL_SLEEP_US / 1000;
     }
 
@@ -617,7 +605,7 @@ static learn_capture_result wait_for_control_change(
             break;
         }
 
-        if (stdin_has_line()) {
+        if (desktop_stdin_line_ready()) {
             if (!read_line(line, sizeof(line))) {
                 context->capture_enabled = 0;
                 return LEARN_CAPTURE_ENDED;
@@ -643,7 +631,7 @@ static learn_capture_result wait_for_control_change(
             }
         }
 
-        usleep(MIDI_LEARN_POLL_SLEEP_US);
+        desktop_sleep_us(MIDI_LEARN_POLL_SLEEP_US);
     }
 
     context->capture_enabled = 0;

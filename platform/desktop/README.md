@@ -11,6 +11,7 @@ desktop-only dependencies.
 | `main.c` | Desktop app entry point and command-line parsing |
 | `audio/` | miniaudio device adapter |
 | `midi/` | PortMidi runtime loader, MIDI input transport, and controller mapping |
+| `system/` | Small OS adapter for console polling and sleeping |
 
 ## Build And Run
 
@@ -99,5 +100,9 @@ Optional install on macOS:
 ```sh
 brew install portmidi
 ```
+
+On Windows, the PortMidi adapter loads `portmidi.dll` with the normal Windows
+DLL search rules. Put that DLL beside `synth.exe` or on `PATH` to enable MIDI
+input.
 
 Controller mapping details live in [config/midi/README.md](../../config/midi/README.md).
