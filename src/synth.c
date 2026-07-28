@@ -195,6 +195,15 @@ void synth_init(synth *s, float sample_rate)
     }
 }
 
+void synth_uninit(synth *s)
+{
+    if (s == 0) {
+        return;
+    }
+
+    synth_effect_chain_uninit(&s->effects);
+}
+
 void synth_note_on(synth *s, int midi_note, float velocity)
 {
     synth_voice *voice = find_available_voice(s);

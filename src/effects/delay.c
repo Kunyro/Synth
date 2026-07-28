@@ -1,6 +1,7 @@
 #include "synth/delay.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../internal/synth_internal.h"
@@ -61,6 +62,47 @@ static float interpolate_sample(const float *buffer, float position)
     return buffer[first_index] + ((buffer[second_index] - buffer[first_index]) * fraction);
 }
 
+static int delay_line_has_storage(const synth_delay_line *line)
+{
+    return line->left != 0 && line->right != 0;
+}
+
+static int allocate_delay_line(synth_delay_line *line)
+{
+    line->left = (float *)calloc(SYNTH_DELAY_MAX_FRAMES, sizeof(float));
+    line->right = (float *)calloc(SYNTH_DELAY_MAX_FRAMES, sizeof(float));
+
+    if (!delay_line_has_storage(line)) {
+        free(line->left);
+        free(line->right);
+        line->left = 0;
+        line->right = 0;
+        return 0;
+    }
+
+    return 1;
+}
+
+static void free_delay_line(synth_delay_line *line)
+{
+    free(line->left);
+    free(line->right);
+    line->left = 0;
+    line->right = 0;
+    line->write_index = 0;
+    line->delay_frames = 0.0f;
+}
+
+static void clear_delay_line(const synth_delay_line *line)
+{
+    if (!delay_line_has_storage(line)) {
+        return;
+    }
+
+    memset(line->left, 0, sizeof(float) * SYNTH_DELAY_MAX_FRAMES);
+    memset(line->right, 0, sizeof(float) * SYNTH_DELAY_MAX_FRAMES);
+}
+
 // reads the delayed stereo sample from one independent delay line.
 static synth_stereo_sample read_delay_line(const synth_delay_line *line)
 {
@@ -76,7 +118,7 @@ static synth_stereo_sample read_delay_line(const synth_delay_line *line)
 // clears a line so a new delay time starts with its own clean history.
 static void reset_delay_line(synth_delay_line *line, float delay_frames, size_t write_index)
 {
-    memset(line, 0, sizeof(*line));
+    clear_delay_line(line);
     line->delay_frames = delay_frames;
     line->write_index = write_index;
 }
@@ -339,6 +381,10 @@ static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo
             continue;
         }
 
+        if (!delay_line_has_storage(&voice->line)) {
+            continue;
+        }
+
         voice_input = voice->state == SYNTH_DELAY_VOICE_MAIN ? input : silence;
         voice_output = process_delay_line(&voice->line, voice_input, delay->feedback);
         voice->last_level = sample_level(voice_output);
@@ -358,12 +404,28 @@ static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo
 void synth_delay_init(synth_delay *delay, float sample_rate)
 {
     memset(delay, 0, sizeof(*delay));
+
+    for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i) {
+        (void)allocate_delay_line(&delay->voices[i].line);
+    }
+
     delay->sample_rate = sample_rate;
     delay->crossfade_frames = crossfade_frames_for_sample_rate(sample_rate);
     delay->settle_frames = settle_frames_for_sample_rate(sample_rate);
     synth_delay_set_time(delay, SYNTH_DELAY_DEFAULT_TIME_SECONDS);
     delay->feedback = 0.0f;
     delay->mix = 0.0f;
+}
+
+void synth_delay_uninit(synth_delay *delay)
+{
+    if (delay == 0) {
+        return;
+    }
+
+    for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i) {
+        free_delay_line(&delay->voices[i].line);
+    }
 }
 
 void synth_delay_set_sample_rate(synth_delay *delay, float sample_rate)

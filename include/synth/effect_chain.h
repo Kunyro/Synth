@@ -15,6 +15,7 @@ typedef struct synth_effect_chain {
 } synth_effect_chain;
 
 void synth_effect_chain_init(synth_effect_chain *chain, float sample_rate);
+void synth_effect_chain_uninit(synth_effect_chain *chain);
 synth_stereo_sample synth_effect_chain_process(
     synth_effect_chain *chain,
     synth_stereo_sample input);

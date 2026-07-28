@@ -289,12 +289,14 @@ int main(int argc, char **argv)
             DESKTOP_CHANNEL_COUNT,
             render_audio,
             &app)) {
+        synth_uninit(&app.synth);
         midi_portmidi_uninit(&midi);
         return 1;
     }
 
     if (!audio_miniaudio_start(&app.audio)) {
         audio_miniaudio_uninit(&app.audio);
+        synth_uninit(&app.synth);
         midi_portmidi_uninit(&midi);
         return 1;
     }
@@ -347,6 +349,7 @@ int main(int argc, char **argv)
     synth_all_notes_off(&app.synth);
     audio_miniaudio_unlock(&app.audio);
     audio_miniaudio_uninit(&app.audio);
+    synth_uninit(&app.synth);
     midi_portmidi_uninit(&midi);
     return 0;
 }

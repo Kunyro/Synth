@@ -42,6 +42,8 @@ typedef struct synth {
 
 // sets up the synth with defaults.
 void synth_init(synth *s, float sample_rate);
+// releases resources owned by the synth.
+void synth_uninit(synth *s);
 // starts a note by frequency instead of midi note.
 void synth_note_on_frequency(synth *s, float frequency, float velocity);
 // starts a midi note.
