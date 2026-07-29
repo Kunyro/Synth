@@ -59,6 +59,7 @@ static float interpolate_sample(const float *buffer, float position)
     const size_t second_index = (first_index + 1) % SYNTH_DELAY_MAX_FRAMES;
     const float fraction = position - (float)first_index;
 
+    // blends neighboring samples for smooth fractional delay times.
     return buffer[first_index] + ((buffer[second_index] - buffer[first_index]) * fraction);
 }
 
@@ -69,10 +70,12 @@ static int delay_line_has_storage(const synth_delay_line *line)
 
 static int allocate_delay_line(synth_delay_line *line)
 {
+    // keeps the large delay buffers off the stack.
     line->left = (float *)calloc(SYNTH_DELAY_MAX_FRAMES, sizeof(float));
     line->right = (float *)calloc(SYNTH_DELAY_MAX_FRAMES, sizeof(float));
 
     if (!delay_line_has_storage(line)) {
+        // cleans up a partial allocation so later checks see a disabled line.
         free(line->left);
         free(line->right);
         line->left = 0;
@@ -99,6 +102,7 @@ static void clear_delay_line(const synth_delay_line *line)
         return;
     }
 
+    // preserves the allocated buffers while clearing old audio history.
     memset(line->left, 0, sizeof(float) * SYNTH_DELAY_MAX_FRAMES);
     memset(line->right, 0, sizeof(float) * SYNTH_DELAY_MAX_FRAMES);
 }
@@ -106,6 +110,7 @@ static void clear_delay_line(const synth_delay_line *line)
 // reads the delayed stereo sample from one independent delay line.
 static synth_stereo_sample read_delay_line(const synth_delay_line *line)
 {
+    // the read head trails the write head by the current delay time.
     const float read_position = wrap_read_position(
         (float)line->write_index - line->delay_frames);
     synth_stereo_sample delayed;
@@ -146,6 +151,7 @@ static synth_stereo_sample process_delay_line(
 {
     const synth_stereo_sample delayed = read_delay_line(line);
 
+    // writes dry input plus feedback so repeats decay through the same line.
     line->left[line->write_index] = input.left + (delayed.left * feedback);
     line->right[line->write_index] = input.right + (delayed.right * feedback);
     line->write_index = (line->write_index + 1) % SYNTH_DELAY_MAX_FRAMES;
@@ -231,10 +237,12 @@ static size_t choose_voice_for_new_main(synth_delay *delay)
             continue;
         }
 
+        // unused voices can become the new main delay without cutting off tails.
         if (voice_is_recyclable(voice)) {
             return i;
         }
 
+        // if all voices are busy, reuse the quietest tail that has faded longest.
         if (voice->state == SYNTH_DELAY_VOICE_TAIL &&
             (!found_tail ||
                 voice->quiet_frames > quietest_tail_frames ||
@@ -257,6 +265,7 @@ static void start_delay_time_transition(synth_delay *delay, float target_delay_f
     const size_t new_main_index = choose_voice_for_new_main(delay);
     const size_t aligned_write_index = old_main->line.write_index;
 
+    // keeps the new delay line phase-aligned with the old one during handoff.
     delay->crossfade_position = 0;
     delay->crossfading = delay->crossfade_frames > 0 &&
         old_main->line.delay_frames != target_delay_frames;
@@ -271,6 +280,7 @@ static void start_delay_time_transition(synth_delay *delay, float target_delay_f
     old_main->output_gain = 1.0f;
     old_main->quiet_frames = 0;
 
+    // the new main starts silent and fades in while the old main becomes a tail.
     reset_delay_voice(
         &delay->voices[new_main_index],
         target_delay_frames,
@@ -330,6 +340,7 @@ static void apply_pending_delay_time(synth_delay *delay)
 
     if (delay->settle_frames_remaining > 0) {
         --delay->settle_frames_remaining;
+        // waits for rapid MIDI/controller changes to stop before rebuilding.
         if (delay->settle_frames_remaining > 0) {
             return;
         }
@@ -341,6 +352,7 @@ static void apply_pending_delay_time(synth_delay *delay)
         start_delay_time_transition(delay, delay->pending_delay_frames);
     }
 
+    // one pending time change has now been consumed.
     delay->has_pending_time_change = 0;
 }
 
@@ -354,6 +366,7 @@ static void advance_main_fade(synth_delay *delay)
         return;
     }
 
+    // ramps the fresh main delay up over the crossfade window.
     main->output_gain = (float)delay->crossfade_position / (float)delay->crossfade_frames;
     ++delay->crossfade_position;
 
@@ -381,10 +394,12 @@ static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo
             continue;
         }
 
+        // allocation failure disables delay output instead of crashing audio.
         if (!delay_line_has_storage(&voice->line)) {
             continue;
         }
 
+        // tails keep ringing without receiving new input.
         voice_input = voice->state == SYNTH_DELAY_VOICE_MAIN ? input : silence;
         voice_output = process_delay_line(&voice->line, voice_input, delay->feedback);
         voice->last_level = sample_level(voice_output);
