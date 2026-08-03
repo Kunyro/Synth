@@ -69,8 +69,9 @@ On macOS, PortMidi can be installed with:
 brew install portmidi
 ```
 
-On Windows, place `portmidi.dll` next to `build/synth.exe` or somewhere on
-`PATH`. Without it, the synth still runs, but MIDI input is disabled.
+On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
+`synth.exe`. This is the required Windows setup for now. Without the DLL there,
+the synth still runs, but MIDI input is disabled.
 
 ## Common Commands
 

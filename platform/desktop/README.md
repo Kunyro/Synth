@@ -101,8 +101,8 @@ Optional install on macOS:
 brew install portmidi
 ```
 
-On Windows, the PortMidi adapter loads `portmidi.dll` with the normal Windows
-DLL search rules. Put that DLL beside `synth.exe` or on `PATH` to enable MIDI
-input.
+On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
+`synth.exe`. This is the required Windows setup for now. Without the DLL there,
+MIDI input is disabled.
 
 Controller mapping details live in [config/midi/README.md](../../config/midi/README.md).
