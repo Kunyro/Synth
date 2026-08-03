@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(_WIN32)
@@ -84,10 +85,10 @@ static void *load_symbol(void *library, const char *name)
     return (void *)GetProcAddress((HMODULE)library, name);
 }
 
-// opens the portmidi library on windows.
-static void *open_portmidi_library(void)
+// opens a windows library from the supplied path or library name.
+static void *open_dynamic_library(const char *path)
 {
-    return (void *)LoadLibraryA("portmidi.dll");
+    return (void *)LoadLibraryA(path);
 }
 
 // closes a windows library handle.
@@ -104,38 +105,10 @@ static void *load_symbol(void *library, const char *name)
     return dlsym(library, name);
 }
 
-// tries to open one shared library path.
-static void *try_dlopen(const char *path)
+// opens a posix library from the supplied path or library name.
+static void *open_dynamic_library(const char *path)
 {
     return dlopen(path, RTLD_NOW | RTLD_LOCAL);
-}
-
-// opens portmidi from a few common library paths.
-static void *open_portmidi_library(void)
-{
-#if defined(__APPLE__)
-    static const char *paths[] = {
-        "libportmidi.dylib",
-        "/opt/homebrew/lib/libportmidi.dylib",
-        "/usr/local/lib/libportmidi.dylib"
-    };
-#else
-    static const char *paths[] = {
-        "libportmidi.so",
-        "libportmidi.so.0",
-        "/usr/lib/libportmidi.so",
-        "/usr/local/lib/libportmidi.so"
-    };
-#endif
-
-    for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
-        void *library = try_dlopen(paths[i]);
-        if (library != 0) {
-            return library;
-        }
-    }
-
-    return 0;
 }
 
 // closes a posix library handle.
@@ -146,6 +119,60 @@ static void close_portmidi_library(void *library)
     }
 }
 #endif
+
+// opens the first available library from a list of paths or library names.
+static void *open_first_available_library(const char *const *paths, size_t path_count)
+{
+    for (size_t i = 0; i < path_count; ++i) {
+        void *library = open_dynamic_library(paths[i]);
+        if (library != 0) {
+            return library;
+        }
+    }
+
+    return 0;
+}
+
+// opens portmidi from a supplied path, PORTMIDI_PATH, or platform defaults.
+static void *open_portmidi_library(const char *library_path)
+{
+    const char *custom_path = library_path;
+    void *library;
+
+    if (custom_path == 0 || custom_path[0] == '\0') {
+        custom_path = getenv("PORTMIDI_PATH");
+    }
+
+    if (custom_path != 0 && custom_path[0] != '\0') {
+        library = open_dynamic_library(custom_path);
+        if (library != 0) {
+            return library;
+        }
+    }
+
+#if defined(_WIN32)
+    static const char *default_paths[] = {
+        "portmidi.dll"
+    };
+#elif defined(__APPLE__)
+    static const char *default_paths[] = {
+        "libportmidi.dylib",
+        "/opt/homebrew/lib/libportmidi.dylib",
+        "/usr/local/lib/libportmidi.dylib"
+    };
+#else
+    static const char *default_paths[] = {
+        "libportmidi.so",
+        "libportmidi.so.0",
+        "/usr/lib/libportmidi.so",
+        "/usr/local/lib/libportmidi.so"
+    };
+#endif
+
+    return open_first_available_library(
+        default_paths,
+        sizeof(default_paths) / sizeof(default_paths[0]));
+}
 
 // fills the portmidi api table from the loaded library.
 static int load_portmidi_api(void *library)
@@ -180,11 +207,20 @@ static int load_portmidi_api(void *library)
 // loads portmidi and opens available midi input streams.
 int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbacks)
 {
+    return midi_portmidi_init_with_path(input, callbacks, 0);
+}
+
+// loads portmidi from an optional custom path and opens available input streams.
+int midi_portmidi_init_with_path(
+    midi_portmidi_input *input,
+    midi_device_callbacks callbacks,
+    const char *library_path)
+{
     int device_count;
 
     memset(input, 0, sizeof(*input));
     input->callbacks = callbacks;
-    input->library = open_portmidi_library();
+    input->library = open_portmidi_library(library_path);
 
     // load at runtime so the synth can still build without portmidi installed.
     if (input->library == 0 || !load_portmidi_api(input->library)) {

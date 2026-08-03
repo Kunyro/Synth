@@ -49,15 +49,16 @@ Try waveform, filter cutoff, and filter pole arguments:
 
 ## Arguments
 
-MIDI config flags come first:
+Options come before positional arguments:
 
 ```sh
 ./build/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
 ./build/synth --midi-config=path/to/controller.conf
 ./build/synth --no-midi-config
+./build/synth --portmidi-path /custom/path/libportmidi.dylib
 ```
 
-After any MIDI config flags, positional arguments are:
+After any options, positional arguments are:
 
 | Argument | Description |
 | --- | --- |
@@ -102,7 +103,24 @@ brew install portmidi
 ```
 
 On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
-`synth.exe`. This is the required Windows setup for now. Without the DLL there,
-MIDI input is disabled.
+`synth.exe`. This is the default Windows setup for now.
+
+On macOS or Windows, pass `--portmidi-path` followed by the full path of the
+PortMidi library file:
+
+```sh
+# macOS
+./build/synth --portmidi-path /custom/path/libportmidi.dylib
+```
+
+```powershell
+# Windows PowerShell
+.\build\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
+```
+
+The `PORTMIDI_PATH` environment variable remains available as an alternative.
+A command-line path takes precedence over the environment variable. The custom
+path is tried first, followed by the normal platform locations. Without an
+available PortMidi library, MIDI input is disabled.
 
 Controller mapping details live in [config/midi/README.md](../../config/midi/README.md).

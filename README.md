@@ -70,8 +70,25 @@ brew install portmidi
 ```
 
 On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
-`synth.exe`. This is the required Windows setup for now. Without the DLL there,
-the synth still runs, but MIDI input is disabled.
+`synth.exe`. This is the default Windows setup for now.
+
+On macOS or Windows, pass `--portmidi-path` followed by the full path of the
+PortMidi library file:
+
+```sh
+# macOS
+./build/synth --portmidi-path /custom/path/libportmidi.dylib
+```
+
+```powershell
+# Windows PowerShell
+.\build\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
+```
+
+The `PORTMIDI_PATH` environment variable remains available as an alternative.
+A command-line path takes precedence over the environment variable. The custom
+path is tried first, followed by the normal platform locations. Without an
+available PortMidi library, the synth still runs, but MIDI input is disabled.
 
 ## Common Commands
 

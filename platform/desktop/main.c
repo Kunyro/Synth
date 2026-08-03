@@ -206,12 +206,27 @@ int main(int argc, char **argv)
     int use_frequency = 0;
     float frequency = 220.0f;
     const char *midi_config_path = DESKTOP_DEFAULT_MIDI_CONFIG;
+    const char *portmidi_path = 0;
     int should_load_midi_config = 1;
     int arg_index = 1;
     char midi_mapping_error[MIDI_MAPPING_ERROR_LENGTH];
 
     while (arg_index < argc) {
-        if (strcmp(argv[arg_index], "--midi-config") == 0 && arg_index + 1 < argc) {
+        if (strcmp(argv[arg_index], "--portmidi-path") == 0) {
+            if (arg_index + 1 >= argc) {
+                fprintf(stderr, "--portmidi-path requires a library path.\n");
+                return 1;
+            }
+            portmidi_path = argv[arg_index + 1];
+            arg_index += 2;
+        } else if (strncmp(argv[arg_index], "--portmidi-path=", 16) == 0) {
+            portmidi_path = argv[arg_index] + 16;
+            if (portmidi_path[0] == '\0') {
+                fprintf(stderr, "--portmidi-path requires a library path.\n");
+                return 1;
+            }
+            arg_index += 1;
+        } else if (strcmp(argv[arg_index], "--midi-config") == 0 && arg_index + 1 < argc) {
             midi_config_path = argv[arg_index + 1];
             should_load_midi_config = 1;
             arg_index += 2;
@@ -241,7 +256,7 @@ int main(int argc, char **argv)
 
     midi_callbacks.short_message = on_midi_short_message;
     midi_callbacks.user_data = &app;
-    midi_stream_count = midi_portmidi_init(&midi, midi_callbacks);
+    midi_stream_count = midi_portmidi_init_with_path(&midi, midi_callbacks, portmidi_path);
 
     if (argc > arg_index) {
         if (strcmp(argv[arg_index], "silence") == 0) {
