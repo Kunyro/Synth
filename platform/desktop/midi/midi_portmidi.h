@@ -23,6 +23,11 @@ typedef struct midi_portmidi_input {
 
 // loads portmidi and opens available midi input streams.
 int midi_portmidi_init(midi_portmidi_input *input, midi_device_callbacks callbacks);
+// tries a custom library path before the environment and platform defaults.
+int midi_portmidi_init_with_path(
+    midi_portmidi_input *input,
+    midi_device_callbacks callbacks,
+    const char *library_path);
 // reads pending midi events and sends callbacks.
 void midi_portmidi_poll(midi_portmidi_input *input);
 // closes midi streams and unloads portmidi.

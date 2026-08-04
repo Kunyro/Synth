@@ -56,7 +56,7 @@ keyboard. Type `save` when you are done. More detail is available in
 
 - A C99 compiler
 - `make`
-- macOS or Linux for the desktop host
+- macOS, Linux, or Windows with a MinGW/MSYS2-style GNU Make toolchain for the desktop host
 - Optional: PortMidi for MIDI input
 
 miniaudio is vendored under `third_party/miniaudio/`. PortMidi is loaded
@@ -68,6 +68,27 @@ On macOS, PortMidi can be installed with:
 ```sh
 brew install portmidi
 ```
+
+On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
+`synth.exe`. This is the default Windows setup for now.
+
+On macOS or Windows, pass `--portmidi-path` followed by the full path of the
+PortMidi library file:
+
+```sh
+# macOS
+./build/synth --portmidi-path /custom/path/libportmidi.dylib
+```
+
+```powershell
+# Windows PowerShell
+.\build\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
+```
+
+The `PORTMIDI_PATH` environment variable remains available as an alternative.
+A command-line path takes precedence over the environment variable. The custom
+path is tried first, followed by the normal platform locations. Without an
+available PortMidi library, the synth still runs, but MIDI input is disabled.
 
 ## Common Commands
 

@@ -25,7 +25,7 @@ Most engine users should start with `../include/synth/synth.h`.
 
 Important entry points:
 
-- `synth_init()` initializes a synth with defaults.
+- `synth_init()` initializes a synth with defaults; call `synth_uninit()` before discarding it.
 - `synth_note_on()`, `synth_note_off()`, and `synth_all_notes_off()` manage MIDI notes.
 - `synth_note_on_frequency()` starts a direct-frequency voice.
 - `synth_set_*()` functions update envelope, oscillator, filter, LFO, and effect parameters.

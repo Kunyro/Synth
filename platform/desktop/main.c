@@ -1,14 +1,13 @@
 #include "audio/audio_miniaudio.h"
 #include "midi/midi_mapping.h"
 #include "midi/midi_portmidi.h"
+#include "system/desktop_system.h"
 #include "synth/synth.h"
 #include "synth/synth_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
-#include <unistd.h>
 
 // the desktop app asks for stereo output.
 #define DESKTOP_CHANNEL_COUNT 2
@@ -166,20 +165,6 @@ static void on_midi_short_message(void *user_data, const unsigned char *data, un
     }
 }
 
-// checks whether stdin has a line ready.
-static int stdin_has_line(void)
-{
-    fd_set read_fds;
-    struct timeval timeout;
-
-    FD_ZERO(&read_fds);
-    FD_SET(STDIN_FILENO, &read_fds);
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
-
-    return select(STDIN_FILENO + 1, &read_fds, 0, 0, &timeout) > 0;
-}
-
 // polls midi while waiting for a fixed number of seconds.
 static void run_for_seconds(midi_portmidi_input *midi, double seconds)
 {
@@ -189,7 +174,7 @@ static void run_for_seconds(midi_portmidi_input *midi, double seconds)
         const unsigned int sleep_ms = remaining_ms > 5 ? 5 : remaining_ms;
 
         midi_portmidi_poll(midi);
-        audio_miniaudio_sleep(sleep_ms);
+        desktop_sleep_ms(sleep_ms);
         remaining_ms -= sleep_ms;
     }
 }
@@ -197,12 +182,15 @@ static void run_for_seconds(midi_portmidi_input *midi, double seconds)
 // polls midi until the user presses enter.
 static void run_until_enter(midi_portmidi_input *midi)
 {
-    while (!stdin_has_line()) {
+    while (!desktop_stdin_line_ready()) {
         midi_portmidi_poll(midi);
-        audio_miniaudio_sleep(5);
+        desktop_sleep_ms(5);
     }
 
-    (void)getchar();
+    {
+        char line[8];
+        (void)desktop_read_stdin_line(line, sizeof(line));
+    }
 }
 
 // starts the desktop synth app.
@@ -218,12 +206,27 @@ int main(int argc, char **argv)
     int use_frequency = 0;
     float frequency = 220.0f;
     const char *midi_config_path = DESKTOP_DEFAULT_MIDI_CONFIG;
+    const char *portmidi_path = 0;
     int should_load_midi_config = 1;
     int arg_index = 1;
     char midi_mapping_error[MIDI_MAPPING_ERROR_LENGTH];
 
     while (arg_index < argc) {
-        if (strcmp(argv[arg_index], "--midi-config") == 0 && arg_index + 1 < argc) {
+        if (strcmp(argv[arg_index], "--portmidi-path") == 0) {
+            if (arg_index + 1 >= argc) {
+                fprintf(stderr, "--portmidi-path requires a library path.\n");
+                return 1;
+            }
+            portmidi_path = argv[arg_index + 1];
+            arg_index += 2;
+        } else if (strncmp(argv[arg_index], "--portmidi-path=", 16) == 0) {
+            portmidi_path = argv[arg_index] + 16;
+            if (portmidi_path[0] == '\0') {
+                fprintf(stderr, "--portmidi-path requires a library path.\n");
+                return 1;
+            }
+            arg_index += 1;
+        } else if (strcmp(argv[arg_index], "--midi-config") == 0 && arg_index + 1 < argc) {
             midi_config_path = argv[arg_index + 1];
             should_load_midi_config = 1;
             arg_index += 2;
@@ -253,7 +256,7 @@ int main(int argc, char **argv)
 
     midi_callbacks.short_message = on_midi_short_message;
     midi_callbacks.user_data = &app;
-    midi_stream_count = midi_portmidi_init(&midi, midi_callbacks);
+    midi_stream_count = midi_portmidi_init_with_path(&midi, midi_callbacks, portmidi_path);
 
     if (argc > arg_index) {
         if (strcmp(argv[arg_index], "silence") == 0) {
@@ -301,12 +304,14 @@ int main(int argc, char **argv)
             DESKTOP_CHANNEL_COUNT,
             render_audio,
             &app)) {
+        synth_uninit(&app.synth);
         midi_portmidi_uninit(&midi);
         return 1;
     }
 
     if (!audio_miniaudio_start(&app.audio)) {
         audio_miniaudio_uninit(&app.audio);
+        synth_uninit(&app.synth);
         midi_portmidi_uninit(&midi);
         return 1;
     }
@@ -359,6 +364,7 @@ int main(int argc, char **argv)
     synth_all_notes_off(&app.synth);
     audio_miniaudio_unlock(&app.audio);
     audio_miniaudio_uninit(&app.audio);
+    synth_uninit(&app.synth);
     midi_portmidi_uninit(&midi);
     return 0;
 }

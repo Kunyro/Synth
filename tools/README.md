@@ -7,6 +7,8 @@ Developer utilities live in this folder.
 `midi_monitor.c` builds to `build/midi_monitor`. It helps inspect MIDI input and
 create controller mapping files.
 
+On Windows, the built executable is `build/midi_monitor.exe`.
+
 Build and run the monitor:
 
 ```sh

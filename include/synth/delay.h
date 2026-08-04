@@ -22,8 +22,8 @@ typedef enum synth_delay_voice_state {
 } synth_delay_voice_state;
 
 typedef struct synth_delay_line {
-    float left[SYNTH_DELAY_MAX_FRAMES];
-    float right[SYNTH_DELAY_MAX_FRAMES];
+    float *left;
+    float *right;
     size_t write_index;
     float delay_frames;
 } synth_delay_line;
@@ -54,6 +54,7 @@ typedef struct synth_delay {
 } synth_delay;
 
 void synth_delay_init(synth_delay *delay, float sample_rate);
+void synth_delay_uninit(synth_delay *delay);
 void synth_delay_set_sample_rate(synth_delay *delay, float sample_rate);
 void synth_delay_set_time(synth_delay *delay, float seconds);
 void synth_delay_set_feedback(synth_delay *delay, float feedback);
