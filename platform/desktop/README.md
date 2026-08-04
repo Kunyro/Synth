@@ -15,36 +15,49 @@ desktop-only dependencies.
 
 ## Build And Run
 
-Build the app:
+Configure the development build:
 
 ```sh
-make
+cmake --preset dev
+```
+
+Build the desktop synth:
+
+```sh
+cmake --build --preset dev --target synth
 ```
 
 Run until Enter is pressed:
 
 ```sh
-make run
+cmake --build --preset dev --target run-synth
 ```
+
+Run direct executable commands from the repository root so MIDI config paths
+resolve relative to `config/midi/`.
+
+With the default single-config preset, the executable is `build/dev/synth`. With
+the Visual Studio preset, the debug executable is `build/vs2022/Debug/synth.exe`.
+The examples below use the default development preset.
 
 Run a MIDI note for a fixed number of seconds:
 
 ```sh
-./build/synth 69 2
+./build/dev/synth 69 2
 ```
 
 Run a direct frequency:
 
 ```sh
-./build/synth freq:440 2
+./build/dev/synth freq:440 2
 ```
 
 Try waveform, filter cutoff, and filter pole arguments:
 
 ```sh
-./build/synth 45 2 saw 1200
-./build/synth 45 2 square 900
-./build/synth freq:2000 1 saw 100 4
+./build/dev/synth 45 2 saw 1200
+./build/dev/synth 45 2 square 900
+./build/dev/synth freq:2000 1 saw 100 4
 ```
 
 ## Arguments
@@ -52,10 +65,10 @@ Try waveform, filter cutoff, and filter pole arguments:
 Options come before positional arguments:
 
 ```sh
-./build/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
-./build/synth --midi-config=path/to/controller.conf
-./build/synth --no-midi-config
-./build/synth --portmidi-path /custom/path/libportmidi.dylib
+./build/dev/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
+./build/dev/synth --midi-config=path/to/controller.conf
+./build/dev/synth --no-midi-config
+./build/dev/synth --portmidi-path /custom/path/libportmidi.dylib
 ```
 
 After any options, positional arguments are:
@@ -102,20 +115,21 @@ Optional install on macOS:
 brew install portmidi
 ```
 
-On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
-`synth.exe`. This is the default Windows setup for now.
+On Windows, copy `portmidi.dll` into the same folder as `synth.exe`, or pass
+`--portmidi-path`. With the Visual Studio preset, the debug executable lives
+under `build/vs2022/Debug/`.
 
 On macOS or Windows, pass `--portmidi-path` followed by the full path of the
 PortMidi library file:
 
 ```sh
 # macOS
-./build/synth --portmidi-path /custom/path/libportmidi.dylib
+./build/dev/synth --portmidi-path /custom/path/libportmidi.dylib
 ```
 
 ```powershell
 # Windows PowerShell
-.\build\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
+.\build\vs2022\Debug\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
 ```
 
 The `PORTMIDI_PATH` environment variable remains available as an alternative.

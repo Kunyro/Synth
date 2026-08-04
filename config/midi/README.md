@@ -10,10 +10,13 @@ config/midi/akai_mpk_mini_mk2.conf
 ## Running With A Config
 
 ```sh
-./build/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
-./build/synth --midi-config=path/to/controller.conf
-./build/synth --no-midi-config
+./build/dev/synth --midi-config config/midi/akai_mpk_mini_mk2.conf
+./build/dev/synth --midi-config=path/to/controller.conf
+./build/dev/synth --no-midi-config
 ```
+
+Run these commands from the repository root so relative config paths resolve to
+`config/midi/`.
 
 ## File Format
 
@@ -43,11 +46,11 @@ value before it starts changing that parameter.
 Use the MIDI monitor to inspect, validate, and learn mappings:
 
 ```sh
-make midi-monitor
-./build/midi_monitor show --config config/midi/akai_mpk_mini_mk2.conf
-./build/midi_monitor validate --config config/midi/akai_mpk_mini_mk2.conf
-./build/midi_monitor learn --output config/midi/my_controller.conf
-./build/midi_monitor learn --edit config/midi/akai_mpk_mini_mk2.conf
+cmake --build --preset dev --target midi_monitor
+./build/dev/midi_monitor show --config config/midi/akai_mpk_mini_mk2.conf
+./build/dev/midi_monitor validate --config config/midi/akai_mpk_mini_mk2.conf
+./build/dev/midi_monitor learn --output config/midi/my_controller.conf
+./build/dev/midi_monitor learn --edit config/midi/akai_mpk_mini_mk2.conf
 ```
 
 ## Supported Parameters

@@ -1,12 +1,14 @@
 # Tests
 
-The test suite is a set of small C programs under `tests/`. Each test builds to
-its own binary in `build/`, and `make test` runs them in sequence.
+The test suite is a set of small C programs under `tests/`. CMake builds each
+test as its own binary, and CTest runs them in sequence from the repository root.
 
 Run all tests:
 
 ```sh
-make test
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
 ```
 
 The current suite covers:
@@ -23,8 +25,8 @@ The current suite covers:
 - MIDI parsing
 - MIDI controller mapping
 
-Build artifacts are written to `build/` and can be removed with:
+Build artifacts are written under `build/` and can be removed with:
 
 ```sh
-make clean
+cmake --build --preset dev --target clean
 ```

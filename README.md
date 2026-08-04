@@ -23,29 +23,38 @@ easy to play, test, and experiment from a regular computer.
 
 ## Quick Start
 
-Build the desktop synth:
+Configure the development build:
 
 ```sh
-make
+cmake --preset dev
 ```
 
-Start the desktop app:
+Build the desktop synth, MIDI monitor, and tests:
 
 ```sh
-make run
+cmake --build --preset dev
 ```
 
-With no MIDI controller connected, `make run` plays a default test note until
-you press Enter. With a MIDI input source connected, the app starts silent and
-waits for MIDI notes.
+Start the desktop app from the repository root:
+
+```sh
+cmake --build --preset dev --target run-synth
+```
+
+With no MIDI controller connected, the app plays a default test note until you
+press Enter. With a MIDI input source connected, the app starts silent and waits
+for MIDI notes.
 
 Bind MIDI controls:
 
 ```sh
-make midi-monitor
-./build/midi_monitor learn --output config/midi/my_keyboard.conf
-./build/synth --midi-config config/midi/my_keyboard.conf
+cmake --build --preset dev --target midi_monitor
+./build/dev/midi_monitor learn --output config/midi/my_keyboard.conf
+./build/dev/synth --midi-config config/midi/my_keyboard.conf
 ```
+
+Run commands from the repository root so relative config paths resolve to
+`config/midi/`.
 
 In the learn prompt, type `list` to see synth parameters, then use
 `bind <name|number>` and move a knob, fader, or other control on your MIDI
@@ -55,8 +64,9 @@ keyboard. Type `save` when you are done. More detail is available in
 ## Requirements
 
 - A C99 compiler
-- `make`
-- macOS, Linux, or Windows with a MinGW/MSYS2-style GNU Make toolchain for the desktop host
+- CMake 3.21 or newer
+- macOS, Linux, or Windows with a CMake-supported C compiler
+- Windows: Visual Studio 2022 is supported through the `vs2022` preset
 - Optional: PortMidi for MIDI input
 
 miniaudio is vendored under `third_party/miniaudio/`. PortMidi is loaded
@@ -69,20 +79,21 @@ On macOS, PortMidi can be installed with:
 brew install portmidi
 ```
 
-On Windows, copy `portmidi.dll` into the `build/` folder so it is next to
-`synth.exe`. This is the default Windows setup for now.
+On Windows, copy `portmidi.dll` into the same folder as `synth.exe`, or pass
+`--portmidi-path`. With the Visual Studio preset, the debug executable lives
+under `build/vs2022/Debug/`.
 
 On macOS or Windows, pass `--portmidi-path` followed by the full path of the
 PortMidi library file:
 
 ```sh
 # macOS
-./build/synth --portmidi-path /custom/path/libportmidi.dylib
+./build/dev/synth --portmidi-path /custom/path/libportmidi.dylib
 ```
 
 ```powershell
 # Windows PowerShell
-.\build\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
+.\build\vs2022\Debug\synth.exe --portmidi-path "C:\custom\path\portmidi.dll"
 ```
 
 The `PORTMIDI_PATH` environment variable remains available as an alternative.
@@ -93,11 +104,12 @@ available PortMidi library, the synth still runs, but MIDI input is disabled.
 ## Common Commands
 
 ```sh
-make              # build build/synth
-make run          # build and run the desktop synth
-make test         # build and run the test suite
-make midi-monitor # build and run the MIDI monitor
-make clean        # remove build artifacts
+cmake --preset dev                         # configure a debug build
+cmake --build --preset dev                 # build app, tools, and tests
+ctest --preset dev                         # run the test suite
+cmake --build --preset dev --target run-synth
+cmake --build --preset dev --target run-midi-monitor
+cmake --preset release                     # configure an optimized build
 ```
 
 ## Project Layout
@@ -111,7 +123,7 @@ make clean        # remove build artifacts
 | `platform/desktop/` | Desktop audio app, miniaudio adapter, and MIDI input |
 | `config/midi/` | Controller mapping files |
 | `tools/` | Developer utilities such as the MIDI monitor |
-| `tests/` | C test programs built by `make test` |
+| `tests/` | C test programs run through CTest |
 | `third_party/` | Vendored or reserved third-party dependencies |
 | `platform/teensy/` | Reserved for a future Teensy 4.1 port |
 

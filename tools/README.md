@@ -4,26 +4,33 @@ Developer utilities live in this folder.
 
 ## MIDI Monitor
 
-`midi_monitor.c` builds to `build/midi_monitor`. It helps inspect MIDI input and
-create controller mapping files.
+`midi_monitor.c` builds to `build/dev/midi_monitor` with the default
+development preset. It helps inspect MIDI input and create controller mapping
+files.
 
-On Windows, the built executable is `build/midi_monitor.exe`.
+With the Visual Studio preset, the debug executable is
+`build/vs2022/Debug/midi_monitor.exe`.
 
 Build and run the monitor:
 
 ```sh
-make midi-monitor
+cmake --preset dev
+cmake --build --preset dev --target run-midi-monitor
 ```
 
 Or run a specific command after building:
 
 ```sh
-./build/midi_monitor monitor
-./build/midi_monitor show --config config/midi/akai_mpk_mini_mk2.conf
-./build/midi_monitor validate --config config/midi/akai_mpk_mini_mk2.conf
-./build/midi_monitor learn --output config/midi/my_controller.conf
-./build/midi_monitor learn --edit config/midi/akai_mpk_mini_mk2.conf
+cmake --build --preset dev --target midi_monitor
+./build/dev/midi_monitor monitor
+./build/dev/midi_monitor show --config config/midi/akai_mpk_mini_mk2.conf
+./build/dev/midi_monitor validate --config config/midi/akai_mpk_mini_mk2.conf
+./build/dev/midi_monitor learn --output config/midi/my_controller.conf
+./build/dev/midi_monitor learn --edit config/midi/akai_mpk_mini_mk2.conf
 ```
+
+Run direct executable commands from the repository root so relative config paths
+resolve to `config/midi/`.
 
 ## Monitor Mode
 
