@@ -147,14 +147,14 @@ if(SYNTH_BUILD_DESKTOP)
         Synth::DesktopMidi
         Synth::DesktopSystem)
 
-    add_custom_target(run-synth
+    add_custom_target(run_synth
         COMMAND "$<TARGET_FILE:synth>"
         DEPENDS synth
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
         USES_TERMINAL
         COMMENT "Running desktop synth from the repository root")
 
-    add_custom_target(run-midi-monitor
+    add_custom_target(run_midi_monitor
         COMMAND "$<TARGET_FILE:midi_monitor>"
         DEPENDS midi_monitor
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"

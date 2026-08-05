@@ -15,7 +15,7 @@ Build and run the monitor:
 
 ```sh
 cmake --preset dev
-cmake --build --preset dev --target run-midi-monitor
+cmake --build --preset dev --target run_midi_monitor
 ```
 
 Or run a specific command after building:
