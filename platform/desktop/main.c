@@ -1,4 +1,5 @@
 #include "audio/audio_miniaudio.h"
+#include "midi/chord_mode.h"
 #include "midi/midi_mapping.h"
 #include "midi/midi_portmidi.h"
 #include "system/desktop_system.h"
@@ -20,6 +21,7 @@
 typedef struct desktop_synth_app {
     synth synth;
     audio_miniaudio_device audio;
+    midi_chord_mode chord_mode;
     midi_mapping midi_mapping;
     int midi_mapping_enabled;
     float left_buffer[DESKTOP_RENDER_CHUNK_FRAMES];
@@ -81,13 +83,25 @@ static void render_audio(void *user_data, float *output, unsigned int frame_coun
     }
 }
 
+// sends one chord-mode event into the synth while the audio lock is held.
+static void emit_chord_note_event(void *user_data, const midi_chord_mode_note_event *event)
+{
+    desktop_synth_app *app = (desktop_synth_app *)user_data;
+
+    if (event->type == MIDI_CHORD_MODE_EVENT_NOTE_ON) {
+        synth_note_on(&app->synth, event->note, event->velocity);
+    } else {
+        synth_note_off(&app->synth, event->note);
+    }
+}
+
 // handles incoming midi note on messages.
 static void on_midi_note_on(void *user_data, int midi_note, float velocity)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
 
     audio_miniaudio_lock(&app->audio);
-    synth_note_on(&app->synth, midi_note, velocity);
+    midi_chord_mode_note_on(&app->chord_mode, midi_note, velocity, emit_chord_note_event, app);
     audio_miniaudio_unlock(&app->audio);
 }
 
@@ -97,7 +111,7 @@ static void on_midi_note_off(void *user_data, int midi_note)
     desktop_synth_app *app = (desktop_synth_app *)user_data;
 
     audio_miniaudio_lock(&app->audio);
-    synth_note_off(&app->synth, midi_note);
+    midi_chord_mode_note_off(&app->chord_mode, midi_note, emit_chord_note_event, app);
     audio_miniaudio_unlock(&app->audio);
 }
 
@@ -140,6 +154,13 @@ static void on_midi_short_message(void *user_data, const unsigned char *data, un
     synth_midi_message message;
     midi_mapping_apply_result result;
     int applied;
+
+    audio_miniaudio_lock(&app->audio);
+    if (midi_chord_mode_handle_short_message(&app->chord_mode, data, length, emit_chord_note_event, app)) {
+        audio_miniaudio_unlock(&app->audio);
+        return;
+    }
+    audio_miniaudio_unlock(&app->audio);
 
     if (synth_midi_parse_short_message(data, length, &message)) {
         apply_midi_message(user_data, &message);
@@ -243,6 +264,7 @@ int main(int argc, char **argv)
     }
 
     synth_init(&app.synth, SYNTH_DEFAULT_SAMPLE_RATE);
+    midi_chord_mode_init(&app.chord_mode);
     midi_mapping_init(&app.midi_mapping);
     app.midi_mapping_enabled = 0;
 
@@ -361,6 +383,7 @@ int main(int argc, char **argv)
     }
 
     audio_miniaudio_lock(&app.audio);
+    midi_chord_mode_all_notes_off(&app.chord_mode, emit_chord_note_event, &app);
     synth_all_notes_off(&app.synth);
     audio_miniaudio_unlock(&app.audio);
     audio_miniaudio_uninit(&app.audio);
