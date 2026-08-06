@@ -96,6 +96,8 @@ if(SYNTH_BUILD_DESKTOP)
         "${PROJECT_SOURCE_DIR}/platform/desktop")
 
     add_library(synth_desktop_midi STATIC
+        platform/desktop/midi/chord_mode.c
+        platform/desktop/midi/chord_mode.h
         platform/desktop/midi/midi_mapping.c
         platform/desktop/midi/midi_mapping.h
         platform/desktop/midi/midi_device.h
@@ -147,14 +149,14 @@ if(SYNTH_BUILD_DESKTOP)
         Synth::DesktopMidi
         Synth::DesktopSystem)
 
-    add_custom_target(run-synth
+    add_custom_target(run_synth
         COMMAND "$<TARGET_FILE:synth>"
         DEPENDS synth
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
         USES_TERMINAL
         COMMENT "Running desktop synth from the repository root")
 
-    add_custom_target(run-midi-monitor
+    add_custom_target(run_midi_monitor
         COMMAND "$<TARGET_FILE:midi_monitor>"
         DEPENDS midi_monitor
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
@@ -166,6 +168,8 @@ if(SYNTH_BUILD_DESKTOP)
         platform/desktop/audio/audio_miniaudio.c
         platform/desktop/audio/audio_miniaudio.h
         platform/desktop/audio/audio_device.h
+        platform/desktop/midi/chord_mode.c
+        platform/desktop/midi/chord_mode.h
         platform/desktop/midi/midi_mapping.c
         platform/desktop/midi/midi_mapping.h
         platform/desktop/midi/midi_device.h
@@ -204,6 +208,13 @@ if(BUILD_TESTING)
         target_link_libraries(test_midi_mapping PRIVATE Synth::DesktopMidi)
         add_test(NAME test_midi_mapping
             COMMAND "$<TARGET_FILE:test_midi_mapping>"
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+
+        add_executable(test_chord_mode tests/test_chord_mode.c)
+        synth_configure_c_target(test_chord_mode)
+        target_link_libraries(test_chord_mode PRIVATE Synth::DesktopMidi)
+        add_test(NAME test_chord_mode
+            COMMAND "$<TARGET_FILE:test_chord_mode>"
             WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
     endif()
 endif()

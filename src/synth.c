@@ -573,8 +573,10 @@ float synth_get_delay_mix(const synth *s)
 
 static synth_stereo_sample apply_master_gain(synth_stereo_sample sample, float master_gain)
 {
-    sample.left *= master_gain;
-    sample.right *= master_gain;
+    const float output_gain = master_gain * SYNTH_MASTER_GAIN_FULL_SCALE;
+
+    sample.left *= output_gain;
+    sample.right *= output_gain;
     return sample;
 }
 

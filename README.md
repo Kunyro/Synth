@@ -38,7 +38,7 @@ cmake --build --preset dev
 Start the desktop app from the repository root:
 
 ```sh
-cmake --build --preset dev --target run-synth
+cmake --build --preset dev --target run_synth
 ```
 
 With no MIDI controller connected, the app plays a default test note until you
@@ -107,8 +107,8 @@ available PortMidi library, the synth still runs, but MIDI input is disabled.
 cmake --preset dev                         # configure a debug build
 cmake --build --preset dev                 # build app, tools, and tests
 ctest --preset dev                         # run the test suite
-cmake --build --preset dev --target run-synth
-cmake --build --preset dev --target run-midi-monitor
+cmake --build --preset dev --target run_synth
+cmake --build --preset dev --target run_midi_monitor
 cmake --preset release                     # configure an optimized build
 ```
 

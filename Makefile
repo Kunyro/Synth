@@ -38,6 +38,7 @@ LFO_TEST_TARGET := build/test_lfo$(EXEEXT)
 VOICE_TEST_TARGET := build/test_voice$(EXEEXT)
 MIDI_TYPES_TEST_TARGET := build/test_midi_types$(EXEEXT)
 MIDI_MAPPING_TEST_TARGET := build/test_midi_mapping$(EXEEXT)
+CHORD_MODE_TEST_TARGET := build/test_chord_mode$(EXEEXT)
 
 CORE_SOURCES := \
 	src/midi_types.c \
@@ -57,6 +58,7 @@ CORE_SOURCES := \
 DESKTOP_SOURCES := \
 	platform/desktop/main.c \
 	platform/desktop/audio/audio_miniaudio.c \
+	platform/desktop/midi/chord_mode.c \
 	platform/desktop/midi/midi_mapping.c \
 	platform/desktop/midi/midi_portmidi.c \
 	platform/desktop/system/desktop_system.c
@@ -73,7 +75,7 @@ run: $(TARGET)
 midi-monitor: $(MIDI_MONITOR_TARGET)
 	./$(MIDI_MONITOR_TARGET)
 
-test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(SATURATION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(DELAY_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET)
+test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(SATURATION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(DELAY_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET) $(CHORD_MODE_TEST_TARGET)
 	./$(OSCILLATOR_TEST_TARGET)
 	./$(ENVELOPE_TEST_TARGET)
 	./$(FILTER_TEST_TARGET)
@@ -85,6 +87,7 @@ test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(
 	./$(VOICE_TEST_TARGET)
 	./$(MIDI_TYPES_TEST_TARGET)
 	./$(MIDI_MAPPING_TEST_TARGET)
+	./$(CHORD_MODE_TEST_TARGET)
 
 $(TARGET): $(SOURCES) third_party/miniaudio/miniaudio.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@ $(LDLIBS)
@@ -124,6 +127,9 @@ $(MIDI_TYPES_TEST_TARGET): tests/test_midi_types.c src/midi_types.c | build
 
 $(MIDI_MAPPING_TEST_TARGET): tests/test_midi_mapping.c platform/desktop/midi/midi_mapping.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(CHORD_MODE_TEST_TARGET): tests/test_chord_mode.c platform/desktop/midi/chord_mode.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@
 
 build:
 	mkdir -p build

@@ -30,7 +30,7 @@ cmake --build --preset dev --target synth
 Run until Enter is pressed:
 
 ```sh
-cmake --build --preset dev --target run-synth
+cmake --build --preset dev --target run_synth
 ```
 
 Run direct executable commands from the repository root so MIDI config paths
