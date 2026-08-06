@@ -292,6 +292,52 @@ static void test_master_gain_scales_after_effects(void)
     }
 }
 
+static void test_full_master_gain_leaves_headroom(void)
+{
+    synth s;
+    synth_voice voice;
+    synth_filter left_filter;
+    synth_filter right_filter;
+    const synth_adsr immediate_envelope = {0.0f, 0.0f, 1.0f, 0.0f};
+    const synth_voice_mix mix = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    float left[64];
+    float right[64];
+    synth_audio_buffer buffer = {left, right, 64};
+
+    synth_init(&s, 48000.0f);
+    synth_set_adsr(&s, immediate_envelope);
+    synth_set_filter_cutoff(&s, 24000.0f);
+    synth_set_master_gain(&s, 1.0f);
+    synth_note_on_frequency(&s, 110.0f, 1.0f);
+
+    synth_voice_init(&voice, immediate_envelope);
+    synth_voice_note_on(
+        &voice,
+        -1,
+        110.0f,
+        1.0f,
+        SYNTH_WAVEFORM_SINE,
+        immediate_envelope);
+    synth_filter_init(&left_filter, 48000.0f, 24000.0f);
+    synth_filter_init(&right_filter, 48000.0f, 24000.0f);
+
+    synth_render_stereo(&s, &buffer);
+
+    for (size_t i = 0; i < 64; ++i) {
+        const synth_stereo_sample voice_sample =
+            synth_voice_render_stereo_mix(&voice, 48000.0f, mix);
+        const float expected_left =
+            synth_filter_process_with_cutoff(&left_filter, voice_sample.left, 24000.0f) *
+            SYNTH_MASTER_GAIN_FULL_SCALE;
+        const float expected_right =
+            synth_filter_process_with_cutoff(&right_filter, voice_sample.right, 24000.0f) *
+            SYNTH_MASTER_GAIN_FULL_SCALE;
+
+        expect_near(left[i], expected_left, 0.0001f, "full master applies -3 dB headroom left");
+        expect_near(right[i], expected_right, 0.0001f, "full master applies -3 dB headroom right");
+    }
+}
+
 static void test_delay_controls(void)
 {
     synth delay_synth;
@@ -540,6 +586,7 @@ int main(void)
     test_stereo_spread();
     test_global_lfo();
     test_master_gain_scales_after_effects();
+    test_full_master_gain_leaves_headroom();
     test_saturation_controls();
     test_delay_controls();
 
