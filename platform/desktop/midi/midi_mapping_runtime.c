@@ -2,6 +2,7 @@
 #include "midi/midi_mapping_internal.h"
 
 #include <math.h>
+#include <string.h>
 
 // clamps a float without depending on synth internals from the desktop layer.
 static float clampf(float value, float min_value, float max_value)
@@ -164,6 +165,28 @@ static int control_binding_matches(
         binding->control == control;
 }
 
+static void reset_effect_macro_pickups(midi_mapping *mapping, midi_mapping_effect effect)
+{
+    if (effect < 0 || effect >= MIDI_MAPPING_EFFECT_COUNT) {
+        return;
+    }
+
+    memset(
+        mapping->effect_macro_pickups[effect],
+        0,
+        sizeof(mapping->effect_macro_pickups[effect]));
+}
+
+static void select_effect(midi_mapping *mapping, midi_mapping_effect effect)
+{
+    if (effect == mapping->selected_effect) {
+        return;
+    }
+
+    mapping->selected_effect = effect;
+    reset_effect_macro_pickups(mapping, effect);
+}
+
 static int fill_macro_parameter_binding(
     midi_mapping *mapping,
     size_t macro_index,
@@ -270,7 +293,7 @@ int midi_mapping_apply_short_message(
     midi_value = data[2];
 
     if (control_binding_matches(&mapping->effect_selector, channel, control)) {
-        mapping->selected_effect = effect_for_selector_value(midi_value);
+        select_effect(mapping, effect_for_selector_value(midi_value));
         if (result != 0) {
             result->kind = MIDI_MAPPING_APPLY_EFFECT_SELECT;
             result->effect = mapping->selected_effect;

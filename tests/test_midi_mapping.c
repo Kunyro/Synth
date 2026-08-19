@@ -854,6 +854,56 @@ static void test_effect_macro_pickup_is_independent_per_effect(void)
         "waiting bitcrusher macro leaves sample rate unchanged");
 }
 
+static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
+        "effect macro mapping loads for pickup rearm test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    (void)apply_cc_value(&mapping, &s, 10, 0, 0);
+    pickup_cc(&mapping, &s, 13, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 13, 127, &result), "saturation mix reaches one hundred percent");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "saturation mix macro reports saturation mix");
+    expect_near(synth_get_saturation_mix(&s), 1.0f, 0.0001f, "saturation mix is at one hundred percent");
+    expect_true(
+        mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
+        "saturation macro three is picked up");
+
+    (void)apply_cc_value(&mapping, &s, 10, 31, 0);
+    expect_true(
+        mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
+        "selector movement inside the same effect keeps macro pickup");
+
+    (void)apply_cc_value(&mapping, &s, 10, 32, 0);
+    pickup_cc(&mapping, &s, 13, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 13, 19, &result), "distortion mix reaches about fifteen percent");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_DISTORTION_MIX, "distortion mix macro reports distortion mix");
+    expect_near(synth_get_distortion_mix(&s), 19.0f / 127.0f, 0.0001f, "distortion mix is about fifteen percent");
+
+    (void)apply_cc_value(&mapping, &s, 10, 0, 0);
+    expect_true(
+        !mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
+        "returning to saturation clears its macro pickup latch");
+    expect_true(
+        !apply_cc_value(&mapping, &s, 13, 20, &result),
+        "returning to saturation rearms macro pickup");
+    expect_near(
+        synth_get_saturation_mix(&s),
+        1.0f,
+        0.0001f,
+        "rearmed saturation mix does not jump to the distortion knob position");
+
+    expect_true(apply_cc_value(&mapping, &s, 13, 127, &result), "saturation mix applies again at pickup point");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "rearmed macro reports saturation mix");
+    expect_near(synth_get_saturation_mix(&s), 1.0f, 0.0001f, "saturation mix remains at pickup value");
+}
+
 static void test_effect_macros_leave_unused_macro_empty_and_direct_bindings_working(void)
 {
     midi_mapping mapping;
@@ -906,6 +956,7 @@ int main(void)
     test_effect_selector_uses_four_fixed_steps();
     test_effect_macros_apply_selected_effect_parameters();
     test_effect_macro_pickup_is_independent_per_effect();
+    test_effect_macro_pickup_rearms_when_returning_to_effect();
     test_effect_macros_leave_unused_macro_empty_and_direct_bindings_working();
     printf("All MIDI mapping tests passed.\n");
     return 0;
