@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "midi/chord_mode.h"
 #include "synth/synth.h"
 
 // the most midi controls one mapping file can bind.
@@ -91,11 +92,21 @@ typedef struct midi_mapping_binding {
     midi_mapping_pickup pickup;
 } midi_mapping_binding;
 
+// one binding from a midi control to a chord-mode pad.
+typedef struct midi_mapping_chord_binding {
+    int enabled;
+    midi_chord_mode_pad pad;
+    midi_mapping_source_type source_type;
+    int channel;
+    int control;
+} midi_mapping_chord_binding;
+
 // a loaded controller mapping with all of its bindings.
 typedef struct midi_mapping {
     char name[MIDI_MAPPING_NAME_LENGTH];
     midi_mapping_binding bindings[MIDI_MAPPING_MAX_BINDINGS];
     size_t binding_count;
+    midi_mapping_chord_binding chord_bindings[MIDI_CHORD_MODE_PAD_COUNT];
 } midi_mapping;
 
 // details about a midi message that changed a synth value.
@@ -123,6 +134,8 @@ const char *midi_mapping_scale_name(midi_mapping_scale scale);
 int midi_mapping_parse_scale_name(const char *name, midi_mapping_scale *scale);
 // loads a midi mapping from a config file.
 int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size_t error_size);
+// copies loaded chord pad bindings into a chord-mode processor.
+void midi_mapping_configure_chord_mode(const midi_mapping *mapping, midi_chord_mode *mode);
 // applies a raw midi message to the synth when it matches a binding.
 int midi_mapping_apply_short_message(
     midi_mapping *mapping,

@@ -56,12 +56,35 @@ static void pickup_cc(midi_mapping *mapping, synth *s, int control, int start_va
 static void test_loads_akai_mapping(void)
 {
     midi_mapping mapping;
+    midi_chord_mode mode;
     char error[MIDI_MAPPING_ERROR_LENGTH];
+    const unsigned char major_pad[] = {0xB0, 35, 127};
+    const unsigned char major_pad_wrong_channel[] = {0xB1, 35, 127};
+    size_t chord_binding_count = 0;
 
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
     expect_true(mapping.binding_count == 32, "akai mapping has thirty-two bindings");
+
+    for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
+        if (mapping.chord_bindings[i].enabled) {
+            chord_binding_count += 1;
+        }
+    }
+
+    expect_true(chord_binding_count == MIDI_CHORD_MODE_PAD_COUNT, "akai mapping has eight chord pad bindings");
+    expect_true(mapping.chord_bindings[MIDI_CHORD_MODE_PAD_MAJOR].channel == 1, "major chord pad uses channel one");
+    expect_true(mapping.chord_bindings[MIDI_CHORD_MODE_PAD_MAJOR].control == 35, "major chord pad uses cc thirty-five");
+
+    midi_chord_mode_init(&mode);
+    midi_mapping_configure_chord_mode(&mapping, &mode);
+    expect_true(
+        midi_chord_mode_handle_short_message(&mode, major_pad, sizeof(major_pad), 0, 0),
+        "configured major chord pad is consumed");
+    expect_true(
+        !midi_chord_mode_handle_short_message(&mode, major_pad_wrong_channel, sizeof(major_pad_wrong_channel), 0, 0),
+        "configured major chord pad requires the configured channel");
 }
 
 static void test_parameter_metadata(void)

@@ -271,6 +271,7 @@ int main(int argc, char **argv)
     if (should_load_midi_config) {
         if (midi_mapping_load(&app.midi_mapping, midi_config_path, midi_mapping_error, sizeof(midi_mapping_error))) {
             app.midi_mapping_enabled = 1;
+            midi_mapping_configure_chord_mode(&app.midi_mapping, &app.chord_mode);
         } else {
             fprintf(stderr, "Could not load MIDI config '%s': %s\n", midi_config_path, midi_mapping_error);
         }

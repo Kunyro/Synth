@@ -24,12 +24,14 @@ Config lines use:
 
 ```text
 parameter=cc:channel:control:scale:min:max
+chord_pad=cc:channel:control
 ```
 
 Example:
 
 ```text
 filter_cutoff=cc:1:5:log:20.0:20000.0
+chord_major=cc:1:35
 ```
 
 Supported scales:
@@ -40,6 +42,9 @@ Supported scales:
 
 CC mappings use soft takeover: a knob must reach or cross the current synth
 value before it starts changing that parameter.
+
+Chord pad mappings are momentary controls: CC values `1` through `127` mean
+held, and CC value `0` means released.
 
 ## Creating A Mapping
 
@@ -89,6 +94,17 @@ cmake --build --preset dev --target midi_monitor
 - `delay_feedback`
 - `delay_mix`
 
+## Supported Chord Pads
+
+- `chord_diminished`
+- `chord_minor`
+- `chord_major`
+- `chord_suspended`
+- `chord_6`
+- `chord_minor_7`
+- `chord_major_7`
+- `chord_9`
+
 ## Default Akai MPK Mini Mk II Mapping
 
 The included config maps Akai MPK Mini MK2-style CC knobs on channel 1:
@@ -127,5 +143,13 @@ The included config maps Akai MPK Mini MK2-style CC knobs on channel 1:
 | 30 | `delay_mix` |
 | 31 | `delay_time` |
 | 32 | `delay_feedback` |
+| 33 | `chord_diminished` |
+| 34 | `chord_minor` |
+| 35 | `chord_major` |
+| 36 | `chord_suspended` |
+| 37 | `chord_6` |
+| 38 | `chord_minor_7` |
+| 39 | `chord_major_7` |
+| 40 | `chord_9` |
 
 See [tools/README.md](../../tools/README.md) for the full MIDI monitor workflow.

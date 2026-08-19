@@ -77,6 +77,22 @@ typedef struct midi_mapping_parameter_entry {
     float default_max_value;
 } midi_mapping_parameter_entry;
 
+typedef struct midi_mapping_chord_entry {
+    midi_chord_mode_pad pad;
+    const char *name;
+} midi_mapping_chord_entry;
+
+static const midi_mapping_chord_entry chord_entries[] = {
+    {MIDI_CHORD_MODE_PAD_DIMINISHED, "chord_diminished"},
+    {MIDI_CHORD_MODE_PAD_MINOR, "chord_minor"},
+    {MIDI_CHORD_MODE_PAD_MAJOR, "chord_major"},
+    {MIDI_CHORD_MODE_PAD_SUSPENDED, "chord_suspended"},
+    {MIDI_CHORD_MODE_PAD_SIXTH, "chord_6"},
+    {MIDI_CHORD_MODE_PAD_MINOR_SEVENTH, "chord_minor_7"},
+    {MIDI_CHORD_MODE_PAD_MAJOR_SEVENTH, "chord_major_7"},
+    {MIDI_CHORD_MODE_PAD_NINTH, "chord_9"}
+};
+
 static float get_attack(const synth *s)
 {
     return synth_get_adsr(s).attack_seconds;
@@ -425,6 +441,17 @@ static const midi_mapping_parameter_entry *find_parameter_by_name(const char *na
     return 0;
 }
 
+static const midi_mapping_chord_entry *find_chord_by_name(const char *name)
+{
+    for (size_t i = 0; i < sizeof(chord_entries) / sizeof(chord_entries[0]); ++i) {
+        if (strcmp(chord_entries[i].name, name) == 0) {
+            return &chord_entries[i];
+        }
+    }
+
+    return 0;
+}
+
 static const midi_mapping_parameter_entry *find_parameter(midi_mapping_parameter parameter)
 {
     for (size_t i = 0; i < sizeof(parameter_entries) / sizeof(parameter_entries[0]); ++i) {
@@ -434,6 +461,19 @@ static const midi_mapping_parameter_entry *find_parameter(midi_mapping_parameter
     }
 
     return 0;
+}
+
+// parses a chord-mode pad name from a config key.
+static int parse_chord_pad(const char *name, midi_chord_mode_pad *pad)
+{
+    const midi_mapping_chord_entry *entry = find_chord_by_name(name);
+
+    if (entry == 0) {
+        return 0;
+    }
+
+    *pad = entry->pad;
+    return 1;
 }
 
 static void fill_parameter_info(
@@ -621,6 +661,61 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
     if (entry != 0 && entry->set != 0) {
         entry->set(s, synth_value);
     }
+}
+
+// adds one chord-mode pad binding from a config line.
+static int add_chord_binding(
+    midi_mapping *mapping,
+    const char *key,
+    char *value,
+    char *error,
+    size_t error_size,
+    int line_number)
+{
+    char *source_name;
+    char *channel_text;
+    char *control_text;
+    char *extra_text;
+    midi_mapping_chord_binding binding;
+
+    memset(&binding, 0, sizeof(binding));
+
+    if (!parse_chord_pad(key, &binding.pad)) {
+        return 0;
+    }
+
+    source_name = strtok(value, ":");
+    channel_text = strtok(0, ":");
+    control_text = strtok(0, ":");
+    extra_text = strtok(0, ":");
+
+    if (source_name == 0 || channel_text == 0 || control_text == 0 || extra_text != 0) {
+        set_error(error, error_size, line_number, "expected cc:channel:control");
+        return 0;
+    }
+
+    source_name = trim(source_name);
+    channel_text = trim(channel_text);
+    control_text = trim(control_text);
+
+    if (!parse_source_type(source_name, &binding.source_type)) {
+        set_error(error, error_size, line_number, "unknown midi source type");
+        return 0;
+    }
+
+    if (!parse_int_range(channel_text, 1, 16, &binding.channel)) {
+        set_error(error, error_size, line_number, "channel must be 1 through 16");
+        return 0;
+    }
+
+    if (!parse_int_range(control_text, 0, 127, &binding.control)) {
+        set_error(error, error_size, line_number, "control must be 0 through 127");
+        return 0;
+    }
+
+    binding.enabled = 1;
+    mapping->chord_bindings[binding.pad] = binding;
+    return 1;
 }
 
 // adds one binding from a config line.
@@ -841,6 +936,11 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
 
         if (strcmp(key, "name") == 0) {
             copy_string(mapping->name, sizeof(mapping->name), value);
+        } else if (find_chord_by_name(key) != 0) {
+            if (!add_chord_binding(mapping, key, value, error, error_size, line_number)) {
+                fclose(file);
+                return 0;
+            }
         } else if (!add_binding(mapping, key, value, error, error_size, line_number)) {
             fclose(file);
             return 0;
@@ -849,6 +949,25 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
 
     fclose(file);
     return 1;
+}
+
+// copies loaded chord pad bindings into a chord-mode processor.
+void midi_mapping_configure_chord_mode(const midi_mapping *mapping, midi_chord_mode *mode)
+{
+    size_t index;
+
+    if (mapping == 0 || mode == 0) {
+        return;
+    }
+
+    midi_chord_mode_clear_pad_bindings(mode);
+    for (index = 0; index < MIDI_CHORD_MODE_PAD_COUNT; ++index) {
+        const midi_mapping_chord_binding *binding = &mapping->chord_bindings[index];
+
+        if (binding->enabled && binding->source_type == MIDI_MAPPING_SOURCE_CC) {
+            midi_chord_mode_bind_pad(mode, binding->pad, binding->channel, binding->control);
+        }
+    }
 }
 
 // applies a raw midi message to the synth when it matches a binding.

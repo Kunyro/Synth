@@ -3,10 +3,6 @@
 
 #include <stddef.h>
 
-// the first cc number reserved for chord-mode pads.
-#define MIDI_CHORD_MODE_FIRST_PAD_CC 33
-// the last cc number reserved for chord-mode pads.
-#define MIDI_CHORD_MODE_LAST_PAD_CC 40
 // the most notes one root can generate.
 #define MIDI_CHORD_MODE_MAX_NOTES 8
 // the number of midi notes the note tracker supports.
@@ -49,6 +45,14 @@ typedef void (*midi_chord_mode_emit_callback)(
     void *user_data,
     const midi_chord_mode_note_event *event);
 
+// one midi cc binding for a chord-mode pad.
+typedef struct midi_chord_mode_pad_binding {
+    int enabled;
+    int channel;
+    int control;
+    midi_chord_mode_pad pad;
+} midi_chord_mode_pad_binding;
+
 // one held keyboard note and the chord notes it currently requests.
 typedef struct midi_chord_mode_held_note {
     int held;
@@ -59,6 +63,7 @@ typedef struct midi_chord_mode_held_note {
 // the chord-mode state held by the desktop midi layer.
 typedef struct midi_chord_mode {
     int pads[MIDI_CHORD_MODE_PAD_COUNT];
+    midi_chord_mode_pad_binding bindings[MIDI_CHORD_MODE_PAD_COUNT];
     unsigned int chord_type_order;
     unsigned int chord_type_press_order[4];
     midi_chord_mode_held_note held_notes[MIDI_CHORD_MODE_NOTE_COUNT];
@@ -67,8 +72,14 @@ typedef struct midi_chord_mode {
 
 // clears chord-mode state.
 void midi_chord_mode_init(midi_chord_mode *mode);
-// returns whether a cc number belongs to the chord-mode pad range.
-int midi_chord_mode_is_pad_cc(int control);
+// binds one midi cc to a chord-mode pad.
+void midi_chord_mode_bind_pad(
+    midi_chord_mode *mode,
+    midi_chord_mode_pad pad,
+    int channel,
+    int control);
+// removes all configured chord-mode pad bindings.
+void midi_chord_mode_clear_pad_bindings(midi_chord_mode *mode);
 // returns the generated notes for the current pad state and one root.
 void midi_chord_mode_build_notes(
     const midi_chord_mode *mode,

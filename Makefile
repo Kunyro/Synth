@@ -92,7 +92,7 @@ test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(
 $(TARGET): $(SOURCES) third_party/miniaudio/miniaudio.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@ $(LDLIBS)
 
-$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/midi_mapping.c platform/desktop/midi/midi_portmidi.c platform/desktop/system/desktop_system.c $(CORE_SOURCES) | build
+$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/chord_mode.c platform/desktop/midi/midi_mapping.c platform/desktop/midi/midi_portmidi.c platform/desktop/system/desktop_system.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c src/wavetable.c | build
@@ -125,7 +125,7 @@ $(VOICE_TEST_TARGET): tests/test_voice.c $(CORE_SOURCES) | build
 $(MIDI_TYPES_TEST_TARGET): tests/test_midi_types.c src/midi_types.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(MIDI_MAPPING_TEST_TARGET): tests/test_midi_mapping.c platform/desktop/midi/midi_mapping.c $(CORE_SOURCES) | build
+$(MIDI_MAPPING_TEST_TARGET): tests/test_midi_mapping.c platform/desktop/midi/chord_mode.c platform/desktop/midi/midi_mapping.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(CHORD_MODE_TEST_TARGET): tests/test_chord_mode.c platform/desktop/midi/chord_mode.c | build
