@@ -14,6 +14,7 @@
 #define MIDI_LEARN_POLL_SLEEP_US 5000
 #define MIDI_LEARN_DRAIN_QUIET_MS 80
 #define MIDI_LEARN_DRAIN_MAX_MS 600
+#define MIDI_MONITOR_EFFECT_CONTROL_COUNT (1 + MIDI_MAPPING_EFFECT_MACRO_COUNT)
 
 typedef struct learn_capture {
     int has_cc;
@@ -342,9 +343,28 @@ static void print_binding(const midi_mapping_binding *binding)
         binding->max_value);
 }
 
+static void print_control_binding(const midi_mapping_control_binding *binding)
+{
+    printf("cc:%d:%d", binding->channel, binding->control);
+}
+
 static void print_chord_binding(const midi_mapping_chord_binding *binding)
 {
     printf("cc:%d:%d", binding->channel, binding->control);
+}
+
+static const midi_mapping_control_binding *effect_control_binding_at(
+    const midi_mapping *mapping,
+    size_t index,
+    const char **name)
+{
+    if (index == 0) {
+        *name = "effect_selector";
+        return &mapping->effect_selector;
+    }
+
+    *name = midi_mapping_effect_macro_name(index - 1);
+    return &mapping->effect_macros[index - 1];
 }
 
 static size_t chord_binding_count(const midi_mapping *mapping)
@@ -353,6 +373,23 @@ static size_t chord_binding_count(const midi_mapping *mapping)
 
     for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
         if (mapping->chord_bindings[i].enabled) {
+            count += 1;
+        }
+    }
+
+    return count;
+}
+
+static size_t effect_control_binding_count(const midi_mapping *mapping)
+{
+    size_t count = 0;
+
+    for (size_t i = 0; i < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++i) {
+        const char *name;
+        const midi_mapping_control_binding *binding = effect_control_binding_at(mapping, i, &name);
+
+        (void)name;
+        if (binding->enabled) {
             count += 1;
         }
     }
@@ -429,6 +466,45 @@ static void print_parameter_list(const midi_mapping *mapping)
         printf("\n");
     }
 
+    printf("\neffect macro controls:\n");
+    for (size_t i = 0; i < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++i) {
+        const char *name;
+        const midi_mapping_control_binding *binding = effect_control_binding_at(mapping, i, &name);
+
+        printf("%-42s ", name);
+        if (binding->enabled) {
+            print_control_binding(binding);
+        } else {
+            printf("unbound");
+        }
+        printf("\n");
+    }
+
+    printf("\neffect macro pages:\n");
+    for (int effect = 0; effect < MIDI_MAPPING_EFFECT_COUNT; ++effect) {
+        printf("%-12s ", midi_mapping_effect_name((midi_mapping_effect)effect));
+
+        for (size_t macro_index = 0; macro_index < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++macro_index) {
+            midi_mapping_parameter parameter;
+
+            if (macro_index > 0) {
+                printf("  ");
+            }
+
+            printf("macro %zu: ", macro_index + 1);
+            if (midi_mapping_effect_macro_parameter(
+                    (midi_mapping_effect)effect,
+                    macro_index,
+                    &parameter)) {
+                printf("%s", midi_mapping_parameter_name(parameter));
+            } else {
+                printf("unused");
+            }
+        }
+
+        printf("\n");
+    }
+
     printf("\nchord pad bindings:\n");
     for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
         const midi_mapping_chord_binding *binding = &mapping->chord_bindings[i];
@@ -475,6 +551,28 @@ static int control_is_already_bound(
                 channel,
                 control,
                 midi_mapping_parameter_name(binding->parameter));
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int effect_control_is_already_bound(const midi_mapping *mapping, int channel, int control)
+{
+    for (size_t i = 0; i < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++i) {
+        const char *name;
+        const midi_mapping_control_binding *binding = effect_control_binding_at(mapping, i, &name);
+
+        if (binding->enabled &&
+            binding->source_type == MIDI_MAPPING_SOURCE_CC &&
+            binding->channel == channel &&
+            binding->control == control) {
+            printf(
+                "warning: cc:%d:%d is already bound to %s\n",
+                channel,
+                control,
+                name);
             return 1;
         }
     }
@@ -696,6 +794,7 @@ static learn_bind_result store_captured_binding(
 
     (void)control_is_already_bound(mapping, binding.channel, binding.control, binding.parameter);
     (void)chord_control_is_already_bound(mapping, binding.channel, binding.control);
+    (void)effect_control_is_already_bound(mapping, binding.channel, binding.control);
 
     prompt_result = prompt_scale_and_range(&binding);
     if (prompt_result == LEARN_CAPTURE_CANCELLED || prompt_result == LEARN_CAPTURE_ENDED) {
@@ -815,6 +914,29 @@ static int save_mapping_file(const char *path, const midi_mapping *mapping)
                 midi_mapping_scale_name(binding->scale),
                 binding->min_value,
                 binding->max_value);
+        }
+    }
+
+    fprintf(file, "\n# format: effect_selector/effect_macro_N=cc:channel:control\n");
+    if (mapping->effect_selector.enabled &&
+        mapping->effect_selector.source_type == MIDI_MAPPING_SOURCE_CC) {
+        fprintf(
+            file,
+            "effect_selector=cc:%d:%d\n",
+            mapping->effect_selector.channel,
+            mapping->effect_selector.control);
+    }
+
+    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
+        const midi_mapping_control_binding *binding = &mapping->effect_macros[i];
+
+        if (binding->enabled && binding->source_type == MIDI_MAPPING_SOURCE_CC) {
+            fprintf(
+                file,
+                "%s=cc:%d:%d\n",
+                midi_mapping_effect_macro_name(i),
+                binding->channel,
+                binding->control);
         }
     }
 
@@ -957,6 +1079,27 @@ static int validate_mapping_file(const char *path)
                 warnings += 1;
             }
         }
+
+        for (size_t j = 0; j < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++j) {
+            const midi_mapping_binding *parameter = &mapping.bindings[i];
+            const char *effect_control_name;
+            const midi_mapping_control_binding *effect_control =
+                effect_control_binding_at(&mapping, j, &effect_control_name);
+
+            if (effect_control->enabled &&
+                parameter->source_type == MIDI_MAPPING_SOURCE_CC &&
+                effect_control->source_type == MIDI_MAPPING_SOURCE_CC &&
+                parameter->channel == effect_control->channel &&
+                parameter->control == effect_control->control) {
+                printf(
+                    "warning: cc:%d:%d is bound to both %s and %s\n",
+                    parameter->channel,
+                    parameter->control,
+                    midi_mapping_parameter_name(parameter->parameter),
+                    effect_control_name);
+                warnings += 1;
+            }
+        }
     }
 
     for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
@@ -979,13 +1122,61 @@ static int validate_mapping_file(const char *path)
                 warnings += 1;
             }
         }
+
+        for (size_t j = 0; j < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++j) {
+            const midi_mapping_chord_binding *chord = &mapping.chord_bindings[i];
+            const char *effect_control_name;
+            const midi_mapping_control_binding *effect_control =
+                effect_control_binding_at(&mapping, j, &effect_control_name);
+
+            if (chord->enabled &&
+                effect_control->enabled &&
+                chord->source_type == MIDI_MAPPING_SOURCE_CC &&
+                effect_control->source_type == MIDI_MAPPING_SOURCE_CC &&
+                chord->channel == effect_control->channel &&
+                chord->control == effect_control->control) {
+                printf(
+                    "warning: cc:%d:%d is bound to both %s and %s\n",
+                    chord->channel,
+                    chord->control,
+                    midi_mapping_chord_pad_name(chord->pad),
+                    effect_control_name);
+                warnings += 1;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++i) {
+        for (size_t j = i + 1; j < MIDI_MONITOR_EFFECT_CONTROL_COUNT; ++j) {
+            const char *a_name;
+            const char *b_name;
+            const midi_mapping_control_binding *a = effect_control_binding_at(&mapping, i, &a_name);
+            const midi_mapping_control_binding *b = effect_control_binding_at(&mapping, j, &b_name);
+
+            if (a->enabled &&
+                b->enabled &&
+                a->source_type == MIDI_MAPPING_SOURCE_CC &&
+                b->source_type == MIDI_MAPPING_SOURCE_CC &&
+                a->channel == b->channel &&
+                a->control == b->control) {
+                printf(
+                    "warning: cc:%d:%d is bound to both %s and %s\n",
+                    a->channel,
+                    a->control,
+                    a_name,
+                    b_name);
+                warnings += 1;
+            }
+        }
     }
 
     printf(
-        "valid midi config: %s (%zu parameter binding%s, %zu chord binding%s",
+        "valid midi config: %s (%zu parameter binding%s, %zu effect control%s, %zu chord binding%s",
         path,
         mapping.binding_count,
         mapping.binding_count == 1 ? "" : "s",
+        effect_control_binding_count(&mapping),
+        effect_control_binding_count(&mapping) == 1 ? "" : "s",
         chord_binding_count(&mapping),
         chord_binding_count(&mapping) == 1 ? "" : "s");
     if (warnings > 0) {

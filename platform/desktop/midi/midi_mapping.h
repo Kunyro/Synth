@@ -10,6 +10,8 @@
 #define MIDI_MAPPING_MAX_BINDINGS 64
 // the longest controller name stored from a mapping file.
 #define MIDI_MAPPING_NAME_LENGTH 64
+// each effect macro page exposes three parameter knobs.
+#define MIDI_MAPPING_EFFECT_MACRO_COUNT 3
 // the longest mapping load error message.
 #define MIDI_MAPPING_ERROR_LENGTH 160
 // how close a knob must get to the current parameter before it takes over.
@@ -64,6 +66,15 @@ typedef enum midi_mapping_scale {
     MIDI_MAPPING_SCALE_STEP
 } midi_mapping_scale;
 
+// the effect pages selected by the effect-selector macro knob.
+typedef enum midi_mapping_effect {
+    MIDI_MAPPING_EFFECT_SATURATION = 0,
+    MIDI_MAPPING_EFFECT_DISTORTION,
+    MIDI_MAPPING_EFFECT_BITCRUSHER,
+    MIDI_MAPPING_EFFECT_DELAY,
+    MIDI_MAPPING_EFFECT_COUNT
+} midi_mapping_effect;
+
 // editable defaults for one synth parameter in the midi learn utility.
 typedef struct midi_mapping_parameter_info {
     midi_mapping_parameter parameter;
@@ -79,6 +90,14 @@ typedef struct midi_mapping_pickup {
     int has_last_midi_value;
     int last_midi_value;
 } midi_mapping_pickup;
+
+// one simple midi control binding without synth-parameter scaling.
+typedef struct midi_mapping_control_binding {
+    int enabled;
+    midi_mapping_source_type source_type;
+    int channel;
+    int control;
+} midi_mapping_control_binding;
 
 // one binding from a midi control to a synth parameter.
 typedef struct midi_mapping_binding {
@@ -107,11 +126,23 @@ typedef struct midi_mapping {
     midi_mapping_binding bindings[MIDI_MAPPING_MAX_BINDINGS];
     size_t binding_count;
     midi_mapping_chord_binding chord_bindings[MIDI_CHORD_MODE_PAD_COUNT];
+    midi_mapping_control_binding effect_selector;
+    midi_mapping_control_binding effect_macros[MIDI_MAPPING_EFFECT_MACRO_COUNT];
+    midi_mapping_effect selected_effect;
+    midi_mapping_pickup effect_macro_pickups[MIDI_MAPPING_EFFECT_COUNT][MIDI_MAPPING_EFFECT_MACRO_COUNT];
 } midi_mapping;
 
-// details about a midi message that changed a synth value.
+// the kind of mapping action produced by a midi message.
+typedef enum midi_mapping_apply_kind {
+    MIDI_MAPPING_APPLY_PARAMETER = 0,
+    MIDI_MAPPING_APPLY_EFFECT_SELECT
+} midi_mapping_apply_kind;
+
+// details about a midi message that matched a mapping.
 typedef struct midi_mapping_apply_result {
+    midi_mapping_apply_kind kind;
     midi_mapping_parameter parameter;
+    midi_mapping_effect effect;
     int channel;
     int control;
     int midi_value;
@@ -130,6 +161,15 @@ const midi_mapping_parameter_info *midi_mapping_parameter_info_by_name(const cha
 const char *midi_mapping_parameter_name(midi_mapping_parameter parameter);
 // returns the config spelling for a chord-mode pad.
 const char *midi_mapping_chord_pad_name(midi_chord_mode_pad pad);
+// returns the config spelling for an effect macro page.
+const char *midi_mapping_effect_name(midi_mapping_effect effect);
+// returns the config spelling for an effect macro control by zero-based macro index.
+const char *midi_mapping_effect_macro_name(size_t macro_index);
+// returns the synth parameter routed by an effect page macro, or 0 when unused.
+int midi_mapping_effect_macro_parameter(
+    midi_mapping_effect effect,
+    size_t macro_index,
+    midi_mapping_parameter *parameter);
 // returns the config spelling for a scale.
 const char *midi_mapping_scale_name(midi_mapping_scale scale);
 // parses the config spelling for a scale.

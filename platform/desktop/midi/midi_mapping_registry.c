@@ -13,6 +13,48 @@ static const midi_mapping_chord_entry chord_entries[] = {
     {MIDI_CHORD_MODE_PAD_NINTH, "chord_9"}
 };
 
+static const char *effect_names[] = {
+    "saturation",
+    "distortion",
+    "bitcrusher",
+    "delay"
+};
+
+static const char *effect_macro_names[] = {
+    "effect_macro_1",
+    "effect_macro_2",
+    "effect_macro_3"
+};
+
+typedef struct midi_mapping_effect_macro_route {
+    int enabled;
+    midi_mapping_parameter parameter;
+} midi_mapping_effect_macro_route;
+
+static const midi_mapping_effect_macro_route effect_macro_routes
+    [MIDI_MAPPING_EFFECT_COUNT][MIDI_MAPPING_EFFECT_MACRO_COUNT] = {
+        {
+            {1, MIDI_MAPPING_PARAM_SATURATION_DRIVE},
+            {0, MIDI_MAPPING_PARAM_SATURATION_DRIVE},
+            {1, MIDI_MAPPING_PARAM_SATURATION_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_DISTORTION_DRIVE},
+            {0, MIDI_MAPPING_PARAM_DISTORTION_DRIVE},
+            {1, MIDI_MAPPING_PARAM_DISTORTION_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_BITCRUSHER_SAMPLE_RATE},
+            {1, MIDI_MAPPING_PARAM_BITCRUSHER_BITS},
+            {1, MIDI_MAPPING_PARAM_BITCRUSHER_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_DELAY_TIME},
+            {1, MIDI_MAPPING_PARAM_DELAY_FEEDBACK},
+            {1, MIDI_MAPPING_PARAM_DELAY_MIX}
+        }
+    };
+
 static float get_attack(const synth *s)
 {
     return synth_get_adsr(s).attack_seconds;
@@ -236,6 +278,49 @@ const char *midi_mapping_chord_pad_name(midi_chord_mode_pad pad)
     }
 
     return "unknown_chord_pad";
+}
+
+const char *midi_mapping_effect_name(midi_mapping_effect effect)
+{
+    if (effect < 0 || effect >= MIDI_MAPPING_EFFECT_COUNT) {
+        return "unknown_effect";
+    }
+
+    return effect_names[effect];
+}
+
+const char *midi_mapping_effect_macro_name(size_t macro_index)
+{
+    if (macro_index >= MIDI_MAPPING_EFFECT_MACRO_COUNT) {
+        return "unknown_effect_macro";
+    }
+
+    return effect_macro_names[macro_index];
+}
+
+int midi_mapping_effect_macro_parameter(
+    midi_mapping_effect effect,
+    size_t macro_index,
+    midi_mapping_parameter *parameter)
+{
+    const midi_mapping_effect_macro_route *route;
+
+    if (effect < 0 ||
+        effect >= MIDI_MAPPING_EFFECT_COUNT ||
+        macro_index >= MIDI_MAPPING_EFFECT_MACRO_COUNT) {
+        return 0;
+    }
+
+    route = &effect_macro_routes[effect][macro_index];
+    if (!route->enabled) {
+        return 0;
+    }
+
+    if (parameter != 0) {
+        *parameter = route->parameter;
+    }
+
+    return 1;
 }
 
 // returns the config spelling for a scale.

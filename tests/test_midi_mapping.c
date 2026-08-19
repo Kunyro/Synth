@@ -65,7 +65,11 @@ static void test_loads_akai_mapping(void)
     expect_true(
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
-    expect_true(mapping.binding_count == 32, "akai mapping has thirty-two bindings");
+    expect_true(mapping.binding_count == 24, "akai mapping has twenty-four direct parameter bindings");
+    expect_true(mapping.effect_selector.enabled, "akai mapping has an effect selector binding");
+    expect_true(mapping.effect_macros[0].enabled, "akai mapping has effect macro one");
+    expect_true(mapping.effect_macros[1].enabled, "akai mapping has effect macro two");
+    expect_true(mapping.effect_macros[2].enabled, "akai mapping has effect macro three");
 
     for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
         if (mapping.chord_bindings[i].enabled) {
@@ -530,8 +534,8 @@ static void test_applies_distortion_mix_cc_value(void)
     char error[MIDI_MAPPING_ERROR_LENGTH];
 
     expect_true(
-        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
-        "akai mapping loads for distortion mix test");
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for distortion mix test");
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
     pickup_cc(&mapping, &s, 25, 0, 0);
@@ -558,8 +562,8 @@ static void test_applies_distortion_drive_cc_value(void)
         ((96.0f / 127.0f) * (SYNTH_DISTORTION_MAX_DRIVE - SYNTH_DISTORTION_MIN_DRIVE));
 
     expect_true(
-        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
-        "akai mapping loads for distortion drive test");
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for distortion drive test");
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
     pickup_cc(&mapping, &s, 26, 0, 0);
@@ -637,8 +641,8 @@ static void test_applies_bitcrusher_cc_values(void)
         expf(logf(100.0f) + ((64.0f / 127.0f) * (logf(48000.0f) - logf(100.0f))));
 
     expect_true(
-        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
-        "akai mapping loads for bitcrusher test");
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for bitcrusher test");
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
     pickup_cc(&mapping, &s, 27, 0, 0);
@@ -684,8 +688,8 @@ static void test_applies_delay_cc_values(void)
     const float expected_feedback = (96.0f / 127.0f) * 0.95f;
 
     expect_true(
-        midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
-        "akai mapping loads for delay test");
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for delay test");
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
     pickup_cc(&mapping, &s, 30, 0, 0);
@@ -713,6 +717,169 @@ static void test_applies_delay_cc_values(void)
     expect_near(result.synth_value, expected_feedback, 0.0001f, "delay feedback result reports scaled value");
 }
 
+static void test_loads_effect_macro_mapping(void)
+{
+    midi_mapping mapping;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    midi_mapping_parameter parameter;
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
+        "effect macro mapping loads");
+    expect_true(strcmp(mapping.name, "Effect Macro Test") == 0, "effect macro mapping keeps its name");
+    expect_true(mapping.binding_count == 1, "effect macro mapping keeps direct parameter bindings");
+    expect_true(mapping.effect_selector.enabled, "effect selector is bound");
+    expect_true(mapping.effect_selector.channel == 1, "effect selector channel loads");
+    expect_true(mapping.effect_selector.control == 10, "effect selector control loads");
+    expect_true(mapping.effect_macros[0].enabled, "effect macro one is bound");
+    expect_true(mapping.effect_macros[1].enabled, "effect macro two is bound");
+    expect_true(mapping.effect_macros[2].enabled, "effect macro three is bound");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "effect macro mapping starts on saturation");
+
+    expect_true(
+        strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_DELAY), "delay") == 0,
+        "delay effect page has a name");
+    expect_true(
+        strcmp(midi_mapping_effect_macro_name(2), "effect_macro_3") == 0,
+        "third effect macro control has a config name");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
+        "saturation macro one has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        "saturation macro one routes to drive");
+    expect_true(
+        !midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 1, &parameter),
+        "saturation macro two is unused");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 2, &parameter),
+        "saturation macro three has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_SATURATION_MIX,
+        "saturation macro three routes to dry wet");
+}
+
+static void test_effect_selector_uses_four_fixed_steps(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
+        "effect macro mapping loads for selector test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    expect_true(apply_cc_value(&mapping, &s, 10, 0, &result), "selector cc reports effect selection");
+    expect_true(result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT, "selector result is effect selection");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_SATURATION, "selector result reports saturation");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value zero chooses saturation");
+    expect_true(apply_cc_value(&mapping, &s, 10, 31, &result), "selector upper saturation step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value thirty-one chooses saturation");
+    expect_true(apply_cc_value(&mapping, &s, 10, 32, &result), "selector lower distortion step reports effect selection");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector result reports distortion");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value thirty-two chooses distortion");
+    expect_true(apply_cc_value(&mapping, &s, 10, 63, &result), "selector upper distortion step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value sixty-three chooses distortion");
+    expect_true(apply_cc_value(&mapping, &s, 10, 64, &result), "selector lower bitcrusher step reports effect selection");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector result reports bitcrusher");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value sixty-four chooses bitcrusher");
+    expect_true(apply_cc_value(&mapping, &s, 10, 95, &result), "selector upper bitcrusher step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value ninety-five chooses bitcrusher");
+    expect_true(apply_cc_value(&mapping, &s, 10, 96, &result), "selector lower delay step reports effect selection");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_DELAY, "selector result reports delay");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value ninety-six chooses delay");
+    expect_true(apply_cc_value(&mapping, &s, 10, 127, &result), "selector upper delay step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value one twenty-seven chooses delay");
+}
+
+static void test_effect_macros_apply_selected_effect_parameters(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_time = 0.001f + ((64.0f / 127.0f) * (2.0f - 0.001f));
+    const float expected_feedback = (96.0f / 127.0f) * 0.95f;
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
+        "effect macro mapping loads for apply test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    (void)apply_cc_value(&mapping, &s, 10, 127, 0);
+    pickup_cc(&mapping, &s, 11, 0, 16);
+    expect_true(apply_cc_value(&mapping, &s, 11, 64, &result), "delay macro one applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "delay macro one reports delay time");
+    expect_near(synth_get_delay_time(&s), expected_time, 0.0001f, "delay macro one scales delay time");
+
+    pickup_cc(&mapping, &s, 12, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 12, 96, &result), "delay macro two applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_FEEDBACK, "delay macro two reports delay feedback");
+    expect_near(synth_get_delay_feedback(&s), expected_feedback, 0.0001f, "delay macro two scales delay feedback");
+
+    pickup_cc(&mapping, &s, 13, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 13, 44, &result), "delay macro three applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_MIX, "delay macro three reports delay mix");
+    expect_near(synth_get_delay_mix(&s), 44.0f / 127.0f, 0.0001f, "delay macro three scales delay dry wet");
+}
+
+static void test_effect_macro_pickup_is_independent_per_effect(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float initial_bitcrusher_rate = SYNTH_DEFAULT_SAMPLE_RATE;
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
+        "effect macro mapping loads for pickup independence test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    (void)apply_cc_value(&mapping, &s, 10, 127, 0);
+    pickup_cc(&mapping, &s, 11, 0, 16);
+    expect_true(apply_cc_value(&mapping, &s, 11, 127, &result), "delay macro one is picked up");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "picked-up delay macro one reports delay time");
+
+    (void)apply_cc_value(&mapping, &s, 10, 64, 0);
+    expect_true(
+        !apply_cc_value(&mapping, &s, 11, 0, &result),
+        "bitcrusher macro one waits for its own pickup state");
+    expect_near(
+        synth_get_bitcrusher_sample_rate(&s),
+        initial_bitcrusher_rate,
+        0.0001f,
+        "waiting bitcrusher macro leaves sample rate unchanged");
+}
+
+static void test_effect_macros_leave_unused_macro_empty_and_direct_bindings_working(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
+        "effect macro mapping loads for unused/direct test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    (void)apply_cc_value(&mapping, &s, 10, 0, 0);
+    expect_true(!apply_cc_value(&mapping, &s, 12, 127, &result), "unused saturation macro two does nothing");
+
+    pickup_cc(&mapping, &s, 13, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 13, 64, &result), "saturation macro three applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "saturation macro three reports dry wet");
+    expect_near(synth_get_saturation_mix(&s), 64.0f / 127.0f, 0.0001f, "saturation macro three scales dry wet");
+
+    pickup_cc(&mapping, &s, 1, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 1, 127, &result), "direct attack binding still applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_ATTACK, "direct binding reports attack");
+    expect_near(synth_get_adsr(&s).attack_seconds, 2.0f, 0.0001f, "direct binding updates attack");
+}
+
 int main(void)
 {
     test_loads_akai_mapping();
@@ -735,6 +902,11 @@ int main(void)
     test_applies_saturation_cc_values();
     test_applies_bitcrusher_cc_values();
     test_applies_delay_cc_values();
+    test_loads_effect_macro_mapping();
+    test_effect_selector_uses_four_fixed_steps();
+    test_effect_macros_apply_selected_effect_parameters();
+    test_effect_macro_pickup_is_independent_per_effect();
+    test_effect_macros_leave_unused_macro_empty_and_direct_bindings_working();
     printf("All MIDI mapping tests passed.\n");
     return 0;
 }

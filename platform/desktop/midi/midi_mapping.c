@@ -89,11 +89,10 @@ static int parse_float_value(const char *text, float *value)
     return 1;
 }
 
-// adds one chord-mode pad binding from a config line.
-static int add_chord_binding(
-    midi_mapping *mapping,
-    const char *key,
+// parses a simple cc:channel:control binding from a config value.
+static int parse_control_binding(
     char *value,
+    midi_mapping_control_binding *binding,
     char *error,
     size_t error_size,
     int line_number)
@@ -102,13 +101,6 @@ static int add_chord_binding(
     char *channel_text;
     char *control_text;
     char *extra_text;
-    midi_mapping_chord_binding binding;
-
-    memset(&binding, 0, sizeof(binding));
-
-    if (!parse_chord_pad(key, &binding.pad)) {
-        return 0;
-    }
 
     source_name = strtok(value, ":");
     channel_text = strtok(0, ":");
@@ -124,24 +116,101 @@ static int add_chord_binding(
     channel_text = midi_text_trim(channel_text);
     control_text = midi_text_trim(control_text);
 
-    if (!parse_source_type(source_name, &binding.source_type)) {
+    if (!parse_source_type(source_name, &binding->source_type)) {
         set_error(error, error_size, line_number, "unknown midi source type");
         return 0;
     }
 
-    if (!parse_int_range(channel_text, 1, 16, &binding.channel)) {
+    if (!parse_int_range(channel_text, 1, 16, &binding->channel)) {
         set_error(error, error_size, line_number, "channel must be 1 through 16");
         return 0;
     }
 
-    if (!parse_int_range(control_text, 0, 127, &binding.control)) {
+    if (!parse_int_range(control_text, 0, 127, &binding->control)) {
         set_error(error, error_size, line_number, "control must be 0 through 127");
         return 0;
     }
 
-    binding.enabled = 1;
+    binding->enabled = 1;
+    return 1;
+}
+
+// parses an effect macro config key into a zero-based macro index.
+static int parse_effect_macro_key(const char *key, size_t *macro_index)
+{
+    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
+        if (strcmp(key, midi_mapping_effect_macro_name(i)) == 0) {
+            if (macro_index != 0) {
+                *macro_index = i;
+            }
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+// adds one chord-mode pad binding from a config line.
+static int add_chord_binding(
+    midi_mapping *mapping,
+    const char *key,
+    char *value,
+    char *error,
+    size_t error_size,
+    int line_number)
+{
+    midi_mapping_chord_binding binding;
+    midi_mapping_control_binding control_binding;
+
+    memset(&binding, 0, sizeof(binding));
+    memset(&control_binding, 0, sizeof(control_binding));
+
+    if (!parse_chord_pad(key, &binding.pad)) {
+        return 0;
+    }
+
+    if (!parse_control_binding(value, &control_binding, error, error_size, line_number)) {
+        return 0;
+    }
+
+    binding.enabled = control_binding.enabled;
+    binding.source_type = control_binding.source_type;
+    binding.channel = control_binding.channel;
+    binding.control = control_binding.control;
     mapping->chord_bindings[binding.pad] = binding;
     return 1;
+}
+
+// adds one effect macro control binding from a config line.
+static int add_effect_control_binding(
+    midi_mapping *mapping,
+    const char *key,
+    char *value,
+    char *error,
+    size_t error_size,
+    int line_number)
+{
+    size_t macro_index;
+    midi_mapping_control_binding binding;
+
+    memset(&binding, 0, sizeof(binding));
+
+    if (!parse_control_binding(value, &binding, error, error_size, line_number)) {
+        return 0;
+    }
+
+    if (strcmp(key, "effect_selector") == 0) {
+        mapping->effect_selector = binding;
+        return 1;
+    }
+
+    if (parse_effect_macro_key(key, &macro_index)) {
+        mapping->effect_macros[macro_index] = binding;
+        return 1;
+    }
+
+    set_error(error, error_size, line_number, "unknown effect macro control");
+    return 0;
 }
 
 // adds one binding from a config line.
@@ -244,6 +313,7 @@ void midi_mapping_init(midi_mapping *mapping)
 {
     memset(mapping, 0, sizeof(*mapping));
     midi_text_copy(mapping->name, sizeof(mapping->name), "unnamed midi controller");
+    mapping->selected_effect = MIDI_MAPPING_EFFECT_SATURATION;
 }
 
 // loads a midi mapping from a config file.
@@ -284,6 +354,12 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
 
         if (strcmp(key, "name") == 0) {
             midi_text_copy(mapping->name, sizeof(mapping->name), value);
+        } else if (strcmp(key, "effect_selector") == 0 ||
+                   parse_effect_macro_key(key, 0)) {
+            if (!add_effect_control_binding(mapping, key, value, error, error_size, line_number)) {
+                fclose(file);
+                return 0;
+            }
         } else if (midi_mapping_find_chord_by_name(key) != 0) {
             if (!add_chord_binding(mapping, key, value, error, error_size, line_number)) {
                 fclose(file);

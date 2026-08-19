@@ -135,6 +135,114 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
     }
 }
 
+// returns the effect page selected by the selector knob's four fixed ranges.
+static midi_mapping_effect effect_for_selector_value(int midi_value)
+{
+    if (midi_value < 32) {
+        return MIDI_MAPPING_EFFECT_SATURATION;
+    }
+
+    if (midi_value < 64) {
+        return MIDI_MAPPING_EFFECT_DISTORTION;
+    }
+
+    if (midi_value < 96) {
+        return MIDI_MAPPING_EFFECT_BITCRUSHER;
+    }
+
+    return MIDI_MAPPING_EFFECT_DELAY;
+}
+
+static int control_binding_matches(
+    const midi_mapping_control_binding *binding,
+    int channel,
+    int control)
+{
+    return binding->enabled &&
+        binding->source_type == MIDI_MAPPING_SOURCE_CC &&
+        binding->channel == channel &&
+        binding->control == control;
+}
+
+static int fill_macro_parameter_binding(
+    midi_mapping *mapping,
+    size_t macro_index,
+    midi_mapping_binding *binding)
+{
+    const midi_mapping_effect effect = mapping->selected_effect;
+    midi_mapping_parameter parameter;
+    const midi_mapping_parameter_entry *entry;
+
+    if (!midi_mapping_effect_macro_parameter(effect, macro_index, &parameter)) {
+        return 0;
+    }
+
+    entry = midi_mapping_find_parameter(parameter);
+    if (entry == 0) {
+        return 0;
+    }
+
+    binding->parameter = entry->parameter;
+    binding->source_type = MIDI_MAPPING_SOURCE_CC;
+    binding->channel = mapping->effect_macros[macro_index].channel;
+    binding->control = mapping->effect_macros[macro_index].control;
+    binding->scale = entry->default_scale;
+    binding->min_value = entry->default_min_value;
+    binding->max_value = entry->default_max_value;
+    binding->pickup = mapping->effect_macro_pickups[effect][macro_index];
+    return 1;
+}
+
+static int apply_parameter_binding(
+    midi_mapping_binding *binding,
+    int channel,
+    int control,
+    int midi_value,
+    synth *s,
+    midi_mapping_apply_result *result)
+{
+    const float synth_value = scale_midi_value(binding, midi_value);
+
+    if (!binding_has_pickup(binding, s, midi_value)) {
+        return 0;
+    }
+
+    apply_synth_value(s, binding->parameter, synth_value);
+
+    if (result != 0) {
+        result->kind = MIDI_MAPPING_APPLY_PARAMETER;
+        result->parameter = binding->parameter;
+        result->channel = channel;
+        result->control = control;
+        result->midi_value = midi_value;
+        result->synth_value = synth_value;
+    }
+
+    return 1;
+}
+
+static int apply_effect_macro(
+    midi_mapping *mapping,
+    size_t macro_index,
+    int channel,
+    int control,
+    int midi_value,
+    synth *s,
+    midi_mapping_apply_result *result)
+{
+    midi_mapping_binding binding;
+    const midi_mapping_effect effect = mapping->selected_effect;
+    int applied;
+
+    if (!fill_macro_parameter_binding(mapping, macro_index, &binding)) {
+        return 0;
+    }
+
+    applied = apply_parameter_binding(&binding, channel, control, midi_value, s, result);
+    mapping->effect_macro_pickups[effect][macro_index] = binding.pickup;
+    return applied;
+}
+
 // applies a raw midi message to the synth when it matches a binding.
 int midi_mapping_apply_short_message(
     midi_mapping *mapping,
@@ -161,29 +269,32 @@ int midi_mapping_apply_short_message(
     control = data[1];
     midi_value = data[2];
 
+    if (control_binding_matches(&mapping->effect_selector, channel, control)) {
+        mapping->selected_effect = effect_for_selector_value(midi_value);
+        if (result != 0) {
+            result->kind = MIDI_MAPPING_APPLY_EFFECT_SELECT;
+            result->effect = mapping->selected_effect;
+            result->channel = channel;
+            result->control = control;
+            result->midi_value = midi_value;
+            result->synth_value = 0.0f;
+        }
+        return 1;
+    }
+
+    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
+        if (control_binding_matches(&mapping->effect_macros[i], channel, control)) {
+            return apply_effect_macro(mapping, i, channel, control, midi_value, s, result);
+        }
+    }
+
     for (size_t i = 0; i < mapping->binding_count; ++i) {
         midi_mapping_binding *binding = &mapping->bindings[i];
 
         if (binding->source_type == MIDI_MAPPING_SOURCE_CC &&
             binding->channel == channel &&
             binding->control == control) {
-            const float synth_value = scale_midi_value(binding, midi_value);
-
-            if (!binding_has_pickup(binding, s, midi_value)) {
-                return 0;
-            }
-
-            apply_synth_value(s, binding->parameter, synth_value);
-
-            if (result != 0) {
-                result->parameter = binding->parameter;
-                result->channel = channel;
-                result->control = control;
-                result->midi_value = midi_value;
-                result->synth_value = synth_value;
-            }
-
-            return 1;
+            return apply_parameter_binding(binding, channel, control, midi_value, s, result);
         }
     }
 

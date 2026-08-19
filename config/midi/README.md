@@ -24,6 +24,8 @@ Config lines use:
 
 ```text
 parameter=cc:channel:control:scale:min:max
+effect_selector=cc:channel:control
+effect_macro_N=cc:channel:control
 chord_pad=cc:channel:control
 ```
 
@@ -31,6 +33,10 @@ Example:
 
 ```text
 filter_cutoff=cc:1:5:log:20.0:20000.0
+effect_selector=cc:1:10
+effect_macro_1=cc:1:11
+effect_macro_2=cc:1:12
+effect_macro_3=cc:1:13
 chord_major=cc:1:35
 ```
 
@@ -42,6 +48,26 @@ Supported scales:
 
 CC mappings use soft takeover: a knob must reach or cross the current synth
 value before it starts changing that parameter.
+
+Effect macro controls are an optional alternative to binding every effect
+parameter directly. The selector knob chooses one of four fixed pages:
+
+- values `0` through `31`: saturation
+- values `32` through `63`: distortion
+- values `64` through `95`: bitcrusher
+- values `96` through `127`: delay
+
+The three macro knobs then control the selected page:
+
+| Effect | Macro 1 | Macro 2 | Macro 3 |
+| --- | --- | --- | --- |
+| saturation | `saturation_drive` | unused | `saturation_mix` |
+| distortion | `distortion_drive` | unused | `distortion_mix` |
+| bitcrusher | `bitcrusher_sample_rate` | `bitcrusher_bits` | `bitcrusher_mix` |
+| delay | `delay_time` | `delay_feedback` | `delay_mix` |
+
+Macro knobs use independent soft takeover for each effect page, so switching
+pages does not make a knob jump the newly selected effect parameter.
 
 Chord pad mappings are momentary controls: CC values `1` through `127` mean
 held, and CC value `0` means released.
