@@ -108,6 +108,18 @@ static void test_delay_parameters_are_bounded(void)
     expect_near(synth_delay_get_mix(&delay), 1.0f, 0.0001f, "delay mix clamps high");
 }
 
+static void test_delay_max_time_tracks_sample_rate(void)
+{
+    synth_delay delay;
+
+    synth_delay_init(&delay, 96000.0f);
+    synth_delay_set_time(&delay, 10.0f);
+
+    expect_near(synth_delay_get_time(&delay), SYNTH_DELAY_MAX_TIME_SECONDS, 0.0001f, "delay max time remains two seconds at high sample rates");
+    expect_near(main_voice(&delay)->line.delay_frames, 192000.0f, 0.0001f, "delay line stores enough frames for high sample rates");
+    expect_true(main_voice(&delay)->line.capacity_frames >= delay.max_delay_frames, "delay line capacity tracks configured max frames");
+}
+
 static void test_delay_outputs_an_impulse_after_delay_time(void)
 {
     synth_delay delay;
@@ -338,6 +350,7 @@ int main(void)
 {
     test_delay_defaults_to_dry();
     test_delay_parameters_are_bounded();
+    test_delay_max_time_tracks_sample_rate();
     test_delay_outputs_an_impulse_after_delay_time();
     test_delay_feedback_repeats_decay();
     test_delay_time_change_crossfades_after_audio_starts();

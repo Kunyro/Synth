@@ -128,6 +128,8 @@ const midi_mapping_parameter_info *midi_mapping_parameter_info_at(size_t index);
 const midi_mapping_parameter_info *midi_mapping_parameter_info_by_name(const char *name);
 // returns the readable name for a mapped synth parameter.
 const char *midi_mapping_parameter_name(midi_mapping_parameter parameter);
+// returns the config spelling for a chord-mode pad.
+const char *midi_mapping_chord_pad_name(midi_chord_mode_pad pad);
 // returns the config spelling for a scale.
 const char *midi_mapping_scale_name(midi_mapping_scale scale);
 // parses the config spelling for a scale.

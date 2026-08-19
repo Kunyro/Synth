@@ -6,12 +6,29 @@
 
 #include "../internal/synth_internal.h"
 
-// converts seconds into the circular-buffer distance used by the read head.
-static float delay_frames_for_time(float sample_rate, float seconds)
+static float sanitize_sample_rate(float sample_rate)
 {
-    const float frames = seconds * sample_rate;
+    return sample_rate > 0.0f ? sample_rate : 1.0f;
+}
 
-    return synth_clampf(frames, 1.0f, (float)SYNTH_DELAY_MAX_FRAMES);
+static size_t max_delay_frames_for_sample_rate(float sample_rate)
+{
+    const float safe_sample_rate = sanitize_sample_rate(sample_rate);
+    size_t frames = (size_t)((SYNTH_DELAY_MAX_TIME_SECONDS * safe_sample_rate) + 0.5f);
+
+    if (frames < 1) {
+        return 1;
+    }
+
+    return frames;
+}
+
+// converts seconds into the circular-buffer distance used by the read head.
+static float delay_frames_for_time(const synth_delay *delay, float seconds)
+{
+    const float frames = seconds * delay->sample_rate;
+
+    return synth_clampf(frames, 1.0f, (float)delay->max_delay_frames);
 }
 
 // turns the crossfade time into a sample count.
@@ -39,24 +56,26 @@ static size_t settle_frames_for_sample_rate(float sample_rate)
 }
 
 // wraps fractional read positions back into the delay buffer.
-static float wrap_read_position(float position)
+static float wrap_read_position(float position, size_t capacity_frames)
 {
+    const float capacity = (float)capacity_frames;
+
     while (position < 0.0f) {
-        position += (float)SYNTH_DELAY_MAX_FRAMES;
+        position += capacity;
     }
 
-    while (position >= (float)SYNTH_DELAY_MAX_FRAMES) {
-        position -= (float)SYNTH_DELAY_MAX_FRAMES;
+    while (position >= capacity) {
+        position -= capacity;
     }
 
     return position;
 }
 
 // reads between samples so delay taps are not limited to whole frames.
-static float interpolate_sample(const float *buffer, float position)
+static float interpolate_sample(const float *buffer, size_t capacity_frames, float position)
 {
     const size_t first_index = (size_t)position;
-    const size_t second_index = (first_index + 1) % SYNTH_DELAY_MAX_FRAMES;
+    const size_t second_index = (first_index + 1) % capacity_frames;
     const float fraction = position - (float)first_index;
 
     // blends neighboring samples for smooth fractional delay times.
@@ -65,14 +84,15 @@ static float interpolate_sample(const float *buffer, float position)
 
 static int delay_line_has_storage(const synth_delay_line *line)
 {
-    return line->left != 0 && line->right != 0;
+    return line->left != 0 && line->right != 0 && line->capacity_frames > 0;
 }
 
-static int allocate_delay_line(synth_delay_line *line)
+static int allocate_delay_line(synth_delay_line *line, size_t capacity_frames)
 {
+    line->capacity_frames = capacity_frames;
     // keeps the large delay buffers off the stack.
-    line->left = (float *)calloc(SYNTH_DELAY_MAX_FRAMES, sizeof(float));
-    line->right = (float *)calloc(SYNTH_DELAY_MAX_FRAMES, sizeof(float));
+    line->left = (float *)calloc(capacity_frames, sizeof(float));
+    line->right = (float *)calloc(capacity_frames, sizeof(float));
 
     if (!delay_line_has_storage(line)) {
         // cleans up a partial allocation so later checks see a disabled line.
@@ -80,6 +100,7 @@ static int allocate_delay_line(synth_delay_line *line)
         free(line->right);
         line->left = 0;
         line->right = 0;
+        line->capacity_frames = 0;
         return 0;
     }
 
@@ -93,7 +114,21 @@ static void free_delay_line(synth_delay_line *line)
     line->left = 0;
     line->right = 0;
     line->write_index = 0;
+    line->capacity_frames = 0;
     line->delay_frames = 0.0f;
+}
+
+static void resize_delay_line(synth_delay_line *line, size_t capacity_frames)
+{
+    free_delay_line(line);
+    (void)allocate_delay_line(line, capacity_frames);
+}
+
+static void resize_delay_voices(synth_delay *delay, size_t capacity_frames)
+{
+    for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i) {
+        resize_delay_line(&delay->voices[i].line, capacity_frames);
+    }
 }
 
 static void clear_delay_line(const synth_delay_line *line)
@@ -103,8 +138,8 @@ static void clear_delay_line(const synth_delay_line *line)
     }
 
     // preserves the allocated buffers while clearing old audio history.
-    memset(line->left, 0, sizeof(float) * SYNTH_DELAY_MAX_FRAMES);
-    memset(line->right, 0, sizeof(float) * SYNTH_DELAY_MAX_FRAMES);
+    memset(line->left, 0, sizeof(float) * line->capacity_frames);
+    memset(line->right, 0, sizeof(float) * line->capacity_frames);
 }
 
 // reads the delayed stereo sample from one independent delay line.
@@ -112,11 +147,12 @@ static synth_stereo_sample read_delay_line(const synth_delay_line *line)
 {
     // the read head trails the write head by the current delay time.
     const float read_position = wrap_read_position(
-        (float)line->write_index - line->delay_frames);
+        (float)line->write_index - line->delay_frames,
+        line->capacity_frames);
     synth_stereo_sample delayed;
 
-    delayed.left = interpolate_sample(line->left, read_position);
-    delayed.right = interpolate_sample(line->right, read_position);
+    delayed.left = interpolate_sample(line->left, line->capacity_frames, read_position);
+    delayed.right = interpolate_sample(line->right, line->capacity_frames, read_position);
     return delayed;
 }
 
@@ -154,7 +190,7 @@ static synth_stereo_sample process_delay_line(
     // writes dry input plus feedback so repeats decay through the same line.
     line->left[line->write_index] = input.left + (delayed.left * feedback);
     line->right[line->write_index] = input.right + (delayed.right * feedback);
-    line->write_index = (line->write_index + 1) % SYNTH_DELAY_MAX_FRAMES;
+    line->write_index = (line->write_index + 1) % line->capacity_frames;
 
     return delayed;
 }
@@ -418,15 +454,18 @@ static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo
 
 void synth_delay_init(synth_delay *delay, float sample_rate)
 {
+    const float safe_sample_rate = sanitize_sample_rate(sample_rate);
+
     memset(delay, 0, sizeof(*delay));
+    delay->sample_rate = safe_sample_rate;
+    delay->max_delay_frames = max_delay_frames_for_sample_rate(safe_sample_rate);
 
     for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i) {
-        (void)allocate_delay_line(&delay->voices[i].line);
+        (void)allocate_delay_line(&delay->voices[i].line, delay->max_delay_frames);
     }
 
-    delay->sample_rate = sample_rate;
-    delay->crossfade_frames = crossfade_frames_for_sample_rate(sample_rate);
-    delay->settle_frames = settle_frames_for_sample_rate(sample_rate);
+    delay->crossfade_frames = crossfade_frames_for_sample_rate(safe_sample_rate);
+    delay->settle_frames = settle_frames_for_sample_rate(safe_sample_rate);
     synth_delay_set_time(delay, SYNTH_DELAY_DEFAULT_TIME_SECONDS);
     delay->feedback = 0.0f;
     delay->mix = 0.0f;
@@ -446,12 +485,15 @@ void synth_delay_uninit(synth_delay *delay)
 void synth_delay_set_sample_rate(synth_delay *delay, float sample_rate)
 {
     const float current_time_seconds = delay->time_seconds;
+    const float safe_sample_rate = sanitize_sample_rate(sample_rate);
     float delay_frames;
 
-    delay->sample_rate = sample_rate;
-    delay->crossfade_frames = crossfade_frames_for_sample_rate(sample_rate);
-    delay->settle_frames = settle_frames_for_sample_rate(sample_rate);
-    delay_frames = delay_frames_for_time(delay->sample_rate, current_time_seconds);
+    delay->sample_rate = safe_sample_rate;
+    delay->max_delay_frames = max_delay_frames_for_sample_rate(safe_sample_rate);
+    resize_delay_voices(delay, delay->max_delay_frames);
+    delay->crossfade_frames = crossfade_frames_for_sample_rate(safe_sample_rate);
+    delay->settle_frames = settle_frames_for_sample_rate(safe_sample_rate);
+    delay_frames = delay_frames_for_time(delay, current_time_seconds);
     delay->time_seconds = delay_frames / delay->sample_rate;
     set_delay_time_immediately(delay, delay_frames);
 }
@@ -462,7 +504,7 @@ void synth_delay_set_time(synth_delay *delay, float seconds)
         seconds,
         SYNTH_DELAY_MIN_TIME_SECONDS,
         SYNTH_DELAY_MAX_TIME_SECONDS);
-    const float requested_delay_frames = delay_frames_for_time(delay->sample_rate, clamped_seconds);
+    const float requested_delay_frames = delay_frames_for_time(delay, clamped_seconds);
 
     delay->time_seconds = requested_delay_frames / delay->sample_rate;
 

@@ -1,5 +1,6 @@
 #include "midi/midi_mapping.h"
 #include "midi/midi_portmidi.h"
+#include "midi/midi_text.h"
 #include "system/desktop_system.h"
 
 #include <ctype.h>
@@ -40,28 +41,6 @@ typedef enum learn_bind_result {
     LEARN_BIND_EXITED
 } learn_bind_result;
 
-// trims whitespace from both ends of a mutable string.
-static char *trim(char *text)
-{
-    char *end;
-
-    while (isspace((unsigned char)*text)) {
-        ++text;
-    }
-
-    if (*text == '\0') {
-        return text;
-    }
-
-    end = text + strlen(text) - 1;
-    while (end > text && isspace((unsigned char)*end)) {
-        *end = '\0';
-        --end;
-    }
-
-    return text;
-}
-
 // reads one command line and trims it in place.
 static int read_line(char *line, size_t line_size)
 {
@@ -71,7 +50,7 @@ static int read_line(char *line, size_t line_size)
         return 0;
     }
 
-    trimmed = trim(line);
+    trimmed = midi_text_trim(line);
     if (trimmed != line) {
         memmove(line, trimmed, strlen(trimmed) + 1);
     }
@@ -363,30 +342,6 @@ static void print_binding(const midi_mapping_binding *binding)
         binding->max_value);
 }
 
-static const char *chord_pad_name(midi_chord_mode_pad pad)
-{
-    switch (pad) {
-        case MIDI_CHORD_MODE_PAD_DIMINISHED:
-            return "chord_diminished";
-        case MIDI_CHORD_MODE_PAD_MINOR:
-            return "chord_minor";
-        case MIDI_CHORD_MODE_PAD_MAJOR:
-            return "chord_major";
-        case MIDI_CHORD_MODE_PAD_SUSPENDED:
-            return "chord_suspended";
-        case MIDI_CHORD_MODE_PAD_SIXTH:
-            return "chord_6";
-        case MIDI_CHORD_MODE_PAD_MINOR_SEVENTH:
-            return "chord_minor_7";
-        case MIDI_CHORD_MODE_PAD_MAJOR_SEVENTH:
-            return "chord_major_7";
-        case MIDI_CHORD_MODE_PAD_NINTH:
-            return "chord_9";
-        default:
-            return "unknown_chord_pad";
-    }
-}
-
 static void print_chord_binding(const midi_mapping_chord_binding *binding)
 {
     printf("cc:%d:%d", binding->channel, binding->control);
@@ -478,7 +433,7 @@ static void print_parameter_list(const midi_mapping *mapping)
     for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
         const midi_mapping_chord_binding *binding = &mapping->chord_bindings[i];
 
-        printf("%-42s ", chord_pad_name((midi_chord_mode_pad)i));
+        printf("%-42s ", midi_mapping_chord_pad_name((midi_chord_mode_pad)i));
         if (binding->enabled) {
             print_chord_binding(binding);
         } else {
@@ -540,7 +495,7 @@ static int chord_control_is_already_bound(const midi_mapping *mapping, int chann
                 "warning: cc:%d:%d is already bound to %s\n",
                 channel,
                 control,
-                chord_pad_name(binding->pad));
+                midi_mapping_chord_pad_name(binding->pad));
             return 1;
         }
     }
@@ -871,7 +826,7 @@ static int save_mapping_file(const char *path, const midi_mapping *mapping)
             fprintf(
                 file,
                 "%s=cc:%d:%d\n",
-                chord_pad_name(binding->pad),
+                midi_mapping_chord_pad_name(binding->pad),
                 binding->channel,
                 binding->control);
         }
@@ -998,7 +953,7 @@ static int validate_mapping_file(const char *path)
                     parameter->channel,
                     parameter->control,
                     midi_mapping_parameter_name(parameter->parameter),
-                    chord_pad_name(chord->pad));
+                    midi_mapping_chord_pad_name(chord->pad));
                 warnings += 1;
             }
         }
@@ -1019,8 +974,8 @@ static int validate_mapping_file(const char *path)
                     "warning: cc:%d:%d is bound to both %s and %s\n",
                     a->channel,
                     a->control,
-                    chord_pad_name(a->pad),
-                    chord_pad_name(b->pad));
+                    midi_mapping_chord_pad_name(a->pad),
+                    midi_mapping_chord_pad_name(b->pad));
                 warnings += 1;
             }
         }
@@ -1132,14 +1087,14 @@ static int run_learn_command(int argc, char **argv)
             break;
         }
 
-        command = trim(line);
+        command = midi_text_trim(line);
         argument = command;
         while (*argument != '\0' && !isspace((unsigned char)*argument)) {
             ++argument;
         }
         if (*argument != '\0') {
             *argument = '\0';
-            argument = trim(argument + 1);
+            argument = midi_text_trim(argument + 1);
         }
 
         if (*command == '\0') {

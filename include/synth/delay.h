@@ -5,6 +5,8 @@
 
 #include "synth/audio_types.h"
 
+// default max delay frames at the project's 48 kHz default sample rate.
+// initialized delays expose their actual per-sample-rate limit in max_delay_frames.
 #define SYNTH_DELAY_MAX_FRAMES 96000
 #define SYNTH_DELAY_MIN_TIME_SECONDS 0.001f
 #define SYNTH_DELAY_MAX_TIME_SECONDS 2.0f
@@ -25,6 +27,7 @@ typedef struct synth_delay_line {
     float *left;
     float *right;
     size_t write_index;
+    size_t capacity_frames;
     float delay_frames;
 } synth_delay_line;
 
@@ -48,6 +51,7 @@ typedef struct synth_delay {
     int has_pending_time_change;
     int has_processed;
     float sample_rate;
+    size_t max_delay_frames;
     float time_seconds;
     float feedback;
     float mix;

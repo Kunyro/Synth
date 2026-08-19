@@ -40,28 +40,18 @@ MIDI_TYPES_TEST_TARGET := build/test_midi_types$(EXEEXT)
 MIDI_MAPPING_TEST_TARGET := build/test_midi_mapping$(EXEEXT)
 CHORD_MODE_TEST_TARGET := build/test_chord_mode$(EXEEXT)
 
-CORE_SOURCES := \
-	src/midi_types.c \
-	src/wavetable.c \
-	src/oscillator.c \
-	src/envelope.c \
-	src/voice.c \
-	src/filter.c \
-	src/effects/saturation.c \
-	src/effects/distortion.c \
-	src/effects/bitcrusher.c \
-	src/effects/delay.c \
-	src/effects/effect_chain.c \
-	src/synth.c \
-	src/lfo.c
-
-DESKTOP_SOURCES := \
-	platform/desktop/main.c \
-	platform/desktop/audio/audio_miniaudio.c \
+CORE_SOURCES := $(shell sed -e '/^[[:space:]]*\#/d' -e '/^[[:space:]]*$$/d' cmake/synth_core_sources.txt)
+DESKTOP_AUDIO_SOURCES := $(shell sed -e '/^[[:space:]]*\#/d' -e '/^[[:space:]]*$$/d' cmake/synth_desktop_audio_sources.txt)
+DESKTOP_MIDI_SOURCES := $(shell sed -e '/^[[:space:]]*\#/d' -e '/^[[:space:]]*$$/d' cmake/synth_desktop_midi_sources.txt)
+DESKTOP_SYSTEM_SOURCES := $(shell sed -e '/^[[:space:]]*\#/d' -e '/^[[:space:]]*$$/d' cmake/synth_desktop_system_sources.txt)
+MIDI_MAPPING_SOURCES := \
 	platform/desktop/midi/chord_mode.c \
 	platform/desktop/midi/midi_mapping.c \
-	platform/desktop/midi/midi_portmidi.c \
-	platform/desktop/system/desktop_system.c
+	platform/desktop/midi/midi_mapping_registry.c \
+	platform/desktop/midi/midi_mapping_runtime.c \
+	platform/desktop/midi/midi_text.c
+
+DESKTOP_SOURCES := platform/desktop/main.c $(DESKTOP_AUDIO_SOURCES) $(DESKTOP_MIDI_SOURCES) $(DESKTOP_SYSTEM_SOURCES)
 
 SOURCES := $(CORE_SOURCES) $(DESKTOP_SOURCES)
 
@@ -92,7 +82,7 @@ test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(
 $(TARGET): $(SOURCES) third_party/miniaudio/miniaudio.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@ $(LDLIBS)
 
-$(MIDI_MONITOR_TARGET): tools/midi_monitor.c platform/desktop/midi/chord_mode.c platform/desktop/midi/midi_mapping.c platform/desktop/midi/midi_portmidi.c platform/desktop/system/desktop_system.c $(CORE_SOURCES) | build
+$(MIDI_MONITOR_TARGET): tools/midi_monitor.c $(DESKTOP_MIDI_SOURCES) $(DESKTOP_SYSTEM_SOURCES) $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(OSCILLATOR_TEST_TARGET): tests/test_oscillator.c src/oscillator.c src/wavetable.c | build
@@ -125,7 +115,7 @@ $(VOICE_TEST_TARGET): tests/test_voice.c $(CORE_SOURCES) | build
 $(MIDI_TYPES_TEST_TARGET): tests/test_midi_types.c src/midi_types.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(MIDI_MAPPING_TEST_TARGET): tests/test_midi_mapping.c platform/desktop/midi/chord_mode.c platform/desktop/midi/midi_mapping.c $(CORE_SOURCES) | build
+$(MIDI_MAPPING_TEST_TARGET): tests/test_midi_mapping.c $(MIDI_MAPPING_SOURCES) $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(CHORD_MODE_TEST_TARGET): tests/test_chord_mode.c platform/desktop/midi/chord_mode.c | build
