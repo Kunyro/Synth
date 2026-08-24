@@ -380,6 +380,26 @@ void synth_set_delay_mix(synth *s, float mix)
     synth_delay_set_mix(&s->effects.delay, mix);
 }
 
+void synth_set_plate_reverb_decay(synth *s, float seconds)
+{
+    synth_plate_reverb_set_decay(&s->effects.plate_reverb, seconds);
+}
+
+void synth_set_plate_reverb_damping(synth *s, float damping)
+{
+    synth_plate_reverb_set_damping(&s->effects.plate_reverb, damping);
+}
+
+void synth_set_plate_reverb_mix(synth *s, float mix)
+{
+    synth_plate_reverb_set_mix(&s->effects.plate_reverb, mix);
+}
+
+void synth_set_plate_reverb_predelay(synth *s, float seconds)
+{
+    synth_plate_reverb_set_predelay(&s->effects.plate_reverb, seconds);
+}
+
 float synth_get_master_gain(const synth *s)
 {
     return s->master_gain;
@@ -523,4 +543,24 @@ float synth_get_delay_feedback(const synth *s)
 float synth_get_delay_mix(const synth *s)
 {
     return synth_delay_get_mix(&s->effects.delay);
+}
+
+float synth_get_plate_reverb_decay(const synth *s)
+{
+    return synth_plate_reverb_get_decay(&s->effects.plate_reverb);
+}
+
+float synth_get_plate_reverb_damping(const synth *s)
+{
+    return synth_plate_reverb_get_damping(&s->effects.plate_reverb);
+}
+
+float synth_get_plate_reverb_mix(const synth *s)
+{
+    return synth_plate_reverb_get_mix(&s->effects.plate_reverb);
+}
+
+float synth_get_plate_reverb_predelay(const synth *s)
+{
+    return synth_plate_reverb_get_predelay(&s->effects.plate_reverb);
 }

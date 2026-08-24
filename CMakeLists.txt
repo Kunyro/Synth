@@ -45,6 +45,7 @@ set(SYNTH_PUBLIC_HEADERS
     include/synth/lfo.h
     include/synth/midi_types.h
     include/synth/oscillator.h
+    include/synth/plate_reverb.h
     include/synth/saturation.h
     include/synth/synth.h
     include/synth/synth_config.h
@@ -185,6 +186,7 @@ if(BUILD_TESTING)
         test_saturation
         test_bitcrusher
         test_delay
+        test_plate_reverb
         test_lfo
         test_voice
         test_midi_types)

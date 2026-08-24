@@ -17,7 +17,8 @@ static const char *effect_names[] = {
     "saturation",
     "distortion",
     "bitcrusher",
-    "delay"
+    "delay",
+    "plate_reverb"
 };
 
 static const char *effect_macro_names[] = {
@@ -52,6 +53,11 @@ static const midi_mapping_effect_macro_route effect_macro_routes
             {1, MIDI_MAPPING_PARAM_DELAY_TIME},
             {1, MIDI_MAPPING_PARAM_DELAY_FEEDBACK},
             {1, MIDI_MAPPING_PARAM_DELAY_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY},
+            {1, MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING},
+            {1, MIDI_MAPPING_PARAM_PLATE_REVERB_MIX}
         }
     };
 
@@ -181,7 +187,11 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_BITCRUSHER_MIX, "bitcrusher_mix", synth_get_bitcrusher_mix, synth_set_bitcrusher_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
     {MIDI_MAPPING_PARAM_DELAY_TIME, "delay_time", synth_get_delay_time, synth_set_delay_time, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 2.0f},
     {MIDI_MAPPING_PARAM_DELAY_FEEDBACK, "delay_feedback", synth_get_delay_feedback, synth_set_delay_feedback, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 0.95f},
-    {MIDI_MAPPING_PARAM_DELAY_MIX, "delay_mix", synth_get_delay_mix, synth_set_delay_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f}
+    {MIDI_MAPPING_PARAM_DELAY_MIX, "delay_mix", synth_get_delay_mix, synth_set_delay_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY, "plate_reverb_decay", synth_get_plate_reverb_decay, synth_set_plate_reverb_decay, MIDI_MAPPING_SCALE_LINEAR, SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS, SYNTH_PLATE_REVERB_MAX_DECAY_SECONDS},
+    {MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING, "plate_reverb_damping", synth_get_plate_reverb_damping, synth_set_plate_reverb_damping, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_PLATE_REVERB_MIX, "plate_reverb_mix", synth_get_plate_reverb_mix, synth_set_plate_reverb_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY, "plate_reverb_predelay", synth_get_plate_reverb_predelay, synth_set_plate_reverb_predelay, MIDI_MAPPING_SCALE_LINEAR, 0.0f, SYNTH_PLATE_REVERB_MAX_PREDELAY_SECONDS}
 };
 
 const midi_mapping_parameter_entry *midi_mapping_find_parameter_by_name(const char *name)

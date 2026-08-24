@@ -136,22 +136,16 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
     }
 }
 
-// returns the effect page selected by the selector knob's four fixed ranges.
+// returns the effect page selected by the selector knob's evenly spaced ranges.
 static midi_mapping_effect effect_for_selector_value(int midi_value)
 {
-    if (midi_value < 32) {
-        return MIDI_MAPPING_EFFECT_SATURATION;
+    const int effect = (midi_value * MIDI_MAPPING_EFFECT_COUNT) / 128;
+
+    if (effect >= MIDI_MAPPING_EFFECT_COUNT) {
+        return (midi_mapping_effect)(MIDI_MAPPING_EFFECT_COUNT - 1);
     }
 
-    if (midi_value < 64) {
-        return MIDI_MAPPING_EFFECT_DISTORTION;
-    }
-
-    if (midi_value < 96) {
-        return MIDI_MAPPING_EFFECT_BITCRUSHER;
-    }
-
-    return MIDI_MAPPING_EFFECT_DELAY;
+    return (midi_mapping_effect)effect;
 }
 
 static int control_binding_matches(

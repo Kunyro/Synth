@@ -8,6 +8,7 @@ src/effects/saturation.c
 src/effects/distortion.c
 src/effects/bitcrusher.c
 src/effects/delay.c
+src/effects/plate_reverb.c
 src/effects/effect_chain.c
 src/synth.c
 src/synth_render.c

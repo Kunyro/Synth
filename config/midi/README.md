@@ -50,12 +50,13 @@ CC mappings use soft takeover: a knob must reach or cross the current synth
 value before it starts changing that parameter.
 
 Effect macro controls are an optional alternative to binding every effect
-parameter directly. The selector knob chooses one of four fixed pages:
+parameter directly. The selector knob chooses one of five fixed pages:
 
-- values `0` through `31`: saturation
-- values `32` through `63`: distortion
-- values `64` through `95`: bitcrusher
-- values `96` through `127`: delay
+- values `0` through `25`: saturation
+- values `26` through `51`: distortion
+- values `52` through `76`: bitcrusher
+- values `77` through `102`: delay
+- values `103` through `127`: plate reverb
 
 The three macro knobs then control the selected page:
 
@@ -65,6 +66,7 @@ The three macro knobs then control the selected page:
 | distortion | `distortion_drive` | unused | `distortion_mix` |
 | bitcrusher | `bitcrusher_sample_rate` | `bitcrusher_bits` | `bitcrusher_mix` |
 | delay | `delay_time` | `delay_feedback` | `delay_mix` |
+| plate reverb | `plate_reverb_decay` | `plate_reverb_damping` | `plate_reverb_mix` |
 
 Macro knobs use independent soft takeover for each effect page, so switching
 pages does not make a knob jump the newly selected effect parameter.
@@ -119,6 +121,10 @@ cmake --build --preset dev --target midi_monitor
 - `delay_time`
 - `delay_feedback`
 - `delay_mix`
+- `plate_reverb_decay`
+- `plate_reverb_damping`
+- `plate_reverb_mix`
+- `plate_reverb_predelay`
 
 ## Supported Chord Pads
 
@@ -161,14 +167,10 @@ The included config maps Akai MPK Mini MK2-style CC knobs on channel 1:
 | 22 | `lfo_depth` |
 | 23 | `lfo_filter_amount` |
 | 24 | `lfo_shape_morph` |
-| 25 | `distortion_mix` |
-| 26 | `distortion_drive` |
-| 27 | `bitcrusher_mix` |
-| 28 | `bitcrusher_sample_rate` |
-| 29 | `bitcrusher_bits` |
-| 30 | `delay_mix` |
-| 31 | `delay_time` |
-| 32 | `delay_feedback` |
+| 25 | `effect_selector` |
+| 26 | `effect_macro_1` |
+| 27 | `effect_macro_2` |
+| 28 | `effect_macro_3` |
 | 33 | `chord_diminished` |
 | 34 | `chord_minor` |
 | 35 | `chord_major` |

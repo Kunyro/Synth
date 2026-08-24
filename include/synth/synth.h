@@ -118,6 +118,14 @@ void synth_set_delay_time(synth *s, float seconds);
 void synth_set_delay_feedback(synth *s, float feedback);
 // changes the wet/dry mix for delay.
 void synth_set_delay_mix(synth *s, float mix);
+// changes the plate reverb decay time in seconds.
+void synth_set_plate_reverb_decay(synth *s, float seconds);
+// changes how quickly high frequencies fade inside the plate tank.
+void synth_set_plate_reverb_damping(synth *s, float damping);
+// changes the wet/dry mix for plate reverb.
+void synth_set_plate_reverb_mix(synth *s, float mix);
+// changes the delay before sound enters the plate reverb.
+void synth_set_plate_reverb_predelay(synth *s, float seconds);
 
 // reads current synth values without exposing where they are stored.
 float synth_get_master_gain(const synth *s);
@@ -149,6 +157,10 @@ float synth_get_bitcrusher_mix(const synth *s);
 float synth_get_delay_time(const synth *s);
 float synth_get_delay_feedback(const synth *s);
 float synth_get_delay_mix(const synth *s);
+float synth_get_plate_reverb_decay(const synth *s);
+float synth_get_plate_reverb_damping(const synth *s);
+float synth_get_plate_reverb_mix(const synth *s);
+float synth_get_plate_reverb_predelay(const synth *s);
 
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output);

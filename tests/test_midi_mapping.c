@@ -98,7 +98,7 @@ static void test_parameter_metadata(void)
     const midi_mapping_parameter_info *saturation_drive_info;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 33, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 37, "metadata lists every mappable parameter");
 
     cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -513,6 +513,22 @@ static void test_names_delay_parameters(void)
         "delay mix has a midi mapping name");
 }
 
+static void test_names_plate_reverb_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY), "plate_reverb_decay") == 0,
+        "plate reverb decay has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING), "plate_reverb_damping") == 0,
+        "plate reverb damping has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_MIX), "plate_reverb_mix") == 0,
+        "plate reverb mix has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY), "plate_reverb_predelay") == 0,
+        "plate reverb predelay has a midi mapping name");
+}
+
 static void test_names_bitcrusher_parameters(void)
 {
     expect_true(
@@ -717,6 +733,71 @@ static void test_applies_delay_cc_values(void)
     expect_near(result.synth_value, expected_feedback, 0.0001f, "delay feedback result reports scaled value");
 }
 
+static void test_applies_plate_reverb_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_decay =
+        SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS +
+        ((64.0f / 127.0f) *
+            (SYNTH_PLATE_REVERB_MAX_DECAY_SECONDS - SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS));
+    const float expected_damping = 96.0f / 127.0f;
+    const float expected_predelay =
+        (44.0f / 127.0f) * SYNTH_PLATE_REVERB_MAX_PREDELAY_SECONDS;
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for plate reverb test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 41, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 41, 44, &result), "plate reverb mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX,
+        "plate reverb mix cc reports plate reverb mix parameter");
+    expect_near(
+        synth_get_plate_reverb_mix(&s),
+        44.0f / 127.0f,
+        0.0001f,
+        "plate reverb mix cc scales to normalized dry wet");
+
+    pickup_cc(&mapping, &s, 42, 0, 22);
+    expect_true(apply_cc_value(&mapping, &s, 42, 64, &result), "plate reverb decay cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY,
+        "plate reverb decay cc reports plate reverb decay parameter");
+    expect_near(
+        synth_get_plate_reverb_decay(&s),
+        expected_decay,
+        0.0001f,
+        "plate reverb decay cc scales to seconds");
+    expect_near(result.synth_value, expected_decay, 0.0001f, "plate reverb decay result reports seconds");
+
+    pickup_cc(&mapping, &s, 43, 0, 44);
+    expect_true(apply_cc_value(&mapping, &s, 43, 96, &result), "plate reverb damping cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING,
+        "plate reverb damping cc reports plate reverb damping parameter");
+    expect_near(
+        synth_get_plate_reverb_damping(&s),
+        expected_damping,
+        0.0001f,
+        "plate reverb damping cc scales to normalized damping");
+
+    pickup_cc(&mapping, &s, 44, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 44, 44, &result), "plate reverb predelay cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY,
+        "plate reverb predelay cc reports plate reverb predelay parameter");
+    expect_near(
+        synth_get_plate_reverb_predelay(&s),
+        expected_predelay,
+        0.0001f,
+        "plate reverb predelay cc scales to seconds");
+}
+
 static void test_loads_effect_macro_mapping(void)
 {
     midi_mapping mapping;
@@ -740,6 +821,9 @@ static void test_loads_effect_macro_mapping(void)
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_DELAY), "delay") == 0,
         "delay effect page has a name");
     expect_true(
+        strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_PLATE_REVERB), "plate_reverb") == 0,
+        "plate reverb effect page has a name");
+    expect_true(
         strcmp(midi_mapping_effect_macro_name(2), "effect_macro_3") == 0,
         "third effect macro control has a config name");
     expect_true(
@@ -757,9 +841,27 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         parameter == MIDI_MAPPING_PARAM_SATURATION_MIX,
         "saturation macro three routes to dry wet");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_PLATE_REVERB, 0, &parameter),
+        "plate reverb macro one has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY,
+        "plate reverb macro one routes to decay");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_PLATE_REVERB, 1, &parameter),
+        "plate reverb macro two has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING,
+        "plate reverb macro two routes to damping");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_PLATE_REVERB, 2, &parameter),
+        "plate reverb macro three has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX,
+        "plate reverb macro three routes to dry wet");
 }
 
-static void test_effect_selector_uses_four_fixed_steps(void)
+static void test_effect_selector_uses_even_steps_for_effect_count(void)
 {
     midi_mapping mapping;
     synth s;
@@ -775,23 +877,28 @@ static void test_effect_selector_uses_four_fixed_steps(void)
     expect_true(result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT, "selector result is effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_SATURATION, "selector result reports saturation");
     expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value zero chooses saturation");
-    expect_true(apply_cc_value(&mapping, &s, 10, 31, &result), "selector upper saturation step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value thirty-one chooses saturation");
-    expect_true(apply_cc_value(&mapping, &s, 10, 32, &result), "selector lower distortion step reports effect selection");
+    expect_true(apply_cc_value(&mapping, &s, 10, 25, &result), "selector upper saturation step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value twenty-five chooses saturation");
+    expect_true(apply_cc_value(&mapping, &s, 10, 26, &result), "selector lower distortion step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector result reports distortion");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value thirty-two chooses distortion");
-    expect_true(apply_cc_value(&mapping, &s, 10, 63, &result), "selector upper distortion step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value sixty-three chooses distortion");
-    expect_true(apply_cc_value(&mapping, &s, 10, 64, &result), "selector lower bitcrusher step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value twenty-six chooses distortion");
+    expect_true(apply_cc_value(&mapping, &s, 10, 51, &result), "selector upper distortion step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value fifty-one chooses distortion");
+    expect_true(apply_cc_value(&mapping, &s, 10, 52, &result), "selector lower bitcrusher step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector result reports bitcrusher");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value sixty-four chooses bitcrusher");
-    expect_true(apply_cc_value(&mapping, &s, 10, 95, &result), "selector upper bitcrusher step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value ninety-five chooses bitcrusher");
-    expect_true(apply_cc_value(&mapping, &s, 10, 96, &result), "selector lower delay step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value fifty-two chooses bitcrusher");
+    expect_true(apply_cc_value(&mapping, &s, 10, 76, &result), "selector upper bitcrusher step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value seventy-six chooses bitcrusher");
+    expect_true(apply_cc_value(&mapping, &s, 10, 77, &result), "selector lower delay step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_DELAY, "selector result reports delay");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value ninety-six chooses delay");
-    expect_true(apply_cc_value(&mapping, &s, 10, 127, &result), "selector upper delay step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value one twenty-seven chooses delay");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value seventy-seven chooses delay");
+    expect_true(apply_cc_value(&mapping, &s, 10, 102, &result), "selector upper delay step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value one hundred two chooses delay");
+    expect_true(apply_cc_value(&mapping, &s, 10, 103, &result), "selector lower plate reverb step reports effect selection");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "selector result reports plate reverb");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "selector value one hundred three chooses plate reverb");
+    expect_true(apply_cc_value(&mapping, &s, 10, 127, &result), "selector upper plate reverb step reports effect selection");
+    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "selector value one twenty-seven chooses plate reverb");
 }
 
 static void test_effect_macros_apply_selected_effect_parameters(void)
@@ -802,13 +909,17 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     char error[MIDI_MAPPING_ERROR_LENGTH];
     const float expected_time = 0.001f + ((64.0f / 127.0f) * (2.0f - 0.001f));
     const float expected_feedback = (96.0f / 127.0f) * 0.95f;
+    const float expected_decay =
+        SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS +
+        ((64.0f / 127.0f) *
+            (SYNTH_PLATE_REVERB_MAX_DECAY_SECONDS - SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS));
 
     expect_true(
         midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
         "effect macro mapping loads for apply test");
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
-    (void)apply_cc_value(&mapping, &s, 10, 127, 0);
+    (void)apply_cc_value(&mapping, &s, 10, 77, 0);
     pickup_cc(&mapping, &s, 11, 0, 16);
     expect_true(apply_cc_value(&mapping, &s, 11, 64, &result), "delay macro one applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "delay macro one reports delay time");
@@ -823,6 +934,22 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(apply_cc_value(&mapping, &s, 13, 44, &result), "delay macro three applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_MIX, "delay macro three reports delay mix");
     expect_near(synth_get_delay_mix(&s), 44.0f / 127.0f, 0.0001f, "delay macro three scales delay dry wet");
+
+    (void)apply_cc_value(&mapping, &s, 10, 127, 0);
+    pickup_cc(&mapping, &s, 11, 0, 22);
+    expect_true(apply_cc_value(&mapping, &s, 11, 64, &result), "plate reverb macro one applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY, "plate reverb macro one reports decay");
+    expect_near(synth_get_plate_reverb_decay(&s), expected_decay, 0.0001f, "plate reverb macro one scales decay");
+
+    pickup_cc(&mapping, &s, 12, 0, 44);
+    expect_true(apply_cc_value(&mapping, &s, 12, 96, &result), "plate reverb macro two applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING, "plate reverb macro two reports damping");
+    expect_near(synth_get_plate_reverb_damping(&s), 96.0f / 127.0f, 0.0001f, "plate reverb macro two scales damping");
+
+    pickup_cc(&mapping, &s, 13, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 13, 44, &result), "plate reverb macro three applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX, "plate reverb macro three reports mix");
+    expect_near(synth_get_plate_reverb_mix(&s), 44.0f / 127.0f, 0.0001f, "plate reverb macro three scales dry wet");
 }
 
 static void test_effect_macro_pickup_is_independent_per_effect(void)
@@ -838,12 +965,12 @@ static void test_effect_macro_pickup_is_independent_per_effect(void)
         "effect macro mapping loads for pickup independence test");
     synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
 
-    (void)apply_cc_value(&mapping, &s, 10, 127, 0);
+    (void)apply_cc_value(&mapping, &s, 10, 77, 0);
     pickup_cc(&mapping, &s, 11, 0, 16);
     expect_true(apply_cc_value(&mapping, &s, 11, 127, &result), "delay macro one is picked up");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "picked-up delay macro one reports delay time");
 
-    (void)apply_cc_value(&mapping, &s, 10, 64, 0);
+    (void)apply_cc_value(&mapping, &s, 10, 52, 0);
     expect_true(
         !apply_cc_value(&mapping, &s, 11, 0, &result),
         "bitcrusher macro one waits for its own pickup state");
@@ -875,12 +1002,12 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
         mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
         "saturation macro three is picked up");
 
-    (void)apply_cc_value(&mapping, &s, 10, 31, 0);
+    (void)apply_cc_value(&mapping, &s, 10, 25, 0);
     expect_true(
         mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
         "selector movement inside the same effect keeps macro pickup");
 
-    (void)apply_cc_value(&mapping, &s, 10, 32, 0);
+    (void)apply_cc_value(&mapping, &s, 10, 26, 0);
     pickup_cc(&mapping, &s, 13, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 13, 19, &result), "distortion mix reaches about fifteen percent");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_DISTORTION_MIX, "distortion mix macro reports distortion mix");
@@ -947,13 +1074,15 @@ int main(void)
     test_names_distortion_parameters();
     test_names_bitcrusher_parameters();
     test_names_delay_parameters();
+    test_names_plate_reverb_parameters();
     test_applies_distortion_mix_cc_value();
     test_applies_distortion_drive_cc_value();
     test_applies_saturation_cc_values();
     test_applies_bitcrusher_cc_values();
     test_applies_delay_cc_values();
+    test_applies_plate_reverb_cc_values();
     test_loads_effect_macro_mapping();
-    test_effect_selector_uses_four_fixed_steps();
+    test_effect_selector_uses_even_steps_for_effect_count();
     test_effect_macros_apply_selected_effect_parameters();
     test_effect_macro_pickup_is_independent_per_effect();
     test_effect_macro_pickup_rearms_when_returning_to_effect();
