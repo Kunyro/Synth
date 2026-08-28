@@ -135,15 +135,40 @@ static int parse_control_binding(
     return 1;
 }
 
-// parses an effect macro config key into a zero-based macro index.
-static int parse_effect_macro_key(const char *key, size_t *macro_index)
+// parses an effect selector config key into a zero-based bank index.
+static int parse_effect_selector_key(const char *key, size_t *bank_index)
 {
-    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
-        if (strcmp(key, midi_mapping_effect_macro_name(i)) == 0) {
-            if (macro_index != 0) {
-                *macro_index = i;
+    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_BANK_COUNT; ++i) {
+        if (strcmp(key, midi_mapping_effect_selector_name(i)) == 0) {
+            if (bank_index != 0) {
+                *bank_index = i;
             }
             return 1;
+        }
+    }
+
+    return 0;
+}
+
+// parses an effect macro config key into zero-based bank and macro indexes.
+static int parse_effect_macro_key(
+    const char *key,
+    size_t *bank_index,
+    size_t *macro_index)
+{
+    for (size_t bank = 0; bank < MIDI_MAPPING_EFFECT_BANK_COUNT; ++bank) {
+        for (size_t macro = 0; macro < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++macro) {
+            if (strcmp(key, midi_mapping_effect_macro_name(bank, macro)) == 0) {
+                if (bank_index != 0) {
+                    *bank_index = bank;
+                }
+
+                if (macro_index != 0) {
+                    *macro_index = macro;
+                }
+
+                return 1;
+            }
         }
     }
 
@@ -190,6 +215,7 @@ static int add_effect_control_binding(
     size_t error_size,
     int line_number)
 {
+    size_t bank_index;
     size_t macro_index;
     midi_mapping_control_binding binding;
 
@@ -199,13 +225,13 @@ static int add_effect_control_binding(
         return 0;
     }
 
-    if (strcmp(key, "effect_selector") == 0) {
-        mapping->effect_selector = binding;
+    if (parse_effect_selector_key(key, &bank_index)) {
+        mapping->effect_banks[bank_index].selector = binding;
         return 1;
     }
 
-    if (parse_effect_macro_key(key, &macro_index)) {
-        mapping->effect_macros[macro_index] = binding;
+    if (parse_effect_macro_key(key, &bank_index, &macro_index)) {
+        mapping->effect_banks[bank_index].macros[macro_index] = binding;
         return 1;
     }
 
@@ -313,7 +339,11 @@ void midi_mapping_init(midi_mapping *mapping)
 {
     memset(mapping, 0, sizeof(*mapping));
     midi_text_copy(mapping->name, sizeof(mapping->name), "unnamed midi controller");
-    mapping->selected_effect = MIDI_MAPPING_EFFECT_SATURATION;
+
+    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_BANK_COUNT; ++i) {
+        mapping->effect_banks[i].has_selected_effect =
+            midi_mapping_effect_bank_page(i, 0, &mapping->effect_banks[i].selected_effect);
+    }
 }
 
 // loads a midi mapping from a config file.
@@ -354,8 +384,8 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
 
         if (strcmp(key, "name") == 0) {
             midi_text_copy(mapping->name, sizeof(mapping->name), value);
-        } else if (strcmp(key, "effect_selector") == 0 ||
-                   parse_effect_macro_key(key, 0)) {
+        } else if (parse_effect_selector_key(key, 0) ||
+                   parse_effect_macro_key(key, 0, 0)) {
             if (!add_effect_control_binding(mapping, key, value, error, error_size, line_number)) {
                 fclose(file);
                 return 0;

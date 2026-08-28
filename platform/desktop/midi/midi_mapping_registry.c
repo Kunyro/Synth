@@ -21,16 +21,52 @@ static const char *effect_names[] = {
     "plate_reverb"
 };
 
-static const char *effect_macro_names[] = {
-    "effect_macro_1",
-    "effect_macro_2",
-    "effect_macro_3"
+static const char *effect_selector_names[MIDI_MAPPING_EFFECT_BANK_COUNT] = {
+    "effect_selector_1",
+    "effect_selector_2"
+};
+
+static const char *effect_macro_names
+    [MIDI_MAPPING_EFFECT_BANK_COUNT][MIDI_MAPPING_EFFECT_MACRO_COUNT] = {
+        {
+            "effect_1_macro_1",
+            "effect_1_macro_2",
+            "effect_1_macro_3"
+        },
+        {
+            "effect_2_macro_1",
+            "effect_2_macro_2",
+            "effect_2_macro_3"
+        }
 };
 
 typedef struct midi_mapping_effect_macro_route {
     int enabled;
     midi_mapping_parameter parameter;
 } midi_mapping_effect_macro_route;
+
+typedef struct midi_mapping_effect_bank_page_entry {
+    int enabled;
+    midi_mapping_effect effect;
+} midi_mapping_effect_bank_page_entry;
+
+static const midi_mapping_effect_bank_page_entry effect_bank_pages
+    [MIDI_MAPPING_EFFECT_BANK_COUNT][MIDI_MAPPING_EFFECTS_PER_BANK] = {
+        {
+            {1, MIDI_MAPPING_EFFECT_SATURATION},
+            {1, MIDI_MAPPING_EFFECT_DISTORTION},
+            {1, MIDI_MAPPING_EFFECT_BITCRUSHER},
+            {1, MIDI_MAPPING_EFFECT_DELAY},
+            {1, MIDI_MAPPING_EFFECT_PLATE_REVERB}
+        },
+        {
+            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {0, MIDI_MAPPING_EFFECT_SATURATION}
+        }
+    };
 
 static const midi_mapping_effect_macro_route effect_macro_routes
     [MIDI_MAPPING_EFFECT_COUNT][MIDI_MAPPING_EFFECT_MACRO_COUNT] = {
@@ -299,13 +335,50 @@ const char *midi_mapping_effect_name(midi_mapping_effect effect)
     return effect_names[effect];
 }
 
-const char *midi_mapping_effect_macro_name(size_t macro_index)
+const char *midi_mapping_effect_selector_name(size_t bank_index)
 {
+    if (bank_index >= MIDI_MAPPING_EFFECT_BANK_COUNT) {
+        return "unknown_effect_selector";
+    }
+
+    return effect_selector_names[bank_index];
+}
+
+const char *midi_mapping_effect_macro_name(size_t bank_index, size_t macro_index)
+{
+    if (bank_index >= MIDI_MAPPING_EFFECT_BANK_COUNT) {
+        return "unknown_effect_macro";
+    }
+
     if (macro_index >= MIDI_MAPPING_EFFECT_MACRO_COUNT) {
         return "unknown_effect_macro";
     }
 
-    return effect_macro_names[macro_index];
+    return effect_macro_names[bank_index][macro_index];
+}
+
+int midi_mapping_effect_bank_page(
+    size_t bank_index,
+    size_t page_index,
+    midi_mapping_effect *effect)
+{
+    const midi_mapping_effect_bank_page_entry *page;
+
+    if (bank_index >= MIDI_MAPPING_EFFECT_BANK_COUNT ||
+        page_index >= MIDI_MAPPING_EFFECTS_PER_BANK) {
+        return 0;
+    }
+
+    page = &effect_bank_pages[bank_index][page_index];
+    if (!page->enabled) {
+        return 0;
+    }
+
+    if (effect != 0) {
+        *effect = page->effect;
+    }
+
+    return 1;
 }
 
 int midi_mapping_effect_macro_parameter(

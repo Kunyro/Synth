@@ -14,7 +14,8 @@
 #define MIDI_LEARN_POLL_SLEEP_US 5000
 #define MIDI_LEARN_DRAIN_QUIET_MS 80
 #define MIDI_LEARN_DRAIN_MAX_MS 600
-#define MIDI_MONITOR_EFFECT_CONTROL_COUNT (1 + MIDI_MAPPING_EFFECT_MACRO_COUNT)
+#define MIDI_MONITOR_EFFECT_CONTROL_COUNT \
+    (MIDI_MAPPING_EFFECT_BANK_COUNT * (1 + MIDI_MAPPING_EFFECT_MACRO_COUNT))
 
 typedef struct learn_capture {
     int has_cc;
@@ -358,13 +359,22 @@ static const midi_mapping_control_binding *effect_control_binding_at(
     size_t index,
     const char **name)
 {
-    if (index == 0) {
-        *name = "effect_selector";
-        return &mapping->effect_selector;
+    const size_t controls_per_bank = 1 + MIDI_MAPPING_EFFECT_MACRO_COUNT;
+    const size_t bank_index = index / controls_per_bank;
+    const size_t control_index = index % controls_per_bank;
+
+    if (bank_index >= MIDI_MAPPING_EFFECT_BANK_COUNT) {
+        *name = "unknown_effect_control";
+        return 0;
     }
 
-    *name = midi_mapping_effect_macro_name(index - 1);
-    return &mapping->effect_macros[index - 1];
+    if (control_index == 0) {
+        *name = midi_mapping_effect_selector_name(bank_index);
+        return &mapping->effect_banks[bank_index].selector;
+    }
+
+    *name = midi_mapping_effect_macro_name(bank_index, control_index - 1);
+    return &mapping->effect_banks[bank_index].macros[control_index - 1];
 }
 
 static size_t chord_binding_count(const midi_mapping *mapping)
@@ -389,7 +399,7 @@ static size_t effect_control_binding_count(const midi_mapping *mapping)
         const midi_mapping_control_binding *binding = effect_control_binding_at(mapping, i, &name);
 
         (void)name;
-        if (binding->enabled) {
+        if (binding != 0 && binding->enabled) {
             count += 1;
         }
     }
@@ -472,11 +482,33 @@ static void print_parameter_list(const midi_mapping *mapping)
         const midi_mapping_control_binding *binding = effect_control_binding_at(mapping, i, &name);
 
         printf("%-42s ", name);
-        if (binding->enabled) {
+        if (binding != 0 && binding->enabled) {
             print_control_binding(binding);
         } else {
             printf("unbound");
         }
+        printf("\n");
+    }
+
+    printf("\neffect selector banks:\n");
+    for (size_t bank_index = 0; bank_index < MIDI_MAPPING_EFFECT_BANK_COUNT; ++bank_index) {
+        printf("bank %zu ", bank_index + 1);
+
+        for (size_t page_index = 0; page_index < MIDI_MAPPING_EFFECTS_PER_BANK; ++page_index) {
+            midi_mapping_effect effect;
+
+            if (page_index > 0) {
+                printf("  ");
+            }
+
+            printf("page %zu: ", page_index + 1);
+            if (midi_mapping_effect_bank_page(bank_index, page_index, &effect)) {
+                printf("%s", midi_mapping_effect_name(effect));
+            } else {
+                printf("blank");
+            }
+        }
+
         printf("\n");
     }
 
@@ -917,26 +949,31 @@ static int save_mapping_file(const char *path, const midi_mapping *mapping)
         }
     }
 
-    fprintf(file, "\n# format: effect_selector/effect_macro_N=cc:channel:control\n");
-    if (mapping->effect_selector.enabled &&
-        mapping->effect_selector.source_type == MIDI_MAPPING_SOURCE_CC) {
-        fprintf(
-            file,
-            "effect_selector=cc:%d:%d\n",
-            mapping->effect_selector.channel,
-            mapping->effect_selector.control);
-    }
+    fprintf(file, "\n# format: effect_selector_N/effect_N_macro_M=cc:channel:control\n");
+    for (size_t bank_index = 0; bank_index < MIDI_MAPPING_EFFECT_BANK_COUNT; ++bank_index) {
+        const midi_mapping_effect_bank *bank = &mapping->effect_banks[bank_index];
 
-    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
-        const midi_mapping_control_binding *binding = &mapping->effect_macros[i];
-
-        if (binding->enabled && binding->source_type == MIDI_MAPPING_SOURCE_CC) {
+        if (bank->selector.enabled &&
+            bank->selector.source_type == MIDI_MAPPING_SOURCE_CC) {
             fprintf(
                 file,
                 "%s=cc:%d:%d\n",
-                midi_mapping_effect_macro_name(i),
-                binding->channel,
-                binding->control);
+                midi_mapping_effect_selector_name(bank_index),
+                bank->selector.channel,
+                bank->selector.control);
+        }
+
+        for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
+            const midi_mapping_control_binding *binding = &bank->macros[i];
+
+            if (binding->enabled && binding->source_type == MIDI_MAPPING_SOURCE_CC) {
+                fprintf(
+                    file,
+                    "%s=cc:%d:%d\n",
+                    midi_mapping_effect_macro_name(bank_index, i),
+                    binding->channel,
+                    binding->control);
+            }
         }
     }
 

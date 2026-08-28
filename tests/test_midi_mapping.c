@@ -66,10 +66,14 @@ static void test_loads_akai_mapping(void)
         midi_mapping_load(&mapping, "config/midi/akai_mpk_mini_mk2.conf", error, sizeof(error)),
         "akai mapping loads");
     expect_true(mapping.binding_count == 24, "akai mapping has twenty-four direct parameter bindings");
-    expect_true(mapping.effect_selector.enabled, "akai mapping has an effect selector binding");
-    expect_true(mapping.effect_macros[0].enabled, "akai mapping has effect macro one");
-    expect_true(mapping.effect_macros[1].enabled, "akai mapping has effect macro two");
-    expect_true(mapping.effect_macros[2].enabled, "akai mapping has effect macro three");
+    expect_true(mapping.effect_banks[0].selector.enabled, "akai mapping has bank one effect selector");
+    expect_true(mapping.effect_banks[0].macros[0].enabled, "akai mapping has bank one effect macro one");
+    expect_true(mapping.effect_banks[0].macros[1].enabled, "akai mapping has bank one effect macro two");
+    expect_true(mapping.effect_banks[0].macros[2].enabled, "akai mapping has bank one effect macro three");
+    expect_true(mapping.effect_banks[1].selector.enabled, "akai mapping has bank two effect selector");
+    expect_true(mapping.effect_banks[1].macros[0].enabled, "akai mapping has bank two effect macro one");
+    expect_true(mapping.effect_banks[1].macros[1].enabled, "akai mapping has bank two effect macro two");
+    expect_true(mapping.effect_banks[1].macros[2].enabled, "akai mapping has bank two effect macro three");
 
     for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
         if (mapping.chord_bindings[i].enabled) {
@@ -803,19 +807,29 @@ static void test_loads_effect_macro_mapping(void)
     midi_mapping mapping;
     char error[MIDI_MAPPING_ERROR_LENGTH];
     midi_mapping_parameter parameter;
+    midi_mapping_effect effect;
 
     expect_true(
         midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
         "effect macro mapping loads");
     expect_true(strcmp(mapping.name, "Effect Macro Test") == 0, "effect macro mapping keeps its name");
     expect_true(mapping.binding_count == 1, "effect macro mapping keeps direct parameter bindings");
-    expect_true(mapping.effect_selector.enabled, "effect selector is bound");
-    expect_true(mapping.effect_selector.channel == 1, "effect selector channel loads");
-    expect_true(mapping.effect_selector.control == 10, "effect selector control loads");
-    expect_true(mapping.effect_macros[0].enabled, "effect macro one is bound");
-    expect_true(mapping.effect_macros[1].enabled, "effect macro two is bound");
-    expect_true(mapping.effect_macros[2].enabled, "effect macro three is bound");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "effect macro mapping starts on saturation");
+    expect_true(mapping.effect_banks[0].selector.enabled, "bank one effect selector is bound");
+    expect_true(mapping.effect_banks[0].selector.channel == 1, "bank one effect selector channel loads");
+    expect_true(mapping.effect_banks[0].selector.control == 10, "bank one effect selector control loads");
+    expect_true(mapping.effect_banks[0].macros[0].enabled, "bank one effect macro one is bound");
+    expect_true(mapping.effect_banks[0].macros[1].enabled, "bank one effect macro two is bound");
+    expect_true(mapping.effect_banks[0].macros[2].enabled, "bank one effect macro three is bound");
+    expect_true(mapping.effect_banks[0].has_selected_effect, "bank one starts on an active effect");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_SATURATION,
+        "bank one starts on saturation");
+    expect_true(mapping.effect_banks[1].selector.enabled, "bank two effect selector is bound");
+    expect_true(mapping.effect_banks[1].selector.control == 14, "bank two effect selector control loads");
+    expect_true(mapping.effect_banks[1].macros[0].enabled, "bank two effect macro one is bound");
+    expect_true(mapping.effect_banks[1].macros[1].enabled, "bank two effect macro two is bound");
+    expect_true(mapping.effect_banks[1].macros[2].enabled, "bank two effect macro three is bound");
+    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two starts blank");
 
     expect_true(
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_DELAY), "delay") == 0,
@@ -824,8 +838,32 @@ static void test_loads_effect_macro_mapping(void)
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_PLATE_REVERB), "plate_reverb") == 0,
         "plate reverb effect page has a name");
     expect_true(
-        strcmp(midi_mapping_effect_macro_name(2), "effect_macro_3") == 0,
-        "third effect macro control has a config name");
+        strcmp(midi_mapping_effect_selector_name(0), "effect_selector_1") == 0,
+        "bank one selector has a config name");
+    expect_true(
+        strcmp(midi_mapping_effect_macro_name(0, 2), "effect_1_macro_3") == 0,
+        "bank one third effect macro control has a config name");
+    expect_true(
+        strcmp(midi_mapping_effect_selector_name(1), "effect_selector_2") == 0,
+        "bank two selector has a config name");
+    expect_true(
+        strcmp(midi_mapping_effect_macro_name(1, 2), "effect_2_macro_3") == 0,
+        "bank two third effect macro control has a config name");
+    expect_true(
+        midi_mapping_effect_bank_page(0, 0, &effect),
+        "bank one first page has an effect");
+    expect_true(
+        effect == MIDI_MAPPING_EFFECT_SATURATION,
+        "bank one first page is saturation");
+    expect_true(
+        midi_mapping_effect_bank_page(0, 4, &effect),
+        "bank one fifth page has an effect");
+    expect_true(
+        effect == MIDI_MAPPING_EFFECT_PLATE_REVERB,
+        "bank one fifth page is plate reverb");
+    expect_true(
+        !midi_mapping_effect_bank_page(1, 0, &effect),
+        "bank two first page is blank");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
         "saturation macro one has a route");
@@ -861,7 +899,21 @@ static void test_loads_effect_macro_mapping(void)
         "plate reverb macro three routes to dry wet");
 }
 
-static void test_effect_selector_uses_even_steps_for_effect_count(void)
+static void test_rejects_legacy_effect_macro_names(void)
+{
+    midi_mapping mapping;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+
+    expect_true(
+        !midi_mapping_load(
+            &mapping,
+            "tests/fixtures/legacy_effect_macro_mapping.conf",
+            error,
+            sizeof(error)),
+        "legacy effect macro mapping names are rejected");
+}
+
+static void test_effect_selectors_use_bank_pages(void)
 {
     midi_mapping mapping;
     synth s;
@@ -875,30 +927,65 @@ static void test_effect_selector_uses_even_steps_for_effect_count(void)
 
     expect_true(apply_cc_value(&mapping, &s, 10, 0, &result), "selector cc reports effect selection");
     expect_true(result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT, "selector result is effect selection");
+    expect_true(result.effect_bank_index == 0, "selector result reports bank one");
+    expect_true(result.has_effect, "bank one selector reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_SATURATION, "selector result reports saturation");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value zero chooses saturation");
+    expect_true(mapping.effect_banks[0].has_selected_effect, "bank one has selected effect");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_SATURATION,
+        "selector value zero chooses saturation");
     expect_true(apply_cc_value(&mapping, &s, 10, 25, &result), "selector upper saturation step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_SATURATION, "selector value twenty-five chooses saturation");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_SATURATION,
+        "selector value twenty-five chooses saturation");
     expect_true(apply_cc_value(&mapping, &s, 10, 26, &result), "selector lower distortion step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector result reports distortion");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value twenty-six chooses distortion");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_DISTORTION,
+        "selector value twenty-six chooses distortion");
     expect_true(apply_cc_value(&mapping, &s, 10, 51, &result), "selector upper distortion step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DISTORTION, "selector value fifty-one chooses distortion");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_DISTORTION,
+        "selector value fifty-one chooses distortion");
     expect_true(apply_cc_value(&mapping, &s, 10, 52, &result), "selector lower bitcrusher step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector result reports bitcrusher");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value fifty-two chooses bitcrusher");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER,
+        "selector value fifty-two chooses bitcrusher");
     expect_true(apply_cc_value(&mapping, &s, 10, 76, &result), "selector upper bitcrusher step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER, "selector value seventy-six chooses bitcrusher");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_BITCRUSHER,
+        "selector value seventy-six chooses bitcrusher");
     expect_true(apply_cc_value(&mapping, &s, 10, 77, &result), "selector lower delay step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_DELAY, "selector result reports delay");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value seventy-seven chooses delay");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_DELAY,
+        "selector value seventy-seven chooses delay");
     expect_true(apply_cc_value(&mapping, &s, 10, 102, &result), "selector upper delay step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_DELAY, "selector value one hundred two chooses delay");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_DELAY,
+        "selector value one hundred two chooses delay");
     expect_true(apply_cc_value(&mapping, &s, 10, 103, &result), "selector lower plate reverb step reports effect selection");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "selector result reports plate reverb");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "selector value one hundred three chooses plate reverb");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB,
+        "selector value one hundred three chooses plate reverb");
     expect_true(apply_cc_value(&mapping, &s, 10, 127, &result), "selector upper plate reverb step reports effect selection");
-    expect_true(mapping.selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "selector value one twenty-seven chooses plate reverb");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB,
+        "selector value one twenty-seven chooses plate reverb");
+
+    expect_true(apply_cc_value(&mapping, &s, 14, 0, &result), "bank two selector reports selection");
+    expect_true(result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT, "bank two selector result is effect selection");
+    expect_true(result.effect_bank_index == 1, "bank two selector result reports bank two");
+    expect_true(!result.has_effect, "bank two selector reports blank page");
+    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two remains blank");
+    expect_true(
+        mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB,
+        "bank two selector does not change bank one");
+    expect_true(apply_cc_value(&mapping, &s, 14, 127, &result), "bank two upper selector reports selection");
+    expect_true(!result.has_effect, "bank two upper selector reports blank page");
+    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two upper selector remains blank");
 }
 
 static void test_effect_macros_apply_selected_effect_parameters(void)
@@ -922,6 +1009,9 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     (void)apply_cc_value(&mapping, &s, 10, 77, 0);
     pickup_cc(&mapping, &s, 11, 0, 16);
     expect_true(apply_cc_value(&mapping, &s, 11, 64, &result), "delay macro one applies");
+    expect_true(result.effect_bank_index == 0, "delay macro one reports bank one");
+    expect_true(result.has_effect, "delay macro one reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_DELAY, "delay macro one reports selected effect");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "delay macro one reports delay time");
     expect_near(synth_get_delay_time(&s), expected_time, 0.0001f, "delay macro one scales delay time");
 
@@ -938,6 +1028,8 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     (void)apply_cc_value(&mapping, &s, 10, 127, 0);
     pickup_cc(&mapping, &s, 11, 0, 22);
     expect_true(apply_cc_value(&mapping, &s, 11, 64, &result), "plate reverb macro one applies");
+    expect_true(result.effect_bank_index == 0, "plate reverb macro one reports bank one");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "plate reverb macro one reports selected effect");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY, "plate reverb macro one reports decay");
     expect_near(synth_get_plate_reverb_decay(&s), expected_decay, 0.0001f, "plate reverb macro one scales decay");
 
@@ -950,6 +1042,11 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(apply_cc_value(&mapping, &s, 13, 44, &result), "plate reverb macro three applies");
     expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX, "plate reverb macro three reports mix");
     expect_near(synth_get_plate_reverb_mix(&s), 44.0f / 127.0f, 0.0001f, "plate reverb macro three scales dry wet");
+
+    (void)apply_cc_value(&mapping, &s, 14, 0, 0);
+    expect_true(!apply_cc_value(&mapping, &s, 15, 64, &result), "blank bank two macro one does nothing");
+    expect_true(!apply_cc_value(&mapping, &s, 16, 64, &result), "blank bank two macro two does nothing");
+    expect_true(!apply_cc_value(&mapping, &s, 17, 64, &result), "blank bank two macro three does nothing");
 }
 
 static void test_effect_macro_pickup_is_independent_per_effect(void)
@@ -999,12 +1096,12 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
     expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "saturation mix macro reports saturation mix");
     expect_near(synth_get_saturation_mix(&s), 1.0f, 0.0001f, "saturation mix is at one hundred percent");
     expect_true(
-        mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
+        mapping.effect_banks[0].pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
         "saturation macro three is picked up");
 
     (void)apply_cc_value(&mapping, &s, 10, 25, 0);
     expect_true(
-        mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
+        mapping.effect_banks[0].pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
         "selector movement inside the same effect keeps macro pickup");
 
     (void)apply_cc_value(&mapping, &s, 10, 26, 0);
@@ -1015,7 +1112,7 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
 
     (void)apply_cc_value(&mapping, &s, 10, 0, 0);
     expect_true(
-        !mapping.effect_macro_pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
+        !mapping.effect_banks[0].pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
         "returning to saturation clears its macro pickup latch");
     expect_true(
         !apply_cc_value(&mapping, &s, 13, 20, &result),
@@ -1082,7 +1179,8 @@ int main(void)
     test_applies_delay_cc_values();
     test_applies_plate_reverb_cc_values();
     test_loads_effect_macro_mapping();
-    test_effect_selector_uses_even_steps_for_effect_count();
+    test_rejects_legacy_effect_macro_names();
+    test_effect_selectors_use_bank_pages();
     test_effect_macros_apply_selected_effect_parameters();
     test_effect_macro_pickup_is_independent_per_effect();
     test_effect_macro_pickup_rearms_when_returning_to_effect();

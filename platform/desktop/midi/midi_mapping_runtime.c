@@ -136,16 +136,17 @@ static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float 
     }
 }
 
-// returns the effect page selected by the selector knob's evenly spaced ranges.
-static midi_mapping_effect effect_for_selector_value(int midi_value)
+// returns the selector bank page selected by the knob's five fixed ranges.
+static size_t effect_page_for_selector_value(int midi_value)
 {
-    const int effect = (midi_value * MIDI_MAPPING_EFFECT_COUNT) / 128;
+    const size_t page =
+        (size_t)((midi_value * MIDI_MAPPING_EFFECTS_PER_BANK) / 128);
 
-    if (effect >= MIDI_MAPPING_EFFECT_COUNT) {
-        return (midi_mapping_effect)(MIDI_MAPPING_EFFECT_COUNT - 1);
+    if (page >= MIDI_MAPPING_EFFECTS_PER_BANK) {
+        return MIDI_MAPPING_EFFECTS_PER_BANK - 1;
     }
 
-    return (midi_mapping_effect)effect;
+    return page;
 }
 
 static int control_binding_matches(
@@ -159,36 +160,49 @@ static int control_binding_matches(
         binding->control == control;
 }
 
-static void reset_effect_macro_pickups(midi_mapping *mapping, midi_mapping_effect effect)
+static void reset_effect_macro_pickups(
+    midi_mapping_effect_bank *bank,
+    midi_mapping_effect effect)
 {
     if (effect < 0 || effect >= MIDI_MAPPING_EFFECT_COUNT) {
         return;
     }
 
     memset(
-        mapping->effect_macro_pickups[effect],
+        bank->pickups[effect],
         0,
-        sizeof(mapping->effect_macro_pickups[effect]));
+        sizeof(bank->pickups[effect]));
 }
 
-static void select_effect(midi_mapping *mapping, midi_mapping_effect effect)
+static void select_effect(
+    midi_mapping_effect_bank *bank,
+    int has_effect,
+    midi_mapping_effect effect)
 {
-    if (effect == mapping->selected_effect) {
+    if (bank->has_selected_effect == has_effect &&
+        (!has_effect || effect == bank->selected_effect)) {
         return;
     }
 
-    mapping->selected_effect = effect;
-    reset_effect_macro_pickups(mapping, effect);
+    bank->has_selected_effect = has_effect;
+    bank->selected_effect = has_effect ? effect : MIDI_MAPPING_EFFECT_SATURATION;
+    if (has_effect) {
+        reset_effect_macro_pickups(bank, effect);
+    }
 }
 
 static int fill_macro_parameter_binding(
-    midi_mapping *mapping,
+    midi_mapping_effect_bank *bank,
     size_t macro_index,
     midi_mapping_binding *binding)
 {
-    const midi_mapping_effect effect = mapping->selected_effect;
+    const midi_mapping_effect effect = bank->selected_effect;
     midi_mapping_parameter parameter;
     const midi_mapping_parameter_entry *entry;
+
+    if (!bank->has_selected_effect) {
+        return 0;
+    }
 
     if (!midi_mapping_effect_macro_parameter(effect, macro_index, &parameter)) {
         return 0;
@@ -201,17 +215,20 @@ static int fill_macro_parameter_binding(
 
     binding->parameter = entry->parameter;
     binding->source_type = MIDI_MAPPING_SOURCE_CC;
-    binding->channel = mapping->effect_macros[macro_index].channel;
-    binding->control = mapping->effect_macros[macro_index].control;
+    binding->channel = bank->macros[macro_index].channel;
+    binding->control = bank->macros[macro_index].control;
     binding->scale = entry->default_scale;
     binding->min_value = entry->default_min_value;
     binding->max_value = entry->default_max_value;
-    binding->pickup = mapping->effect_macro_pickups[effect][macro_index];
+    binding->pickup = bank->pickups[effect][macro_index];
     return 1;
 }
 
 static int apply_parameter_binding(
     midi_mapping_binding *binding,
+    size_t effect_bank_index,
+    int has_effect,
+    midi_mapping_effect effect,
     int channel,
     int control,
     int midi_value,
@@ -229,6 +246,9 @@ static int apply_parameter_binding(
     if (result != 0) {
         result->kind = MIDI_MAPPING_APPLY_PARAMETER;
         result->parameter = binding->parameter;
+        result->effect_bank_index = effect_bank_index;
+        result->has_effect = has_effect;
+        result->effect = effect;
         result->channel = channel;
         result->control = control;
         result->midi_value = midi_value;
@@ -240,6 +260,7 @@ static int apply_parameter_binding(
 
 static int apply_effect_macro(
     midi_mapping *mapping,
+    size_t bank_index,
     size_t macro_index,
     int channel,
     int control,
@@ -248,15 +269,25 @@ static int apply_effect_macro(
     midi_mapping_apply_result *result)
 {
     midi_mapping_binding binding;
-    const midi_mapping_effect effect = mapping->selected_effect;
+    midi_mapping_effect_bank *bank = &mapping->effect_banks[bank_index];
+    const midi_mapping_effect effect = bank->selected_effect;
     int applied;
 
-    if (!fill_macro_parameter_binding(mapping, macro_index, &binding)) {
+    if (!fill_macro_parameter_binding(bank, macro_index, &binding)) {
         return 0;
     }
 
-    applied = apply_parameter_binding(&binding, channel, control, midi_value, s, result);
-    mapping->effect_macro_pickups[effect][macro_index] = binding.pickup;
+    applied = apply_parameter_binding(
+        &binding,
+        bank_index,
+        1,
+        effect,
+        channel,
+        control,
+        midi_value,
+        s,
+        result);
+    bank->pickups[effect][macro_index] = binding.pickup;
     return applied;
 }
 
@@ -286,22 +317,46 @@ int midi_mapping_apply_short_message(
     control = data[1];
     midi_value = data[2];
 
-    if (control_binding_matches(&mapping->effect_selector, channel, control)) {
-        select_effect(mapping, effect_for_selector_value(midi_value));
-        if (result != 0) {
-            result->kind = MIDI_MAPPING_APPLY_EFFECT_SELECT;
-            result->effect = mapping->selected_effect;
-            result->channel = channel;
-            result->control = control;
-            result->midi_value = midi_value;
-            result->synth_value = 0.0f;
+    for (size_t bank_index = 0; bank_index < MIDI_MAPPING_EFFECT_BANK_COUNT; ++bank_index) {
+        midi_mapping_effect_bank *bank = &mapping->effect_banks[bank_index];
+
+        if (control_binding_matches(&bank->selector, channel, control)) {
+            midi_mapping_effect effect = MIDI_MAPPING_EFFECT_SATURATION;
+            const int has_effect = midi_mapping_effect_bank_page(
+                bank_index,
+                effect_page_for_selector_value(midi_value),
+                &effect);
+
+            select_effect(bank, has_effect, effect);
+            if (result != 0) {
+                result->kind = MIDI_MAPPING_APPLY_EFFECT_SELECT;
+                result->effect_bank_index = bank_index;
+                result->has_effect = has_effect;
+                result->effect = effect;
+                result->channel = channel;
+                result->control = control;
+                result->midi_value = midi_value;
+                result->synth_value = 0.0f;
+            }
+            return 1;
         }
-        return 1;
     }
 
-    for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
-        if (control_binding_matches(&mapping->effect_macros[i], channel, control)) {
-            return apply_effect_macro(mapping, i, channel, control, midi_value, s, result);
+    for (size_t bank_index = 0; bank_index < MIDI_MAPPING_EFFECT_BANK_COUNT; ++bank_index) {
+        midi_mapping_effect_bank *bank = &mapping->effect_banks[bank_index];
+
+        for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
+            if (control_binding_matches(&bank->macros[i], channel, control)) {
+                return apply_effect_macro(
+                    mapping,
+                    bank_index,
+                    i,
+                    channel,
+                    control,
+                    midi_value,
+                    s,
+                    result);
+            }
         }
     }
 
@@ -311,7 +366,16 @@ int midi_mapping_apply_short_message(
         if (binding->source_type == MIDI_MAPPING_SOURCE_CC &&
             binding->channel == channel &&
             binding->control == control) {
-            return apply_parameter_binding(binding, channel, control, midi_value, s, result);
+            return apply_parameter_binding(
+                binding,
+                MIDI_MAPPING_EFFECT_BANK_COUNT,
+                0,
+                MIDI_MAPPING_EFFECT_SATURATION,
+                channel,
+                control,
+                midi_value,
+                s,
+                result);
         }
     }
 

@@ -24,8 +24,8 @@ Config lines use:
 
 ```text
 parameter=cc:channel:control:scale:min:max
-effect_selector=cc:channel:control
-effect_macro_N=cc:channel:control
+effect_selector_N=cc:channel:control
+effect_N_macro_M=cc:channel:control
 chord_pad=cc:channel:control
 ```
 
@@ -33,10 +33,14 @@ Example:
 
 ```text
 filter_cutoff=cc:1:5:log:20.0:20000.0
-effect_selector=cc:1:10
-effect_macro_1=cc:1:11
-effect_macro_2=cc:1:12
-effect_macro_3=cc:1:13
+effect_selector_1=cc:1:10
+effect_1_macro_1=cc:1:11
+effect_1_macro_2=cc:1:12
+effect_1_macro_3=cc:1:13
+effect_selector_2=cc:1:14
+effect_2_macro_1=cc:1:15
+effect_2_macro_2=cc:1:16
+effect_2_macro_3=cc:1:17
 chord_major=cc:1:35
 ```
 
@@ -50,13 +54,19 @@ CC mappings use soft takeover: a knob must reach or cross the current synth
 value before it starts changing that parameter.
 
 Effect macro controls are an optional alternative to binding every effect
-parameter directly. The selector knob chooses one of five fixed pages:
+parameter directly. Each selector row chooses one of five fixed pages:
+
+Bank 1:
 
 - values `0` through `25`: saturation
 - values `26` through `51`: distortion
 - values `52` through `76`: bitcrusher
 - values `77` through `102`: delay
 - values `103` through `127`: plate reverb
+
+Bank 2:
+
+- values `0` through `127`: blank until more effects are added
 
 The three macro knobs then control the selected page:
 
@@ -68,8 +78,9 @@ The three macro knobs then control the selected page:
 | delay | `delay_time` | `delay_feedback` | `delay_mix` |
 | plate reverb | `plate_reverb_decay` | `plate_reverb_damping` | `plate_reverb_mix` |
 
-Macro knobs use independent soft takeover for each effect page, so switching
-pages does not make a knob jump the newly selected effect parameter.
+Macro knobs use independent soft takeover for each selector row and effect page,
+so switching pages does not make a knob jump the newly selected effect
+parameter.
 
 Chord pad mappings are momentary controls: CC values `1` through `127` mean
 held, and CC value `0` means released.
@@ -167,10 +178,14 @@ The included config maps Akai MPK Mini MK2-style CC knobs on channel 1:
 | 22 | `lfo_depth` |
 | 23 | `lfo_filter_amount` |
 | 24 | `lfo_shape_morph` |
-| 25 | `effect_selector` |
-| 26 | `effect_macro_1` |
-| 27 | `effect_macro_2` |
-| 28 | `effect_macro_3` |
+| 25 | `effect_selector_1` |
+| 26 | `effect_1_macro_1` |
+| 27 | `effect_1_macro_2` |
+| 28 | `effect_1_macro_3` |
+| 29 | `effect_selector_2` |
+| 30 | `effect_2_macro_1` |
+| 31 | `effect_2_macro_2` |
+| 32 | `effect_2_macro_3` |
 | 33 | `chord_diminished` |
 | 34 | `chord_minor` |
 | 35 | `chord_major` |

@@ -12,6 +12,10 @@
 #define MIDI_MAPPING_NAME_LENGTH 64
 // each effect macro page exposes three parameter knobs.
 #define MIDI_MAPPING_EFFECT_MACRO_COUNT 3
+// each mapping can expose two independent selector/macro rows.
+#define MIDI_MAPPING_EFFECT_BANK_COUNT 2
+// each selector row exposes five effect pages.
+#define MIDI_MAPPING_EFFECTS_PER_BANK 5
 // the longest mapping load error message.
 #define MIDI_MAPPING_ERROR_LENGTH 160
 // how close a knob must get to the current parameter before it takes over.
@@ -125,16 +129,22 @@ typedef struct midi_mapping_chord_binding {
     int control;
 } midi_mapping_chord_binding;
 
+// one selector/macro row for controlling a fixed bank of effect pages.
+typedef struct midi_mapping_effect_bank {
+    midi_mapping_control_binding selector;
+    midi_mapping_control_binding macros[MIDI_MAPPING_EFFECT_MACRO_COUNT];
+    int has_selected_effect;
+    midi_mapping_effect selected_effect;
+    midi_mapping_pickup pickups[MIDI_MAPPING_EFFECT_COUNT][MIDI_MAPPING_EFFECT_MACRO_COUNT];
+} midi_mapping_effect_bank;
+
 // a loaded controller mapping with all of its bindings.
 typedef struct midi_mapping {
     char name[MIDI_MAPPING_NAME_LENGTH];
     midi_mapping_binding bindings[MIDI_MAPPING_MAX_BINDINGS];
     size_t binding_count;
     midi_mapping_chord_binding chord_bindings[MIDI_CHORD_MODE_PAD_COUNT];
-    midi_mapping_control_binding effect_selector;
-    midi_mapping_control_binding effect_macros[MIDI_MAPPING_EFFECT_MACRO_COUNT];
-    midi_mapping_effect selected_effect;
-    midi_mapping_pickup effect_macro_pickups[MIDI_MAPPING_EFFECT_COUNT][MIDI_MAPPING_EFFECT_MACRO_COUNT];
+    midi_mapping_effect_bank effect_banks[MIDI_MAPPING_EFFECT_BANK_COUNT];
 } midi_mapping;
 
 // the kind of mapping action produced by a midi message.
@@ -147,6 +157,8 @@ typedef enum midi_mapping_apply_kind {
 typedef struct midi_mapping_apply_result {
     midi_mapping_apply_kind kind;
     midi_mapping_parameter parameter;
+    size_t effect_bank_index;
+    int has_effect;
     midi_mapping_effect effect;
     int channel;
     int control;
@@ -168,8 +180,15 @@ const char *midi_mapping_parameter_name(midi_mapping_parameter parameter);
 const char *midi_mapping_chord_pad_name(midi_chord_mode_pad pad);
 // returns the config spelling for an effect macro page.
 const char *midi_mapping_effect_name(midi_mapping_effect effect);
-// returns the config spelling for an effect macro control by zero-based macro index.
-const char *midi_mapping_effect_macro_name(size_t macro_index);
+// returns the config spelling for an effect selector control by zero-based bank index.
+const char *midi_mapping_effect_selector_name(size_t bank_index);
+// returns the config spelling for an effect macro control by zero-based bank and macro indexes.
+const char *midi_mapping_effect_macro_name(size_t bank_index, size_t macro_index);
+// returns the effect assigned to a selector bank page, or 0 when the page is blank.
+int midi_mapping_effect_bank_page(
+    size_t bank_index,
+    size_t page_index,
+    midi_mapping_effect *effect);
 // returns the synth parameter routed by an effect page macro, or 0 when unused.
 int midi_mapping_effect_macro_parameter(
     midi_mapping_effect effect,
