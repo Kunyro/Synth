@@ -365,6 +365,36 @@ void synth_set_bitcrusher_mix(synth *s, float mix)
     synth_bitcrusher_set_mix(&s->effects.bitcrusher, mix);
 }
 
+void synth_set_flanger_rate(synth *s, float hz)
+{
+    synth_flanger_set_rate(&s->effects.flanger, hz);
+}
+
+void synth_set_flanger_intensity(synth *s, float intensity)
+{
+    synth_flanger_set_intensity(&s->effects.flanger, intensity);
+}
+
+void synth_set_flanger_depth(synth *s, float depth)
+{
+    synth_flanger_set_depth(&s->effects.flanger, depth);
+}
+
+void synth_set_flanger_feedback(synth *s, float feedback)
+{
+    synth_flanger_set_feedback(&s->effects.flanger, feedback);
+}
+
+void synth_set_flanger_mix(synth *s, float mix)
+{
+    synth_flanger_set_mix(&s->effects.flanger, mix);
+}
+
+void synth_set_flanger_manual(synth *s, float seconds)
+{
+    synth_flanger_set_manual(&s->effects.flanger, seconds);
+}
+
 void synth_set_delay_time(synth *s, float seconds)
 {
     synth_delay_set_time(&s->effects.delay, seconds);
@@ -528,6 +558,36 @@ int synth_get_bitcrusher_bits(const synth *s)
 float synth_get_bitcrusher_mix(const synth *s)
 {
     return synth_bitcrusher_get_mix(&s->effects.bitcrusher);
+}
+
+float synth_get_flanger_rate(const synth *s)
+{
+    return synth_flanger_get_rate(&s->effects.flanger);
+}
+
+float synth_get_flanger_intensity(const synth *s)
+{
+    return synth_flanger_get_intensity(&s->effects.flanger);
+}
+
+float synth_get_flanger_depth(const synth *s)
+{
+    return synth_flanger_get_depth(&s->effects.flanger);
+}
+
+float synth_get_flanger_feedback(const synth *s)
+{
+    return synth_flanger_get_feedback(&s->effects.flanger);
+}
+
+float synth_get_flanger_mix(const synth *s)
+{
+    return synth_flanger_get_mix(&s->effects.flanger);
+}
+
+float synth_get_flanger_manual(const synth *s)
+{
+    return synth_flanger_get_manual(&s->effects.flanger);
 }
 
 float synth_get_delay_time(const synth *s)

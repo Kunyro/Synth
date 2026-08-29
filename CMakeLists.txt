@@ -42,6 +42,7 @@ set(SYNTH_PUBLIC_HEADERS
     include/synth/effect_chain.h
     include/synth/envelope.h
     include/synth/filter.h
+    include/synth/flanger.h
     include/synth/lfo.h
     include/synth/midi_types.h
     include/synth/oscillator.h
@@ -185,6 +186,7 @@ if(BUILD_TESTING)
         test_distortion
         test_saturation
         test_bitcrusher
+        test_flanger
         test_delay
         test_plate_reverb
         test_lfo

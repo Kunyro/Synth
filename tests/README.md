@@ -20,6 +20,7 @@ The current suite covers:
 - Saturation
 - Distortion
 - Bitcrusher
+- Flanger
 - Delay
 - Voice and synth behavior
 - MIDI parsing

@@ -18,7 +18,8 @@ static const char *effect_names[] = {
     "distortion",
     "bitcrusher",
     "delay",
-    "plate_reverb"
+    "plate_reverb",
+    "flanger"
 };
 
 static const char *effect_selector_names[MIDI_MAPPING_EFFECT_BANK_COUNT] = {
@@ -60,7 +61,7 @@ static const midi_mapping_effect_bank_page_entry effect_bank_pages
             {1, MIDI_MAPPING_EFFECT_PLATE_REVERB}
         },
         {
-            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {1, MIDI_MAPPING_EFFECT_FLANGER},
             {0, MIDI_MAPPING_EFFECT_SATURATION},
             {0, MIDI_MAPPING_EFFECT_SATURATION},
             {0, MIDI_MAPPING_EFFECT_SATURATION},
@@ -94,6 +95,11 @@ static const midi_mapping_effect_macro_route effect_macro_routes
             {1, MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY},
             {1, MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING},
             {1, MIDI_MAPPING_PARAM_PLATE_REVERB_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_FLANGER_RATE},
+            {1, MIDI_MAPPING_PARAM_FLANGER_INTENSITY},
+            {1, MIDI_MAPPING_PARAM_FLANGER_MIX}
         }
     };
 
@@ -221,6 +227,12 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_BITCRUSHER_SAMPLE_RATE, "bitcrusher_sample_rate", synth_get_bitcrusher_sample_rate, synth_set_bitcrusher_sample_rate, MIDI_MAPPING_SCALE_LOG, 100.0f, 48000.0f},
     {MIDI_MAPPING_PARAM_BITCRUSHER_BITS, "bitcrusher_bits", get_bitcrusher_bits, set_bitcrusher_bits, MIDI_MAPPING_SCALE_STEP, 1.0f, 16.0f},
     {MIDI_MAPPING_PARAM_BITCRUSHER_MIX, "bitcrusher_mix", synth_get_bitcrusher_mix, synth_set_bitcrusher_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_FLANGER_RATE, "flanger_rate", synth_get_flanger_rate, synth_set_flanger_rate, MIDI_MAPPING_SCALE_LOG, SYNTH_FLANGER_MIN_RATE_HZ, SYNTH_FLANGER_MAX_RATE_HZ},
+    {MIDI_MAPPING_PARAM_FLANGER_INTENSITY, "flanger_intensity", synth_get_flanger_intensity, synth_set_flanger_intensity, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_FLANGER_DEPTH, "flanger_depth", synth_get_flanger_depth, synth_set_flanger_depth, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_FLANGER_FEEDBACK, "flanger_feedback", synth_get_flanger_feedback, synth_set_flanger_feedback, MIDI_MAPPING_SCALE_LINEAR, -SYNTH_FLANGER_MAX_FEEDBACK, SYNTH_FLANGER_MAX_FEEDBACK},
+    {MIDI_MAPPING_PARAM_FLANGER_MIX, "flanger_mix", synth_get_flanger_mix, synth_set_flanger_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_FLANGER_MANUAL, "flanger_manual", synth_get_flanger_manual, synth_set_flanger_manual, MIDI_MAPPING_SCALE_LINEAR, SYNTH_FLANGER_MIN_MANUAL_SECONDS, SYNTH_FLANGER_MAX_MANUAL_SECONDS},
     {MIDI_MAPPING_PARAM_DELAY_TIME, "delay_time", synth_get_delay_time, synth_set_delay_time, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 2.0f},
     {MIDI_MAPPING_PARAM_DELAY_FEEDBACK, "delay_feedback", synth_get_delay_feedback, synth_set_delay_feedback, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 0.95f},
     {MIDI_MAPPING_PARAM_DELAY_MIX, "delay_mix", synth_get_delay_mix, synth_set_delay_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},

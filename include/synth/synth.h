@@ -112,6 +112,18 @@ void synth_set_bitcrusher_sample_rate(synth *s, float sample_rate);
 void synth_set_bitcrusher_bits(synth *s, int bits);
 // changes the wet/dry mix for the bitcrusher.
 void synth_set_bitcrusher_mix(synth *s, float mix);
+// changes the flanger sweep rate in cycles per second.
+void synth_set_flanger_rate(synth *s, float hz);
+// changes flanger depth and feedback together for stronger performance sweeps.
+void synth_set_flanger_intensity(synth *s, float intensity);
+// changes how widely the flanger delay time sweeps.
+void synth_set_flanger_depth(synth *s, float depth);
+// changes how much delayed signal feeds back into the flanger.
+void synth_set_flanger_feedback(synth *s, float feedback);
+// changes the wet/dry mix for flanger.
+void synth_set_flanger_mix(synth *s, float mix);
+// changes the center delay time for the flanger sweep.
+void synth_set_flanger_manual(synth *s, float seconds);
 // changes the delay time in seconds.
 void synth_set_delay_time(synth *s, float seconds);
 // changes how much delayed signal feeds back into the delay line.
@@ -154,6 +166,12 @@ float synth_get_distortion_mix(const synth *s);
 float synth_get_bitcrusher_sample_rate(const synth *s);
 int synth_get_bitcrusher_bits(const synth *s);
 float synth_get_bitcrusher_mix(const synth *s);
+float synth_get_flanger_rate(const synth *s);
+float synth_get_flanger_intensity(const synth *s);
+float synth_get_flanger_depth(const synth *s);
+float synth_get_flanger_feedback(const synth *s);
+float synth_get_flanger_mix(const synth *s);
+float synth_get_flanger_manual(const synth *s);
 float synth_get_delay_time(const synth *s);
 float synth_get_delay_feedback(const synth *s);
 float synth_get_delay_mix(const synth *s);

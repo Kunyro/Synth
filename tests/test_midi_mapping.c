@@ -102,7 +102,7 @@ static void test_parameter_metadata(void)
     const midi_mapping_parameter_info *saturation_drive_info;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 37, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 43, "metadata lists every mappable parameter");
 
     cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -546,6 +546,28 @@ static void test_names_bitcrusher_parameters(void)
         "bitcrusher mix has a midi mapping name");
 }
 
+static void test_names_flanger_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_RATE), "flanger_rate") == 0,
+        "flanger rate has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_INTENSITY), "flanger_intensity") == 0,
+        "flanger intensity has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_DEPTH), "flanger_depth") == 0,
+        "flanger depth has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_FEEDBACK), "flanger_feedback") == 0,
+        "flanger feedback has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_MIX), "flanger_mix") == 0,
+        "flanger mix has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_MANUAL), "flanger_manual") == 0,
+        "flanger manual delay has a midi mapping name");
+}
+
 static void test_applies_distortion_mix_cc_value(void)
 {
     midi_mapping mapping;
@@ -698,6 +720,104 @@ static void test_applies_bitcrusher_cc_values(void)
     expect_near(result.synth_value, 11.0f, 0.0001f, "bitcrusher bits result reports stepped value");
 }
 
+static void test_applies_flanger_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_rate =
+        expf(
+            logf(SYNTH_FLANGER_MIN_RATE_HZ) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_FLANGER_MAX_RATE_HZ) - logf(SYNTH_FLANGER_MIN_RATE_HZ))));
+    const float expected_feedback =
+        -SYNTH_FLANGER_MAX_FEEDBACK +
+        ((96.0f / 127.0f) * (SYNTH_FLANGER_MAX_FEEDBACK * 2.0f));
+    const float expected_manual =
+        SYNTH_FLANGER_MIN_MANUAL_SECONDS +
+        ((44.0f / 127.0f) *
+            (SYNTH_FLANGER_MAX_MANUAL_SECONDS - SYNTH_FLANGER_MIN_MANUAL_SECONDS));
+    const float expected_intensity_feedback =
+        SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK +
+        (sqrtf(96.0f / 127.0f) *
+            (SYNTH_FLANGER_MAX_FEEDBACK - SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK));
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for flanger test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 45, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 45, 64, &result), "flanger rate cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FLANGER_RATE,
+        "flanger rate cc reports flanger rate parameter");
+    expect_near(
+        synth_get_flanger_rate(&s),
+        expected_rate,
+        0.0001f,
+        "flanger rate cc uses logarithmic hz scaling");
+    expect_near(result.synth_value, expected_rate, 0.0001f, "flanger rate result reports hz");
+
+    pickup_cc(&mapping, &s, 50, 0, 83);
+    expect_true(apply_cc_value(&mapping, &s, 50, 96, &result), "flanger intensity cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FLANGER_INTENSITY,
+        "flanger intensity cc reports flanger intensity parameter");
+    expect_near(
+        synth_get_flanger_intensity(&s),
+        96.0f / 127.0f,
+        0.0001f,
+        "flanger intensity scales");
+    expect_near(
+        synth_get_flanger_depth(&s),
+        96.0f / 127.0f,
+        0.0001f,
+        "flanger intensity controls depth");
+    expect_near(
+        synth_get_flanger_feedback(&s),
+        expected_intensity_feedback,
+        0.0001f,
+        "flanger intensity controls feedback");
+
+    pickup_cc(&mapping, &s, 46, 0, 96);
+    expect_true(apply_cc_value(&mapping, &s, 46, 96, &result), "flanger depth cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FLANGER_DEPTH,
+        "flanger depth cc reports flanger depth parameter");
+    expect_near(synth_get_flanger_depth(&s), 96.0f / 127.0f, 0.0001f, "flanger depth scales");
+
+    pickup_cc(&mapping, &s, 47, 127, 86);
+    expect_true(apply_cc_value(&mapping, &s, 47, 96, &result), "flanger feedback cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FLANGER_FEEDBACK,
+        "flanger feedback cc reports flanger feedback parameter");
+    expect_near(
+        synth_get_flanger_feedback(&s),
+        expected_feedback,
+        0.0001f,
+        "flanger feedback scales across negative and positive feedback");
+
+    pickup_cc(&mapping, &s, 48, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 48, 44, &result), "flanger mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FLANGER_MIX,
+        "flanger mix cc reports flanger mix parameter");
+    expect_near(synth_get_flanger_mix(&s), 44.0f / 127.0f, 0.0001f, "flanger mix scales");
+
+    pickup_cc(&mapping, &s, 49, 0, 29);
+    expect_true(apply_cc_value(&mapping, &s, 49, 44, &result), "flanger manual cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_FLANGER_MANUAL,
+        "flanger manual cc reports flanger manual parameter");
+    expect_near(
+        synth_get_flanger_manual(&s),
+        expected_manual,
+        0.0001f,
+        "flanger manual delay scales to seconds");
+}
+
 static void test_applies_delay_cc_values(void)
 {
     midi_mapping mapping;
@@ -829,7 +949,10 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(mapping.effect_banks[1].macros[0].enabled, "bank two effect macro one is bound");
     expect_true(mapping.effect_banks[1].macros[1].enabled, "bank two effect macro two is bound");
     expect_true(mapping.effect_banks[1].macros[2].enabled, "bank two effect macro three is bound");
-    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two starts blank");
+    expect_true(mapping.effect_banks[1].has_selected_effect, "bank two starts on an active effect");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_FLANGER,
+        "bank two starts on flanger");
 
     expect_true(
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_DELAY), "delay") == 0,
@@ -837,6 +960,9 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_PLATE_REVERB), "plate_reverb") == 0,
         "plate reverb effect page has a name");
+    expect_true(
+        strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_FLANGER), "flanger") == 0,
+        "flanger effect page has a name");
     expect_true(
         strcmp(midi_mapping_effect_selector_name(0), "effect_selector_1") == 0,
         "bank one selector has a config name");
@@ -862,8 +988,14 @@ static void test_loads_effect_macro_mapping(void)
         effect == MIDI_MAPPING_EFFECT_PLATE_REVERB,
         "bank one fifth page is plate reverb");
     expect_true(
-        !midi_mapping_effect_bank_page(1, 0, &effect),
-        "bank two first page is blank");
+        midi_mapping_effect_bank_page(1, 0, &effect),
+        "bank two first page has an effect");
+    expect_true(
+        effect == MIDI_MAPPING_EFFECT_FLANGER,
+        "bank two first page is flanger");
+    expect_true(
+        !midi_mapping_effect_bank_page(1, 1, &effect),
+        "bank two second page is blank");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
         "saturation macro one has a route");
@@ -897,6 +1029,24 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX,
         "plate reverb macro three routes to dry wet");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_FLANGER, 0, &parameter),
+        "flanger macro one has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_FLANGER_RATE,
+        "flanger macro one routes to rate");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_FLANGER, 1, &parameter),
+        "flanger macro two has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_FLANGER_INTENSITY,
+        "flanger macro two routes to intensity");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_FLANGER, 2, &parameter),
+        "flanger macro three has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_FLANGER_MIX,
+        "flanger macro three routes to dry wet");
 }
 
 static void test_rejects_legacy_effect_macro_names(void)
@@ -978,11 +1128,23 @@ static void test_effect_selectors_use_bank_pages(void)
     expect_true(apply_cc_value(&mapping, &s, 14, 0, &result), "bank two selector reports selection");
     expect_true(result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT, "bank two selector result is effect selection");
     expect_true(result.effect_bank_index == 1, "bank two selector result reports bank two");
-    expect_true(!result.has_effect, "bank two selector reports blank page");
-    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two remains blank");
+    expect_true(result.has_effect, "bank two selector reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_FLANGER, "bank two selector reports flanger");
+    expect_true(mapping.effect_banks[1].has_selected_effect, "bank two has selected effect");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_FLANGER,
+        "bank two lower selector chooses flanger");
     expect_true(
         mapping.effect_banks[0].selected_effect == MIDI_MAPPING_EFFECT_PLATE_REVERB,
         "bank two selector does not change bank one");
+    expect_true(apply_cc_value(&mapping, &s, 14, 25, &result), "bank two upper flanger step reports selection");
+    expect_true(result.has_effect, "bank two upper flanger step reports active effect");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_FLANGER,
+        "bank two value twenty-five chooses flanger");
+    expect_true(apply_cc_value(&mapping, &s, 14, 26, &result), "bank two lower blank step reports selection");
+    expect_true(!result.has_effect, "bank two lower blank step reports blank page");
+    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two blank page clears selected effect");
     expect_true(apply_cc_value(&mapping, &s, 14, 127, &result), "bank two upper selector reports selection");
     expect_true(!result.has_effect, "bank two upper selector reports blank page");
     expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two upper selector remains blank");
@@ -1000,6 +1162,15 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
         SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS +
         ((64.0f / 127.0f) *
             (SYNTH_PLATE_REVERB_MAX_DECAY_SECONDS - SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS));
+    const float expected_flanger_rate =
+        expf(
+            logf(SYNTH_FLANGER_MIN_RATE_HZ) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_FLANGER_MAX_RATE_HZ) - logf(SYNTH_FLANGER_MIN_RATE_HZ))));
+    const float expected_flanger_intensity_feedback =
+        SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK +
+        (sqrtf(96.0f / 127.0f) *
+            (SYNTH_FLANGER_MAX_FEEDBACK - SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK));
 
     expect_true(
         midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
@@ -1044,6 +1215,31 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_near(synth_get_plate_reverb_mix(&s), 44.0f / 127.0f, 0.0001f, "plate reverb macro three scales dry wet");
 
     (void)apply_cc_value(&mapping, &s, 14, 0, 0);
+    pickup_cc(&mapping, &s, 15, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 15, 64, &result), "flanger macro one applies");
+    expect_true(result.effect_bank_index == 1, "flanger macro one reports bank two");
+    expect_true(result.has_effect, "flanger macro one reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_FLANGER, "flanger macro one reports selected effect");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_FLANGER_RATE, "flanger macro one reports rate");
+    expect_near(synth_get_flanger_rate(&s), expected_flanger_rate, 0.0001f, "flanger macro one scales rate");
+
+    pickup_cc(&mapping, &s, 16, 0, 96);
+    expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "flanger macro two applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_FLANGER_INTENSITY, "flanger macro two reports intensity");
+    expect_near(synth_get_flanger_intensity(&s), 96.0f / 127.0f, 0.0001f, "flanger macro two scales intensity");
+    expect_near(synth_get_flanger_depth(&s), 96.0f / 127.0f, 0.0001f, "flanger macro two controls depth");
+    expect_near(
+        synth_get_flanger_feedback(&s),
+        expected_flanger_intensity_feedback,
+        0.0001f,
+        "flanger macro two controls feedback");
+
+    pickup_cc(&mapping, &s, 17, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "flanger macro three applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_FLANGER_MIX, "flanger macro three reports mix");
+    expect_near(synth_get_flanger_mix(&s), 44.0f / 127.0f, 0.0001f, "flanger macro three scales dry wet");
+
+    (void)apply_cc_value(&mapping, &s, 14, 26, 0);
     expect_true(!apply_cc_value(&mapping, &s, 15, 64, &result), "blank bank two macro one does nothing");
     expect_true(!apply_cc_value(&mapping, &s, 16, 64, &result), "blank bank two macro two does nothing");
     expect_true(!apply_cc_value(&mapping, &s, 17, 64, &result), "blank bank two macro three does nothing");
@@ -1170,12 +1366,14 @@ int main(void)
     test_names_saturation_parameters();
     test_names_distortion_parameters();
     test_names_bitcrusher_parameters();
+    test_names_flanger_parameters();
     test_names_delay_parameters();
     test_names_plate_reverb_parameters();
     test_applies_distortion_mix_cc_value();
     test_applies_distortion_drive_cc_value();
     test_applies_saturation_cc_values();
     test_applies_bitcrusher_cc_values();
+    test_applies_flanger_cc_values();
     test_applies_delay_cc_values();
     test_applies_plate_reverb_cc_values();
     test_loads_effect_macro_mapping();

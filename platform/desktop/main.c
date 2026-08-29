@@ -176,12 +176,22 @@ static void on_midi_short_message(void *user_data, const unsigned char *data, un
 
     if (applied) {
         if (result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT) {
-            printf(
-                "Mapped MIDI: effect_selector=%s from channel=%d cc=%d value=%d\n",
-                midi_mapping_effect_name(result.effect),
-                result.channel,
-                result.control,
-                result.midi_value);
+            if (result.has_effect) {
+                printf(
+                    "Mapped MIDI: effect_selector_%zu=%s from channel=%d cc=%d value=%d\n",
+                    result.effect_bank_index + 1,
+                    midi_mapping_effect_name(result.effect),
+                    result.channel,
+                    result.control,
+                    result.midi_value);
+            } else {
+                printf(
+                    "Mapped MIDI: effect_selector_%zu=blank from channel=%d cc=%d value=%d\n",
+                    result.effect_bank_index + 1,
+                    result.channel,
+                    result.control,
+                    result.midi_value);
+            }
         } else {
             printf(
                 "Mapped MIDI: %s=%.3f from channel=%d cc=%d value=%d\n",

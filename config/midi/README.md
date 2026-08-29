@@ -66,7 +66,8 @@ Bank 1:
 
 Bank 2:
 
-- values `0` through `127`: blank until more effects are added
+- values `0` through `25`: flanger
+- values `26` through `127`: blank until more effects are added
 
 The three macro knobs then control the selected page:
 
@@ -77,6 +78,7 @@ The three macro knobs then control the selected page:
 | bitcrusher | `bitcrusher_sample_rate` | `bitcrusher_bits` | `bitcrusher_mix` |
 | delay | `delay_time` | `delay_feedback` | `delay_mix` |
 | plate reverb | `plate_reverb_decay` | `plate_reverb_damping` | `plate_reverb_mix` |
+| flanger | `flanger_rate` | `flanger_intensity` | `flanger_mix` |
 
 Macro knobs use independent soft takeover for each selector row and effect page,
 so switching pages does not make a knob jump the newly selected effect
@@ -129,6 +131,12 @@ cmake --build --preset dev --target midi_monitor
 - `bitcrusher_sample_rate`
 - `bitcrusher_bits`
 - `bitcrusher_mix`
+- `flanger_rate`
+- `flanger_intensity`
+- `flanger_depth`
+- `flanger_feedback`
+- `flanger_mix`
+- `flanger_manual`
 - `delay_time`
 - `delay_feedback`
 - `delay_mix`
