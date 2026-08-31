@@ -20,7 +20,8 @@ static const char *effect_names[] = {
     "delay",
     "plate_reverb",
     "flanger",
-    "ring_mod"
+    "ring_mod",
+    "eq"
 };
 
 static const char *effect_selector_names[MIDI_MAPPING_EFFECT_BANK_COUNT] = {
@@ -64,7 +65,7 @@ static const midi_mapping_effect_bank_page_entry effect_bank_pages
         {
             {1, MIDI_MAPPING_EFFECT_FLANGER},
             {1, MIDI_MAPPING_EFFECT_RING_MOD},
-            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {1, MIDI_MAPPING_EFFECT_EQ},
             {0, MIDI_MAPPING_EFFECT_SATURATION},
             {0, MIDI_MAPPING_EFFECT_SATURATION}
         }
@@ -106,6 +107,11 @@ static const midi_mapping_effect_macro_route effect_macro_routes
             {1, MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY},
             {1, MIDI_MAPPING_PARAM_RING_MOD_RECTIFY},
             {1, MIDI_MAPPING_PARAM_RING_MOD_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_EQ_LOW},
+            {1, MIDI_MAPPING_PARAM_EQ_MID},
+            {1, MIDI_MAPPING_PARAM_EQ_HIGH}
         }
     };
 
@@ -242,6 +248,9 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY, "ring_mod_frequency", synth_get_ring_mod_frequency, synth_set_ring_mod_frequency, MIDI_MAPPING_SCALE_LOG, SYNTH_RING_MOD_MIN_FREQUENCY_HZ, SYNTH_RING_MOD_MAX_FREQUENCY_HZ},
     {MIDI_MAPPING_PARAM_RING_MOD_RECTIFY, "ring_mod_rectify", synth_get_ring_mod_rectify, synth_set_ring_mod_rectify, MIDI_MAPPING_SCALE_LINEAR, SYNTH_RING_MOD_MIN_RECTIFY, SYNTH_RING_MOD_MAX_RECTIFY},
     {MIDI_MAPPING_PARAM_RING_MOD_MIX, "ring_mod_mix", synth_get_ring_mod_mix, synth_set_ring_mod_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_EQ_LOW, "eq_low", synth_get_eq_low, synth_set_eq_low, MIDI_MAPPING_SCALE_LINEAR, SYNTH_EQ_MIN_GAIN_DB, SYNTH_EQ_MAX_GAIN_DB},
+    {MIDI_MAPPING_PARAM_EQ_MID, "eq_mid", synth_get_eq_mid, synth_set_eq_mid, MIDI_MAPPING_SCALE_LINEAR, SYNTH_EQ_MIN_GAIN_DB, SYNTH_EQ_MAX_GAIN_DB},
+    {MIDI_MAPPING_PARAM_EQ_HIGH, "eq_high", synth_get_eq_high, synth_set_eq_high, MIDI_MAPPING_SCALE_LINEAR, SYNTH_EQ_MIN_GAIN_DB, SYNTH_EQ_MAX_GAIN_DB},
     {MIDI_MAPPING_PARAM_DELAY_TIME, "delay_time", synth_get_delay_time, synth_set_delay_time, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 2.0f},
     {MIDI_MAPPING_PARAM_DELAY_FEEDBACK, "delay_feedback", synth_get_delay_feedback, synth_set_delay_feedback, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 0.95f},
     {MIDI_MAPPING_PARAM_DELAY_MIX, "delay_mix", synth_get_delay_mix, synth_set_delay_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},

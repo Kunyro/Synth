@@ -9,6 +9,7 @@ src/effects/distortion.c
 src/effects/bitcrusher.c
 src/effects/flanger.c
 src/effects/ring_mod.c
+src/effects/eq.c
 src/effects/delay.c
 src/effects/plate_reverb.c
 src/effects/effect_chain.c

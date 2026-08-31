@@ -22,6 +22,7 @@ The current suite covers:
 - Bitcrusher
 - Flanger
 - Ring mod
+- EQ
 - Delay
 - Plate reverb
 - Voice and synth behavior

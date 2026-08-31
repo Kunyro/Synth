@@ -410,6 +410,21 @@ void synth_set_ring_mod_mix(synth *s, float mix)
     synth_ring_mod_set_mix(&s->effects.ring_mod, mix);
 }
 
+void synth_set_eq_low(synth *s, float gain_db)
+{
+    synth_eq_set_low(&s->effects.eq, gain_db);
+}
+
+void synth_set_eq_mid(synth *s, float gain_db)
+{
+    synth_eq_set_mid(&s->effects.eq, gain_db);
+}
+
+void synth_set_eq_high(synth *s, float gain_db)
+{
+    synth_eq_set_high(&s->effects.eq, gain_db);
+}
+
 void synth_set_delay_time(synth *s, float seconds)
 {
     synth_delay_set_time(&s->effects.delay, seconds);
@@ -618,6 +633,21 @@ float synth_get_ring_mod_rectify(const synth *s)
 float synth_get_ring_mod_mix(const synth *s)
 {
     return synth_ring_mod_get_mix(&s->effects.ring_mod);
+}
+
+float synth_get_eq_low(const synth *s)
+{
+    return synth_eq_get_low(&s->effects.eq);
+}
+
+float synth_get_eq_mid(const synth *s)
+{
+    return synth_eq_get_mid(&s->effects.eq);
+}
+
+float synth_get_eq_high(const synth *s)
+{
+    return synth_eq_get_high(&s->effects.eq);
 }
 
 float synth_get_delay_time(const synth *s)

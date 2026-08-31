@@ -39,6 +39,7 @@ set(SYNTH_PUBLIC_HEADERS
     include/synth/bitcrusher.h
     include/synth/delay.h
     include/synth/distortion.h
+    include/synth/eq.h
     include/synth/effect_chain.h
     include/synth/envelope.h
     include/synth/filter.h
@@ -189,6 +190,7 @@ if(BUILD_TESTING)
         test_bitcrusher
         test_flanger
         test_ring_mod
+        test_eq
         test_delay
         test_plate_reverb
         test_lfo
