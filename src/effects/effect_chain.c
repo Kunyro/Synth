@@ -6,6 +6,7 @@ void synth_effect_chain_init(synth_effect_chain *chain, float sample_rate)
     synth_distortion_init(&chain->distortion);
     synth_bitcrusher_init(&chain->bitcrusher, sample_rate);
     synth_flanger_init(&chain->flanger, sample_rate);
+    synth_ring_mod_init(&chain->ring_mod, sample_rate);
     synth_delay_init(&chain->delay, sample_rate);
     synth_plate_reverb_init(&chain->plate_reverb, sample_rate);
 }
@@ -28,6 +29,7 @@ synth_stereo_sample synth_effect_chain_process(
     sample = synth_distortion_process(&chain->distortion, sample);
     sample = synth_bitcrusher_process(&chain->bitcrusher, sample);
     sample = synth_flanger_process(&chain->flanger, sample);
+    sample = synth_ring_mod_process(&chain->ring_mod, sample);
     sample = synth_delay_process(&chain->delay, sample);
     sample = synth_plate_reverb_process(&chain->plate_reverb, sample);
     return sample;

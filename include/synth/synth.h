@@ -124,6 +124,12 @@ void synth_set_flanger_feedback(synth *s, float feedback);
 void synth_set_flanger_mix(synth *s, float mix);
 // changes the center delay time for the flanger sweep.
 void synth_set_flanger_manual(synth *s, float seconds);
+// changes the sine modulator frequency for ring modulation.
+void synth_set_ring_mod_frequency(synth *s, float hz);
+// changes full-wave rectification applied to the sine modulator.
+void synth_set_ring_mod_rectify(synth *s, float rectify);
+// changes the wet/dry mix for ring modulation.
+void synth_set_ring_mod_mix(synth *s, float mix);
 // changes the delay time in seconds.
 void synth_set_delay_time(synth *s, float seconds);
 // changes how much delayed signal feeds back into the delay line.
@@ -172,6 +178,9 @@ float synth_get_flanger_depth(const synth *s);
 float synth_get_flanger_feedback(const synth *s);
 float synth_get_flanger_mix(const synth *s);
 float synth_get_flanger_manual(const synth *s);
+float synth_get_ring_mod_frequency(const synth *s);
+float synth_get_ring_mod_rectify(const synth *s);
+float synth_get_ring_mod_mix(const synth *s);
 float synth_get_delay_time(const synth *s);
 float synth_get_delay_feedback(const synth *s);
 float synth_get_delay_mix(const synth *s);

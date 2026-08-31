@@ -7,6 +7,7 @@
 #include "synth/distortion.h"
 #include "synth/flanger.h"
 #include "synth/plate_reverb.h"
+#include "synth/ring_mod.h"
 #include "synth/saturation.h"
 
 typedef struct synth_effect_chain {
@@ -14,6 +15,7 @@ typedef struct synth_effect_chain {
     synth_distortion distortion;
     synth_bitcrusher bitcrusher;
     synth_flanger flanger;
+    synth_ring_mod ring_mod;
     synth_delay delay;
     synth_plate_reverb plate_reverb;
 } synth_effect_chain;

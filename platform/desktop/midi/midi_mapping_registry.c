@@ -19,7 +19,8 @@ static const char *effect_names[] = {
     "bitcrusher",
     "delay",
     "plate_reverb",
-    "flanger"
+    "flanger",
+    "ring_mod"
 };
 
 static const char *effect_selector_names[MIDI_MAPPING_EFFECT_BANK_COUNT] = {
@@ -62,7 +63,7 @@ static const midi_mapping_effect_bank_page_entry effect_bank_pages
         },
         {
             {1, MIDI_MAPPING_EFFECT_FLANGER},
-            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {1, MIDI_MAPPING_EFFECT_RING_MOD},
             {0, MIDI_MAPPING_EFFECT_SATURATION},
             {0, MIDI_MAPPING_EFFECT_SATURATION},
             {0, MIDI_MAPPING_EFFECT_SATURATION}
@@ -100,6 +101,11 @@ static const midi_mapping_effect_macro_route effect_macro_routes
             {1, MIDI_MAPPING_PARAM_FLANGER_RATE},
             {1, MIDI_MAPPING_PARAM_FLANGER_INTENSITY},
             {1, MIDI_MAPPING_PARAM_FLANGER_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY},
+            {1, MIDI_MAPPING_PARAM_RING_MOD_RECTIFY},
+            {1, MIDI_MAPPING_PARAM_RING_MOD_MIX}
         }
     };
 
@@ -233,6 +239,9 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_FLANGER_FEEDBACK, "flanger_feedback", synth_get_flanger_feedback, synth_set_flanger_feedback, MIDI_MAPPING_SCALE_LINEAR, -SYNTH_FLANGER_MAX_FEEDBACK, SYNTH_FLANGER_MAX_FEEDBACK},
     {MIDI_MAPPING_PARAM_FLANGER_MIX, "flanger_mix", synth_get_flanger_mix, synth_set_flanger_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
     {MIDI_MAPPING_PARAM_FLANGER_MANUAL, "flanger_manual", synth_get_flanger_manual, synth_set_flanger_manual, MIDI_MAPPING_SCALE_LINEAR, SYNTH_FLANGER_MIN_MANUAL_SECONDS, SYNTH_FLANGER_MAX_MANUAL_SECONDS},
+    {MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY, "ring_mod_frequency", synth_get_ring_mod_frequency, synth_set_ring_mod_frequency, MIDI_MAPPING_SCALE_LOG, SYNTH_RING_MOD_MIN_FREQUENCY_HZ, SYNTH_RING_MOD_MAX_FREQUENCY_HZ},
+    {MIDI_MAPPING_PARAM_RING_MOD_RECTIFY, "ring_mod_rectify", synth_get_ring_mod_rectify, synth_set_ring_mod_rectify, MIDI_MAPPING_SCALE_LINEAR, SYNTH_RING_MOD_MIN_RECTIFY, SYNTH_RING_MOD_MAX_RECTIFY},
+    {MIDI_MAPPING_PARAM_RING_MOD_MIX, "ring_mod_mix", synth_get_ring_mod_mix, synth_set_ring_mod_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
     {MIDI_MAPPING_PARAM_DELAY_TIME, "delay_time", synth_get_delay_time, synth_set_delay_time, MIDI_MAPPING_SCALE_LINEAR, 0.001f, 2.0f},
     {MIDI_MAPPING_PARAM_DELAY_FEEDBACK, "delay_feedback", synth_get_delay_feedback, synth_set_delay_feedback, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 0.95f},
     {MIDI_MAPPING_PARAM_DELAY_MIX, "delay_mix", synth_get_delay_mix, synth_set_delay_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},

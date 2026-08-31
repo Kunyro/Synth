@@ -33,7 +33,10 @@ FILTER_TEST_TARGET := build/test_filter$(EXEEXT)
 DISTORTION_TEST_TARGET := build/test_distortion$(EXEEXT)
 SATURATION_TEST_TARGET := build/test_saturation$(EXEEXT)
 BITCRUSHER_TEST_TARGET := build/test_bitcrusher$(EXEEXT)
+FLANGER_TEST_TARGET := build/test_flanger$(EXEEXT)
+RING_MOD_TEST_TARGET := build/test_ring_mod$(EXEEXT)
 DELAY_TEST_TARGET := build/test_delay$(EXEEXT)
+PLATE_REVERB_TEST_TARGET := build/test_plate_reverb$(EXEEXT)
 LFO_TEST_TARGET := build/test_lfo$(EXEEXT)
 VOICE_TEST_TARGET := build/test_voice$(EXEEXT)
 MIDI_TYPES_TEST_TARGET := build/test_midi_types$(EXEEXT)
@@ -65,14 +68,17 @@ run: $(TARGET)
 midi-monitor: $(MIDI_MONITOR_TARGET)
 	./$(MIDI_MONITOR_TARGET)
 
-test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(SATURATION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(DELAY_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET) $(CHORD_MODE_TEST_TARGET)
+test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(SATURATION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(FLANGER_TEST_TARGET) $(RING_MOD_TEST_TARGET) $(DELAY_TEST_TARGET) $(PLATE_REVERB_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET) $(CHORD_MODE_TEST_TARGET)
 	./$(OSCILLATOR_TEST_TARGET)
 	./$(ENVELOPE_TEST_TARGET)
 	./$(FILTER_TEST_TARGET)
 	./$(DISTORTION_TEST_TARGET)
 	./$(SATURATION_TEST_TARGET)
 	./$(BITCRUSHER_TEST_TARGET)
+	./$(FLANGER_TEST_TARGET)
+	./$(RING_MOD_TEST_TARGET)
 	./$(DELAY_TEST_TARGET)
+	./$(PLATE_REVERB_TEST_TARGET)
 	./$(LFO_TEST_TARGET)
 	./$(VOICE_TEST_TARGET)
 	./$(MIDI_TYPES_TEST_TARGET)
@@ -94,16 +100,25 @@ $(ENVELOPE_TEST_TARGET): tests/test_envelope.c src/envelope.c | build
 $(FILTER_TEST_TARGET): tests/test_filter.c src/filter.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(DISTORTION_TEST_TARGET): tests/test_distortion.c src/effects/distortion.c src/effects/effect_chain.c src/effects/saturation.c src/effects/bitcrusher.c src/effects/delay.c | build
+$(DISTORTION_TEST_TARGET): tests/test_distortion.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(SATURATION_TEST_TARGET): tests/test_saturation.c src/effects/saturation.c src/effects/effect_chain.c src/effects/distortion.c src/effects/bitcrusher.c src/effects/delay.c | build
+$(SATURATION_TEST_TARGET): tests/test_saturation.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(BITCRUSHER_TEST_TARGET): tests/test_bitcrusher.c src/effects/bitcrusher.c src/effects/effect_chain.c src/effects/saturation.c src/effects/distortion.c src/effects/delay.c | build
+$(BITCRUSHER_TEST_TARGET): tests/test_bitcrusher.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(DELAY_TEST_TARGET): tests/test_delay.c src/effects/delay.c src/effects/saturation.c src/effects/distortion.c src/effects/bitcrusher.c src/effects/effect_chain.c | build
+$(FLANGER_TEST_TARGET): tests/test_flanger.c $(CORE_SOURCES) | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(RING_MOD_TEST_TARGET): tests/test_ring_mod.c $(CORE_SOURCES) | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(DELAY_TEST_TARGET): tests/test_delay.c $(CORE_SOURCES) | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(PLATE_REVERB_TEST_TARGET): tests/test_plate_reverb.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(LFO_TEST_TARGET): tests/test_lfo.c src/lfo.c src/wavetable.c | build

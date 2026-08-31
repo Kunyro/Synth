@@ -21,7 +21,9 @@ The current suite covers:
 - Distortion
 - Bitcrusher
 - Flanger
+- Ring mod
 - Delay
+- Plate reverb
 - Voice and synth behavior
 - MIDI parsing
 - MIDI controller mapping

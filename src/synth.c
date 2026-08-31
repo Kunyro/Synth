@@ -395,6 +395,21 @@ void synth_set_flanger_manual(synth *s, float seconds)
     synth_flanger_set_manual(&s->effects.flanger, seconds);
 }
 
+void synth_set_ring_mod_frequency(synth *s, float hz)
+{
+    synth_ring_mod_set_frequency(&s->effects.ring_mod, hz);
+}
+
+void synth_set_ring_mod_rectify(synth *s, float rectify)
+{
+    synth_ring_mod_set_rectify(&s->effects.ring_mod, rectify);
+}
+
+void synth_set_ring_mod_mix(synth *s, float mix)
+{
+    synth_ring_mod_set_mix(&s->effects.ring_mod, mix);
+}
+
 void synth_set_delay_time(synth *s, float seconds)
 {
     synth_delay_set_time(&s->effects.delay, seconds);
@@ -588,6 +603,21 @@ float synth_get_flanger_mix(const synth *s)
 float synth_get_flanger_manual(const synth *s)
 {
     return synth_flanger_get_manual(&s->effects.flanger);
+}
+
+float synth_get_ring_mod_frequency(const synth *s)
+{
+    return synth_ring_mod_get_frequency(&s->effects.ring_mod);
+}
+
+float synth_get_ring_mod_rectify(const synth *s)
+{
+    return synth_ring_mod_get_rectify(&s->effects.ring_mod);
+}
+
+float synth_get_ring_mod_mix(const synth *s)
+{
+    return synth_ring_mod_get_mix(&s->effects.ring_mod);
 }
 
 float synth_get_delay_time(const synth *s)

@@ -102,7 +102,7 @@ static void test_parameter_metadata(void)
     const midi_mapping_parameter_info *saturation_drive_info;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 43, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 46, "metadata lists every mappable parameter");
 
     cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -568,6 +568,19 @@ static void test_names_flanger_parameters(void)
         "flanger manual delay has a midi mapping name");
 }
 
+static void test_names_ring_mod_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY), "ring_mod_frequency") == 0,
+        "ring mod frequency has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_RING_MOD_RECTIFY), "ring_mod_rectify") == 0,
+        "ring mod rectify has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_RING_MOD_MIX), "ring_mod_mix") == 0,
+        "ring mod mix has a midi mapping name");
+}
+
 static void test_applies_distortion_mix_cc_value(void)
 {
     midi_mapping mapping;
@@ -818,6 +831,61 @@ static void test_applies_flanger_cc_values(void)
         "flanger manual delay scales to seconds");
 }
 
+static void test_applies_ring_mod_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_frequency =
+        expf(
+            logf(SYNTH_RING_MOD_MIN_FREQUENCY_HZ) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_RING_MOD_MAX_FREQUENCY_HZ) -
+                    logf(SYNTH_RING_MOD_MIN_FREQUENCY_HZ))));
+    const float expected_rectify =
+        SYNTH_RING_MOD_MIN_RECTIFY +
+        ((96.0f / 127.0f) *
+            (SYNTH_RING_MOD_MAX_RECTIFY - SYNTH_RING_MOD_MIN_RECTIFY));
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for ring mod test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 51, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 51, 64, &result), "ring mod frequency cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY,
+        "ring mod frequency cc reports ring mod frequency parameter");
+    expect_near(
+        synth_get_ring_mod_frequency(&s),
+        expected_frequency,
+        0.0001f,
+        "ring mod frequency cc uses logarithmic hz scaling");
+    expect_near(result.synth_value, expected_frequency, 0.0001f, "ring mod frequency result reports hz");
+
+    pickup_cc(&mapping, &s, 52, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 52, 96, &result), "ring mod rectify cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_RING_MOD_RECTIFY,
+        "ring mod rectify cc reports ring mod rectify parameter");
+    expect_near(
+        synth_get_ring_mod_rectify(&s),
+        expected_rectify,
+        0.0001f,
+        "ring mod rectify cc scales across negative and positive rectification");
+    expect_near(result.synth_value, expected_rectify, 0.0001f, "ring mod rectify result reports scaled value");
+
+    pickup_cc(&mapping, &s, 53, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 53, 44, &result), "ring mod mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX,
+        "ring mod mix cc reports ring mod mix parameter");
+    expect_near(synth_get_ring_mod_mix(&s), 44.0f / 127.0f, 0.0001f, "ring mod mix scales");
+    expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "ring mod mix result reports normalized value");
+}
+
 static void test_applies_delay_cc_values(void)
 {
     midi_mapping mapping;
@@ -964,6 +1032,9 @@ static void test_loads_effect_macro_mapping(void)
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_FLANGER), "flanger") == 0,
         "flanger effect page has a name");
     expect_true(
+        strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_RING_MOD), "ring_mod") == 0,
+        "ring mod effect page has a name");
+    expect_true(
         strcmp(midi_mapping_effect_selector_name(0), "effect_selector_1") == 0,
         "bank one selector has a config name");
     expect_true(
@@ -994,8 +1065,11 @@ static void test_loads_effect_macro_mapping(void)
         effect == MIDI_MAPPING_EFFECT_FLANGER,
         "bank two first page is flanger");
     expect_true(
-        !midi_mapping_effect_bank_page(1, 1, &effect),
-        "bank two second page is blank");
+        midi_mapping_effect_bank_page(1, 1, &effect),
+        "bank two second page has an effect");
+    expect_true(
+        effect == MIDI_MAPPING_EFFECT_RING_MOD,
+        "bank two second page is ring mod");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
         "saturation macro one has a route");
@@ -1047,6 +1121,24 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         parameter == MIDI_MAPPING_PARAM_FLANGER_MIX,
         "flanger macro three routes to dry wet");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_RING_MOD, 0, &parameter),
+        "ring mod macro one has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY,
+        "ring mod macro one routes to frequency");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_RING_MOD, 1, &parameter),
+        "ring mod macro two has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_RING_MOD_RECTIFY,
+        "ring mod macro two routes to rectification");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_RING_MOD, 2, &parameter),
+        "ring mod macro three has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX,
+        "ring mod macro three routes to dry wet");
 }
 
 static void test_rejects_legacy_effect_macro_names(void)
@@ -1142,7 +1234,18 @@ static void test_effect_selectors_use_bank_pages(void)
     expect_true(
         mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_FLANGER,
         "bank two value twenty-five chooses flanger");
-    expect_true(apply_cc_value(&mapping, &s, 14, 26, &result), "bank two lower blank step reports selection");
+    expect_true(apply_cc_value(&mapping, &s, 14, 26, &result), "bank two lower ring mod step reports selection");
+    expect_true(result.has_effect, "bank two lower ring mod step reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_RING_MOD, "bank two selector reports ring mod");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_RING_MOD,
+        "bank two value twenty-six chooses ring mod");
+    expect_true(apply_cc_value(&mapping, &s, 14, 51, &result), "bank two upper ring mod step reports selection");
+    expect_true(result.has_effect, "bank two upper ring mod step reports active effect");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_RING_MOD,
+        "bank two value fifty-one chooses ring mod");
+    expect_true(apply_cc_value(&mapping, &s, 14, 52, &result), "bank two lower blank step reports selection");
     expect_true(!result.has_effect, "bank two lower blank step reports blank page");
     expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two blank page clears selected effect");
     expect_true(apply_cc_value(&mapping, &s, 14, 127, &result), "bank two upper selector reports selection");
@@ -1171,6 +1274,16 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
         SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK +
         (sqrtf(96.0f / 127.0f) *
             (SYNTH_FLANGER_MAX_FEEDBACK - SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK));
+    const float expected_ring_mod_frequency =
+        expf(
+            logf(SYNTH_RING_MOD_MIN_FREQUENCY_HZ) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_RING_MOD_MAX_FREQUENCY_HZ) -
+                    logf(SYNTH_RING_MOD_MIN_FREQUENCY_HZ))));
+    const float expected_ring_mod_rectify =
+        SYNTH_RING_MOD_MIN_RECTIFY +
+        ((96.0f / 127.0f) *
+            (SYNTH_RING_MOD_MAX_RECTIFY - SYNTH_RING_MOD_MIN_RECTIFY));
 
     expect_true(
         midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
@@ -1240,6 +1353,33 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_near(synth_get_flanger_mix(&s), 44.0f / 127.0f, 0.0001f, "flanger macro three scales dry wet");
 
     (void)apply_cc_value(&mapping, &s, 14, 26, 0);
+    pickup_cc(&mapping, &s, 15, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 15, 64, &result), "ring mod macro one applies");
+    expect_true(result.effect_bank_index == 1, "ring mod macro one reports bank two");
+    expect_true(result.has_effect, "ring mod macro one reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_RING_MOD, "ring mod macro one reports selected effect");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY, "ring mod macro one reports frequency");
+    expect_near(
+        synth_get_ring_mod_frequency(&s),
+        expected_ring_mod_frequency,
+        0.0001f,
+        "ring mod macro one scales frequency");
+
+    pickup_cc(&mapping, &s, 16, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "ring mod macro two applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_RING_MOD_RECTIFY, "ring mod macro two reports rectify");
+    expect_near(
+        synth_get_ring_mod_rectify(&s),
+        expected_ring_mod_rectify,
+        0.0001f,
+        "ring mod macro two scales bipolar rectification");
+
+    pickup_cc(&mapping, &s, 17, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "ring mod macro three applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX, "ring mod macro three reports mix");
+    expect_near(synth_get_ring_mod_mix(&s), 44.0f / 127.0f, 0.0001f, "ring mod macro three scales dry wet");
+
+    (void)apply_cc_value(&mapping, &s, 14, 52, 0);
     expect_true(!apply_cc_value(&mapping, &s, 15, 64, &result), "blank bank two macro one does nothing");
     expect_true(!apply_cc_value(&mapping, &s, 16, 64, &result), "blank bank two macro two does nothing");
     expect_true(!apply_cc_value(&mapping, &s, 17, 64, &result), "blank bank two macro three does nothing");
@@ -1367,6 +1507,7 @@ int main(void)
     test_names_distortion_parameters();
     test_names_bitcrusher_parameters();
     test_names_flanger_parameters();
+    test_names_ring_mod_parameters();
     test_names_delay_parameters();
     test_names_plate_reverb_parameters();
     test_applies_distortion_mix_cc_value();
@@ -1374,6 +1515,7 @@ int main(void)
     test_applies_saturation_cc_values();
     test_applies_bitcrusher_cc_values();
     test_applies_flanger_cc_values();
+    test_applies_ring_mod_cc_values();
     test_applies_delay_cc_values();
     test_applies_plate_reverb_cc_values();
     test_loads_effect_macro_mapping();
