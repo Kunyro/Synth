@@ -70,4 +70,5 @@ it, or type `done`, `quit`, `exit`, or `cancel` to leave the mode. Editing an
 existing config writes a `.bak` backup the first time you save.
 
 Effects are available in learn mode by their parameter names, such as
-`saturation_drive`, `flanger_rate`, and `plate_reverb_mix`.
+`saturation_drive`, `flanger_rate`, `plate_reverb_mix`,
+`compressor_threshold`, and `compressor_attack_seconds`.

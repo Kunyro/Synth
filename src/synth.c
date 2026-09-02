@@ -460,6 +460,31 @@ void synth_set_plate_reverb_predelay(synth *s, float seconds)
     synth_plate_reverb_set_predelay(&s->effects.plate_reverb, seconds);
 }
 
+void synth_set_compressor_threshold(synth *s, float threshold_db)
+{
+    synth_compressor_set_threshold(&s->effects.compressor, threshold_db);
+}
+
+void synth_set_compressor_ratio(synth *s, float ratio)
+{
+    synth_compressor_set_ratio(&s->effects.compressor, ratio);
+}
+
+void synth_set_compressor_makeup_gain(synth *s, float makeup_gain_db)
+{
+    synth_compressor_set_makeup_gain(&s->effects.compressor, makeup_gain_db);
+}
+
+void synth_set_compressor_attack_seconds(synth *s, float seconds)
+{
+    synth_compressor_set_attack(&s->effects.compressor, seconds);
+}
+
+void synth_set_compressor_release_seconds(synth *s, float seconds)
+{
+    synth_compressor_set_release(&s->effects.compressor, seconds);
+}
+
 float synth_get_master_gain(const synth *s)
 {
     return s->master_gain;
@@ -683,4 +708,29 @@ float synth_get_plate_reverb_mix(const synth *s)
 float synth_get_plate_reverb_predelay(const synth *s)
 {
     return synth_plate_reverb_get_predelay(&s->effects.plate_reverb);
+}
+
+float synth_get_compressor_threshold(const synth *s)
+{
+    return synth_compressor_get_threshold(&s->effects.compressor);
+}
+
+float synth_get_compressor_ratio(const synth *s)
+{
+    return synth_compressor_get_ratio(&s->effects.compressor);
+}
+
+float synth_get_compressor_makeup_gain(const synth *s)
+{
+    return synth_compressor_get_makeup_gain(&s->effects.compressor);
+}
+
+float synth_get_compressor_attack_seconds(const synth *s)
+{
+    return synth_compressor_get_attack(&s->effects.compressor);
+}
+
+float synth_get_compressor_release_seconds(const synth *s)
+{
+    return synth_compressor_get_release(&s->effects.compressor);
 }

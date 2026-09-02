@@ -37,6 +37,7 @@ static void pickup_cc(midi_mapping *mapping, synth *s, int control, int start_va
 {
     const int step = start_value <= end_value ? 1 : -1;
     int value = start_value;
+    const midi_mapping_binding *matched_binding = 0;
 
     for (;;) {
         if (apply_cc_value(mapping, s, control, value, 0)) {
@@ -50,7 +51,32 @@ static void pickup_cc(midi_mapping *mapping, synth *s, int control, int start_va
         value += step;
     }
 
-    expect_true(0, "cc value reaches pickup point");
+    for (size_t i = 0; i < mapping->binding_count; ++i) {
+        if (mapping->bindings[i].control == control) {
+            matched_binding = &mapping->bindings[i];
+            break;
+        }
+    }
+
+    if (matched_binding != 0) {
+        fprintf(
+            stderr,
+            "FAIL: cc %d sweep %d..%d reaches pickup point for %s range %.6f..%.6f\n",
+            control,
+            start_value,
+            end_value,
+            midi_mapping_parameter_name(matched_binding->parameter),
+            matched_binding->min_value,
+            matched_binding->max_value);
+    } else {
+        fprintf(
+            stderr,
+            "FAIL: cc %d sweep %d..%d reaches pickup point; no direct binding found\n",
+            control,
+            start_value,
+            end_value);
+    }
+    exit(1);
 }
 
 static void test_loads_akai_mapping(void)
@@ -102,7 +128,7 @@ static void test_parameter_metadata(void)
     const midi_mapping_parameter_info *saturation_drive_info;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 49, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 54, "metadata lists every mappable parameter");
 
     cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -594,6 +620,25 @@ static void test_names_eq_parameters(void)
         "eq high has a midi mapping name");
 }
 
+static void test_names_compressor_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD), "compressor_threshold") == 0,
+        "compressor threshold has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_RATIO), "compressor_ratio") == 0,
+        "compressor ratio has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN), "compressor_makeup_gain") == 0,
+        "compressor makeup gain has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_ATTACK_SECONDS), "compressor_attack_seconds") == 0,
+        "compressor attack has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_RELEASE_SECONDS), "compressor_release_seconds") == 0,
+        "compressor release has a midi mapping name");
+}
+
 static void test_applies_distortion_mix_cc_value(void)
 {
     midi_mapping mapping;
@@ -939,6 +984,110 @@ static void test_applies_eq_cc_values(void)
     expect_near(result.synth_value, expected_high, 0.0001f, "eq high result reports decibels");
 }
 
+static void test_applies_compressor_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_threshold =
+        SYNTH_COMPRESSOR_MIN_THRESHOLD_DB +
+        ((64.0f / 127.0f) *
+            (SYNTH_COMPRESSOR_MAX_THRESHOLD_DB - SYNTH_COMPRESSOR_MIN_THRESHOLD_DB));
+    const float expected_ratio =
+        SYNTH_COMPRESSOR_MIN_RATIO +
+        ((96.0f / 127.0f) *
+            (SYNTH_COMPRESSOR_MAX_RATIO - SYNTH_COMPRESSOR_MIN_RATIO));
+    const float expected_makeup_gain =
+        SYNTH_COMPRESSOR_MIN_MAKEUP_GAIN_DB +
+        ((44.0f / 127.0f) *
+            (SYNTH_COMPRESSOR_MAX_MAKEUP_GAIN_DB - SYNTH_COMPRESSOR_MIN_MAKEUP_GAIN_DB));
+    const float expected_attack =
+        expf(
+            logf(SYNTH_COMPRESSOR_MIN_ATTACK_SECONDS) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_COMPRESSOR_MAX_ATTACK_SECONDS) -
+                    logf(SYNTH_COMPRESSOR_MIN_ATTACK_SECONDS))));
+    const float expected_release =
+        expf(
+            logf(SYNTH_COMPRESSOR_MIN_RELEASE_SECONDS) +
+            ((96.0f / 127.0f) *
+                (logf(SYNTH_COMPRESSOR_MAX_RELEASE_SECONDS) -
+                    logf(SYNTH_COMPRESSOR_MIN_RELEASE_SECONDS))));
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for compressor test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 57, 127, 127);
+    expect_true(apply_cc_value(&mapping, &s, 57, 64, &result), "compressor threshold cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD,
+        "compressor threshold cc reports compressor threshold parameter");
+    expect_near(
+        synth_get_compressor_threshold(&s),
+        expected_threshold,
+        0.0001f,
+        "compressor threshold cc scales to decibels");
+    expect_near(result.synth_value, expected_threshold, 0.0001f, "compressor threshold result reports decibels");
+
+    expect_near(
+        synth_get_compressor_ratio(&s),
+        SYNTH_COMPRESSOR_DEFAULT_RATIO,
+        0.0001f,
+        "compressor ratio remains at default before ratio cc");
+    pickup_cc(&mapping, &s, 58, 0, 127);
+    expect_true(apply_cc_value(&mapping, &s, 58, 96, &result), "compressor ratio cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RATIO,
+        "compressor ratio cc reports compressor ratio parameter");
+    expect_near(
+        synth_get_compressor_ratio(&s),
+        expected_ratio,
+        0.0001f,
+        "compressor ratio cc scales to ratio range");
+    expect_near(result.synth_value, expected_ratio, 0.0001f, "compressor ratio result reports scaled ratio");
+
+    pickup_cc(&mapping, &s, 59, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 59, 44, &result), "compressor makeup gain cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN,
+        "compressor makeup gain cc reports compressor makeup gain parameter");
+    expect_near(
+        synth_get_compressor_makeup_gain(&s),
+        expected_makeup_gain,
+        0.0001f,
+        "compressor makeup gain cc scales to decibels");
+    expect_near(result.synth_value, expected_makeup_gain, 0.0001f, "compressor makeup result reports decibels");
+
+    pickup_cc(&mapping, &s, 60, 0, 127);
+    expect_true(apply_cc_value(&mapping, &s, 60, 64, &result), "compressor attack cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_ATTACK_SECONDS,
+        "compressor attack cc reports compressor attack parameter");
+    expect_near(
+        synth_get_compressor_attack_seconds(&s),
+        expected_attack,
+        0.0001f,
+        "compressor attack cc uses logarithmic seconds scaling");
+    expect_near(result.synth_value, expected_attack, 0.0001f, "compressor attack result reports seconds");
+
+    pickup_cc(&mapping, &s, 61, 0, 127);
+    expect_true(apply_cc_value(&mapping, &s, 61, 96, &result), "compressor release cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RELEASE_SECONDS,
+        "compressor release cc reports compressor release parameter");
+    expect_near(
+        synth_get_compressor_release_seconds(&s),
+        expected_release,
+        0.0001f,
+        "compressor release cc uses logarithmic seconds scaling");
+    expect_near(result.synth_value, expected_release, 0.0001f, "compressor release result reports seconds");
+
+    synth_uninit(&s);
+}
+
 static void test_applies_delay_cc_values(void)
 {
     midi_mapping mapping;
@@ -1091,6 +1240,9 @@ static void test_loads_effect_macro_mapping(void)
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_EQ), "eq") == 0,
         "eq effect page has a name");
     expect_true(
+        strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_COMPRESSOR), "compressor") == 0,
+        "compressor effect page has a name");
+    expect_true(
         strcmp(midi_mapping_effect_selector_name(0), "effect_selector_1") == 0,
         "bank one selector has a config name");
     expect_true(
@@ -1132,6 +1284,12 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         effect == MIDI_MAPPING_EFFECT_EQ,
         "bank two third page is eq");
+    expect_true(
+        midi_mapping_effect_bank_page(1, 3, &effect),
+        "bank two fourth page has an effect");
+    expect_true(
+        effect == MIDI_MAPPING_EFFECT_COMPRESSOR,
+        "bank two fourth page is compressor");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
         "saturation macro one has a route");
@@ -1219,6 +1377,24 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         parameter == MIDI_MAPPING_PARAM_EQ_HIGH,
         "eq macro three routes to high band");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_COMPRESSOR, 0, &parameter),
+        "compressor macro one has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD,
+        "compressor macro one routes to threshold");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_COMPRESSOR, 1, &parameter),
+        "compressor macro two has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RATIO,
+        "compressor macro two routes to ratio");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_COMPRESSOR, 2, &parameter),
+        "compressor macro three has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN,
+        "compressor macro three routes to makeup gain");
 }
 
 static void test_rejects_legacy_effect_macro_names(void)
@@ -1336,7 +1512,18 @@ static void test_effect_selectors_use_bank_pages(void)
     expect_true(
         mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_EQ,
         "bank two value seventy-six chooses eq");
-    expect_true(apply_cc_value(&mapping, &s, 14, 77, &result), "bank two lower blank step reports selection");
+    expect_true(apply_cc_value(&mapping, &s, 14, 77, &result), "bank two lower compressor step reports selection");
+    expect_true(result.has_effect, "bank two lower compressor step reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_COMPRESSOR, "bank two selector reports compressor");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_COMPRESSOR,
+        "bank two value seventy-seven chooses compressor");
+    expect_true(apply_cc_value(&mapping, &s, 14, 102, &result), "bank two upper compressor step reports selection");
+    expect_true(result.has_effect, "bank two upper compressor step reports active effect");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_COMPRESSOR,
+        "bank two value one hundred two chooses compressor");
+    expect_true(apply_cc_value(&mapping, &s, 14, 103, &result), "bank two lower blank step reports selection");
     expect_true(!result.has_effect, "bank two lower blank step reports blank page");
     expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two blank page clears selected effect");
     expect_true(apply_cc_value(&mapping, &s, 14, 127, &result), "bank two upper selector reports selection");
@@ -1384,6 +1571,18 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     const float expected_eq_high =
         SYNTH_EQ_MIN_GAIN_DB +
         ((80.0f / 127.0f) * (SYNTH_EQ_MAX_GAIN_DB - SYNTH_EQ_MIN_GAIN_DB));
+    const float expected_compressor_threshold =
+        SYNTH_COMPRESSOR_MIN_THRESHOLD_DB +
+        ((64.0f / 127.0f) *
+            (SYNTH_COMPRESSOR_MAX_THRESHOLD_DB - SYNTH_COMPRESSOR_MIN_THRESHOLD_DB));
+    const float expected_compressor_ratio =
+        SYNTH_COMPRESSOR_MIN_RATIO +
+        ((96.0f / 127.0f) *
+            (SYNTH_COMPRESSOR_MAX_RATIO - SYNTH_COMPRESSOR_MIN_RATIO));
+    const float expected_compressor_makeup_gain =
+        SYNTH_COMPRESSOR_MIN_MAKEUP_GAIN_DB +
+        ((44.0f / 127.0f) *
+            (SYNTH_COMPRESSOR_MAX_MAKEUP_GAIN_DB - SYNTH_COMPRESSOR_MIN_MAKEUP_GAIN_DB));
 
     expect_true(
         midi_mapping_load(&mapping, "tests/fixtures/effect_macro_mapping.conf", error, sizeof(error)),
@@ -1499,6 +1698,41 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_near(synth_get_eq_high(&s), expected_eq_high, 0.0001f, "eq macro three scales high band");
 
     (void)apply_cc_value(&mapping, &s, 14, 77, 0);
+    pickup_cc(&mapping, &s, 15, 127, 127);
+    expect_true(apply_cc_value(&mapping, &s, 15, 64, &result), "compressor macro one applies");
+    expect_true(result.effect_bank_index == 1, "compressor macro one reports bank two");
+    expect_true(result.has_effect, "compressor macro one reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_COMPRESSOR, "compressor macro one reports selected effect");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD,
+        "compressor macro one reports threshold");
+    expect_near(
+        synth_get_compressor_threshold(&s),
+        expected_compressor_threshold,
+        0.0001f,
+        "compressor macro one scales threshold");
+
+    pickup_cc(&mapping, &s, 16, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "compressor macro two applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RATIO, "compressor macro two reports ratio");
+    expect_near(
+        synth_get_compressor_ratio(&s),
+        expected_compressor_ratio,
+        0.0001f,
+        "compressor macro two scales ratio");
+
+    pickup_cc(&mapping, &s, 17, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "compressor macro three applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN,
+        "compressor macro three reports makeup gain");
+    expect_near(
+        synth_get_compressor_makeup_gain(&s),
+        expected_compressor_makeup_gain,
+        0.0001f,
+        "compressor macro three scales makeup gain");
+
+    (void)apply_cc_value(&mapping, &s, 14, 103, 0);
     expect_true(!apply_cc_value(&mapping, &s, 15, 64, &result), "blank bank two macro one does nothing");
     expect_true(!apply_cc_value(&mapping, &s, 16, 64, &result), "blank bank two macro two does nothing");
     expect_true(!apply_cc_value(&mapping, &s, 17, 64, &result), "blank bank two macro three does nothing");
@@ -1630,6 +1864,7 @@ int main(void)
     test_names_eq_parameters();
     test_names_delay_parameters();
     test_names_plate_reverb_parameters();
+    test_names_compressor_parameters();
     test_applies_distortion_mix_cc_value();
     test_applies_distortion_drive_cc_value();
     test_applies_saturation_cc_values();
@@ -1637,6 +1872,7 @@ int main(void)
     test_applies_flanger_cc_values();
     test_applies_ring_mod_cc_values();
     test_applies_eq_cc_values();
+    test_applies_compressor_cc_values();
     test_applies_delay_cc_values();
     test_applies_plate_reverb_cc_values();
     test_loads_effect_macro_mapping();

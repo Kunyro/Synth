@@ -150,6 +150,16 @@ void synth_set_plate_reverb_damping(synth *s, float damping);
 void synth_set_plate_reverb_mix(synth *s, float mix);
 // changes the delay before sound enters the plate reverb.
 void synth_set_plate_reverb_predelay(synth *s, float seconds);
+// changes the compressor threshold in decibels.
+void synth_set_compressor_threshold(synth *s, float threshold_db);
+// changes the compressor ratio from no compression upward.
+void synth_set_compressor_ratio(synth *s, float ratio);
+// changes the gain added after compression in decibels.
+void synth_set_compressor_makeup_gain(synth *s, float makeup_gain_db);
+// changes how quickly the compressor reacts to rising level.
+void synth_set_compressor_attack_seconds(synth *s, float seconds);
+// changes how quickly the compressor lets go after the level falls.
+void synth_set_compressor_release_seconds(synth *s, float seconds);
 
 // reads current synth values without exposing where they are stored.
 float synth_get_master_gain(const synth *s);
@@ -197,6 +207,11 @@ float synth_get_plate_reverb_decay(const synth *s);
 float synth_get_plate_reverb_damping(const synth *s);
 float synth_get_plate_reverb_mix(const synth *s);
 float synth_get_plate_reverb_predelay(const synth *s);
+float synth_get_compressor_threshold(const synth *s);
+float synth_get_compressor_ratio(const synth *s);
+float synth_get_compressor_makeup_gain(const synth *s);
+float synth_get_compressor_attack_seconds(const synth *s);
+float synth_get_compressor_release_seconds(const synth *s);
 
 // renders stereo frames into an audio buffer.
 void synth_render_stereo(synth *s, synth_audio_buffer *output);

@@ -3,6 +3,7 @@
 
 #include "synth/audio_types.h"
 #include "synth/bitcrusher.h"
+#include "synth/compressor.h"
 #include "synth/delay.h"
 #include "synth/distortion.h"
 #include "synth/eq.h"
@@ -20,6 +21,7 @@ typedef struct synth_effect_chain {
     synth_eq eq;
     synth_delay delay;
     synth_plate_reverb plate_reverb;
+    synth_compressor compressor;
 } synth_effect_chain;
 
 void synth_effect_chain_init(synth_effect_chain *chain, float sample_rate);

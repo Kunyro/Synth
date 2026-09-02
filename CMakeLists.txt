@@ -37,6 +37,7 @@ synth_read_source_list(SYNTH_DESKTOP_SYSTEM_SOURCES cmake/synth_desktop_system_s
 set(SYNTH_PUBLIC_HEADERS
     include/synth/audio_types.h
     include/synth/bitcrusher.h
+    include/synth/compressor.h
     include/synth/delay.h
     include/synth/distortion.h
     include/synth/eq.h
@@ -188,6 +189,7 @@ if(BUILD_TESTING)
         test_distortion
         test_saturation
         test_bitcrusher
+        test_compressor
         test_flanger
         test_ring_mod
         test_eq

@@ -16,7 +16,7 @@ feeds it note/control events and asks it to render audio buffers.
 | `filter.c` | Chained one-pole low-pass filter |
 | `lfo.c` | Global morphable LFO |
 | `midi_types.c` | Portable MIDI note, note off, and pitch bend parsing |
-| `effects/` | Saturation, distortion, bitcrusher, flanger, ring mod, EQ, delay, plate reverb, and effect-chain code |
+| `effects/` | Saturation, distortion, bitcrusher, flanger, ring mod, EQ, delay, plate reverb, compressor, and effect-chain code |
 | `internal/` | Private headers used by the engine implementation |
 
 ## Public API
@@ -50,6 +50,7 @@ Current post-filter effects:
 - Three-band EQ with low shelf, mid bell, and high shelf gains
 - Delay with time, feedback, and wet/dry mix
 - Plate reverb with decay, damping, predelay, and wet/dry mix
+- Linked RMS compressor with threshold, ratio, makeup gain, attack, and release
 
 The effects default to dry or neutral settings, so existing patches render
 unchanged until the relevant mix or amount is raised.

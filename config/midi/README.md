@@ -69,7 +69,8 @@ Bank 2:
 - values `0` through `25`: flanger
 - values `26` through `51`: ring mod
 - values `52` through `76`: eq
-- values `77` through `127`: blank until more effects are added
+- values `77` through `102`: compressor
+- values `103` through `127`: blank until more effects are added
 
 The three macro knobs then control the selected page:
 
@@ -83,6 +84,7 @@ The three macro knobs then control the selected page:
 | flanger | `flanger_rate` | `flanger_intensity` | `flanger_mix` |
 | ring mod | `ring_mod_frequency` | `ring_mod_rectify` | `ring_mod_mix` |
 | eq | `eq_low` | `eq_mid` | `eq_high` |
+| compressor | `compressor_threshold` | `compressor_ratio` | `compressor_makeup_gain` |
 
 Macro knobs use independent soft takeover for each selector row and effect page,
 so switching pages does not make a knob jump the newly selected effect
@@ -154,6 +156,11 @@ cmake --build --preset dev --target midi_monitor
 - `plate_reverb_damping`
 - `plate_reverb_mix`
 - `plate_reverb_predelay`
+- `compressor_threshold`
+- `compressor_ratio`
+- `compressor_makeup_gain`
+- `compressor_attack_seconds`
+- `compressor_release_seconds`
 
 ## Supported Chord Pads
 

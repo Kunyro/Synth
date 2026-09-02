@@ -21,7 +21,8 @@ static const char *effect_names[] = {
     "plate_reverb",
     "flanger",
     "ring_mod",
-    "eq"
+    "eq",
+    "compressor"
 };
 
 static const char *effect_selector_names[MIDI_MAPPING_EFFECT_BANK_COUNT] = {
@@ -66,7 +67,7 @@ static const midi_mapping_effect_bank_page_entry effect_bank_pages
             {1, MIDI_MAPPING_EFFECT_FLANGER},
             {1, MIDI_MAPPING_EFFECT_RING_MOD},
             {1, MIDI_MAPPING_EFFECT_EQ},
-            {0, MIDI_MAPPING_EFFECT_SATURATION},
+            {1, MIDI_MAPPING_EFFECT_COMPRESSOR},
             {0, MIDI_MAPPING_EFFECT_SATURATION}
         }
     };
@@ -112,6 +113,11 @@ static const midi_mapping_effect_macro_route effect_macro_routes
             {1, MIDI_MAPPING_PARAM_EQ_LOW},
             {1, MIDI_MAPPING_PARAM_EQ_MID},
             {1, MIDI_MAPPING_PARAM_EQ_HIGH}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD},
+            {1, MIDI_MAPPING_PARAM_COMPRESSOR_RATIO},
+            {1, MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN}
         }
     };
 
@@ -257,7 +263,12 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY, "plate_reverb_decay", synth_get_plate_reverb_decay, synth_set_plate_reverb_decay, MIDI_MAPPING_SCALE_LINEAR, SYNTH_PLATE_REVERB_MIN_DECAY_SECONDS, SYNTH_PLATE_REVERB_MAX_DECAY_SECONDS},
     {MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING, "plate_reverb_damping", synth_get_plate_reverb_damping, synth_set_plate_reverb_damping, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
     {MIDI_MAPPING_PARAM_PLATE_REVERB_MIX, "plate_reverb_mix", synth_get_plate_reverb_mix, synth_set_plate_reverb_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
-    {MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY, "plate_reverb_predelay", synth_get_plate_reverb_predelay, synth_set_plate_reverb_predelay, MIDI_MAPPING_SCALE_LINEAR, 0.0f, SYNTH_PLATE_REVERB_MAX_PREDELAY_SECONDS}
+    {MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY, "plate_reverb_predelay", synth_get_plate_reverb_predelay, synth_set_plate_reverb_predelay, MIDI_MAPPING_SCALE_LINEAR, 0.0f, SYNTH_PLATE_REVERB_MAX_PREDELAY_SECONDS},
+    {MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD, "compressor_threshold", synth_get_compressor_threshold, synth_set_compressor_threshold, MIDI_MAPPING_SCALE_LINEAR, SYNTH_COMPRESSOR_MIN_THRESHOLD_DB, SYNTH_COMPRESSOR_MAX_THRESHOLD_DB},
+    {MIDI_MAPPING_PARAM_COMPRESSOR_RATIO, "compressor_ratio", synth_get_compressor_ratio, synth_set_compressor_ratio, MIDI_MAPPING_SCALE_LINEAR, SYNTH_COMPRESSOR_MIN_RATIO, SYNTH_COMPRESSOR_MAX_RATIO},
+    {MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN, "compressor_makeup_gain", synth_get_compressor_makeup_gain, synth_set_compressor_makeup_gain, MIDI_MAPPING_SCALE_LINEAR, SYNTH_COMPRESSOR_MIN_MAKEUP_GAIN_DB, SYNTH_COMPRESSOR_MAX_MAKEUP_GAIN_DB},
+    {MIDI_MAPPING_PARAM_COMPRESSOR_ATTACK_SECONDS, "compressor_attack_seconds", synth_get_compressor_attack_seconds, synth_set_compressor_attack_seconds, MIDI_MAPPING_SCALE_LOG, SYNTH_COMPRESSOR_MIN_ATTACK_SECONDS, SYNTH_COMPRESSOR_MAX_ATTACK_SECONDS},
+    {MIDI_MAPPING_PARAM_COMPRESSOR_RELEASE_SECONDS, "compressor_release_seconds", synth_get_compressor_release_seconds, synth_set_compressor_release_seconds, MIDI_MAPPING_SCALE_LOG, SYNTH_COMPRESSOR_MIN_RELEASE_SECONDS, SYNTH_COMPRESSOR_MAX_RELEASE_SECONDS}
 };
 
 const midi_mapping_parameter_entry *midi_mapping_find_parameter_by_name(const char *name)
