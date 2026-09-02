@@ -410,6 +410,36 @@ void synth_set_ring_mod_mix(synth *s, float mix)
     synth_ring_mod_set_mix(&s->effects.ring_mod, mix);
 }
 
+void synth_set_chorus_rate(synth *s, float hz)
+{
+    synth_chorus_set_rate(&s->effects.chorus, hz);
+}
+
+void synth_set_chorus_depth(synth *s, float depth)
+{
+    synth_chorus_set_depth(&s->effects.chorus, depth);
+}
+
+void synth_set_chorus_mix(synth *s, float mix)
+{
+    synth_chorus_set_mix(&s->effects.chorus, mix);
+}
+
+void synth_set_chorus_width(synth *s, float width)
+{
+    synth_chorus_set_width(&s->effects.chorus, width);
+}
+
+void synth_set_chorus_delay(synth *s, float seconds)
+{
+    synth_chorus_set_delay(&s->effects.chorus, seconds);
+}
+
+void synth_set_chorus_feedback(synth *s, float feedback)
+{
+    synth_chorus_set_feedback(&s->effects.chorus, feedback);
+}
+
 void synth_set_eq_low(synth *s, float gain_db)
 {
     synth_eq_set_low(&s->effects.eq, gain_db);
@@ -658,6 +688,36 @@ float synth_get_ring_mod_rectify(const synth *s)
 float synth_get_ring_mod_mix(const synth *s)
 {
     return synth_ring_mod_get_mix(&s->effects.ring_mod);
+}
+
+float synth_get_chorus_rate(const synth *s)
+{
+    return synth_chorus_get_rate(&s->effects.chorus);
+}
+
+float synth_get_chorus_depth(const synth *s)
+{
+    return synth_chorus_get_depth(&s->effects.chorus);
+}
+
+float synth_get_chorus_mix(const synth *s)
+{
+    return synth_chorus_get_mix(&s->effects.chorus);
+}
+
+float synth_get_chorus_width(const synth *s)
+{
+    return synth_chorus_get_width(&s->effects.chorus);
+}
+
+float synth_get_chorus_delay(const synth *s)
+{
+    return synth_chorus_get_delay(&s->effects.chorus);
+}
+
+float synth_get_chorus_feedback(const synth *s)
+{
+    return synth_chorus_get_feedback(&s->effects.chorus);
 }
 
 float synth_get_eq_low(const synth *s)

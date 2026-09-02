@@ -21,6 +21,7 @@ static const char *effect_names[] = {
     "plate_reverb",
     "flanger",
     "ring_mod",
+    "chorus",
     "eq",
     "compressor"
 };
@@ -68,7 +69,7 @@ static const midi_mapping_effect_bank_page_entry effect_bank_pages
             {1, MIDI_MAPPING_EFFECT_RING_MOD},
             {1, MIDI_MAPPING_EFFECT_EQ},
             {1, MIDI_MAPPING_EFFECT_COMPRESSOR},
-            {0, MIDI_MAPPING_EFFECT_SATURATION}
+            {1, MIDI_MAPPING_EFFECT_CHORUS}
         }
     };
 
@@ -108,6 +109,11 @@ static const midi_mapping_effect_macro_route effect_macro_routes
             {1, MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY},
             {1, MIDI_MAPPING_PARAM_RING_MOD_RECTIFY},
             {1, MIDI_MAPPING_PARAM_RING_MOD_MIX}
+        },
+        {
+            {1, MIDI_MAPPING_PARAM_CHORUS_RATE},
+            {1, MIDI_MAPPING_PARAM_CHORUS_DEPTH},
+            {1, MIDI_MAPPING_PARAM_CHORUS_MIX}
         },
         {
             {1, MIDI_MAPPING_PARAM_EQ_LOW},
@@ -254,6 +260,12 @@ static const midi_mapping_parameter_entry parameter_entries[] = {
     {MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY, "ring_mod_frequency", synth_get_ring_mod_frequency, synth_set_ring_mod_frequency, MIDI_MAPPING_SCALE_LOG, SYNTH_RING_MOD_MIN_FREQUENCY_HZ, SYNTH_RING_MOD_MAX_FREQUENCY_HZ},
     {MIDI_MAPPING_PARAM_RING_MOD_RECTIFY, "ring_mod_rectify", synth_get_ring_mod_rectify, synth_set_ring_mod_rectify, MIDI_MAPPING_SCALE_LINEAR, SYNTH_RING_MOD_MIN_RECTIFY, SYNTH_RING_MOD_MAX_RECTIFY},
     {MIDI_MAPPING_PARAM_RING_MOD_MIX, "ring_mod_mix", synth_get_ring_mod_mix, synth_set_ring_mod_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_CHORUS_RATE, "chorus_rate", synth_get_chorus_rate, synth_set_chorus_rate, MIDI_MAPPING_SCALE_LOG, SYNTH_CHORUS_MIN_RATE_HZ, SYNTH_CHORUS_MAX_RATE_HZ},
+    {MIDI_MAPPING_PARAM_CHORUS_DEPTH, "chorus_depth", synth_get_chorus_depth, synth_set_chorus_depth, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_CHORUS_MIX, "chorus_mix", synth_get_chorus_mix, synth_set_chorus_mix, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_CHORUS_WIDTH, "chorus_width", synth_get_chorus_width, synth_set_chorus_width, MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    {MIDI_MAPPING_PARAM_CHORUS_DELAY, "chorus_delay", synth_get_chorus_delay, synth_set_chorus_delay, MIDI_MAPPING_SCALE_LINEAR, SYNTH_CHORUS_MIN_DELAY_SECONDS, SYNTH_CHORUS_MAX_DELAY_SECONDS},
+    {MIDI_MAPPING_PARAM_CHORUS_FEEDBACK, "chorus_feedback", synth_get_chorus_feedback, synth_set_chorus_feedback, MIDI_MAPPING_SCALE_LINEAR, -SYNTH_CHORUS_MAX_FEEDBACK, SYNTH_CHORUS_MAX_FEEDBACK},
     {MIDI_MAPPING_PARAM_EQ_LOW, "eq_low", synth_get_eq_low, synth_set_eq_low, MIDI_MAPPING_SCALE_LINEAR, SYNTH_EQ_MIN_GAIN_DB, SYNTH_EQ_MAX_GAIN_DB},
     {MIDI_MAPPING_PARAM_EQ_MID, "eq_mid", synth_get_eq_mid, synth_set_eq_mid, MIDI_MAPPING_SCALE_LINEAR, SYNTH_EQ_MIN_GAIN_DB, SYNTH_EQ_MAX_GAIN_DB},
     {MIDI_MAPPING_PARAM_EQ_HIGH, "eq_high", synth_get_eq_high, synth_set_eq_high, MIDI_MAPPING_SCALE_LINEAR, SYNTH_EQ_MIN_GAIN_DB, SYNTH_EQ_MAX_GAIN_DB},

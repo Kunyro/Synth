@@ -128,7 +128,7 @@ static void test_parameter_metadata(void)
     const midi_mapping_parameter_info *saturation_drive_info;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 54, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 60, "metadata lists every mappable parameter");
 
     cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -607,6 +607,28 @@ static void test_names_ring_mod_parameters(void)
         "ring mod mix has a midi mapping name");
 }
 
+static void test_names_chorus_parameters(void)
+{
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_RATE), "chorus_rate") == 0,
+        "chorus rate has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_DEPTH), "chorus_depth") == 0,
+        "chorus depth has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_MIX), "chorus_mix") == 0,
+        "chorus mix has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_WIDTH), "chorus_width") == 0,
+        "chorus width has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_DELAY), "chorus_delay") == 0,
+        "chorus delay has a midi mapping name");
+    expect_true(
+        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_FEEDBACK), "chorus_feedback") == 0,
+        "chorus feedback has a midi mapping name");
+}
+
 static void test_names_eq_parameters(void)
 {
     expect_true(
@@ -944,6 +966,82 @@ static void test_applies_ring_mod_cc_values(void)
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "ring mod mix result reports normalized value");
 }
 
+static void test_applies_chorus_cc_values(void)
+{
+    midi_mapping mapping;
+    synth s;
+    midi_mapping_apply_result result;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    const float expected_rate =
+        expf(
+            logf(SYNTH_CHORUS_MIN_RATE_HZ) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_CHORUS_MAX_RATE_HZ) - logf(SYNTH_CHORUS_MIN_RATE_HZ))));
+    const float expected_delay =
+        SYNTH_CHORUS_MIN_DELAY_SECONDS +
+        ((44.0f / 127.0f) *
+            (SYNTH_CHORUS_MAX_DELAY_SECONDS - SYNTH_CHORUS_MIN_DELAY_SECONDS));
+    const float expected_feedback =
+        -SYNTH_CHORUS_MAX_FEEDBACK +
+        ((96.0f / 127.0f) * (SYNTH_CHORUS_MAX_FEEDBACK * 2.0f));
+
+    expect_true(
+        midi_mapping_load(&mapping, "tests/fixtures/direct_effect_mapping.conf", error, sizeof(error)),
+        "direct effect mapping loads for chorus test");
+    synth_init(&s, SYNTH_DEFAULT_SAMPLE_RATE);
+
+    pickup_cc(&mapping, &s, 62, 0, 70);
+    expect_true(apply_cc_value(&mapping, &s, 62, 64, &result), "chorus rate cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_CHORUS_RATE,
+        "chorus rate cc reports chorus rate parameter");
+    expect_near(
+        synth_get_chorus_rate(&s),
+        expected_rate,
+        0.0001f,
+        "chorus rate cc uses logarithmic hz scaling");
+    expect_near(result.synth_value, expected_rate, 0.0001f, "chorus rate result reports hz");
+
+    pickup_cc(&mapping, &s, 63, 0, 89);
+    expect_true(apply_cc_value(&mapping, &s, 63, 96, &result), "chorus depth cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_CHORUS_DEPTH,
+        "chorus depth cc reports chorus depth parameter");
+    expect_near(synth_get_chorus_depth(&s), 96.0f / 127.0f, 0.0001f, "chorus depth scales");
+
+    pickup_cc(&mapping, &s, 64, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 64, 44, &result), "chorus mix cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_CHORUS_MIX,
+        "chorus mix cc reports chorus mix parameter");
+    expect_near(synth_get_chorus_mix(&s), 44.0f / 127.0f, 0.0001f, "chorus mix scales");
+
+    pickup_cc(&mapping, &s, 65, 127, 127);
+    expect_true(apply_cc_value(&mapping, &s, 65, 80, &result), "chorus width cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_CHORUS_WIDTH,
+        "chorus width cc reports chorus width parameter");
+    expect_near(synth_get_chorus_width(&s), 80.0f / 127.0f, 0.0001f, "chorus width scales");
+
+    pickup_cc(&mapping, &s, 66, 0, 64);
+    expect_true(apply_cc_value(&mapping, &s, 66, 44, &result), "chorus delay cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_CHORUS_DELAY,
+        "chorus delay cc reports chorus delay parameter");
+    expect_near(synth_get_chorus_delay(&s), expected_delay, 0.0001f, "chorus delay scales to seconds");
+
+    pickup_cc(&mapping, &s, 67, 127, 63);
+    expect_true(apply_cc_value(&mapping, &s, 67, 96, &result), "chorus feedback cc applies");
+    expect_true(
+        result.parameter == MIDI_MAPPING_PARAM_CHORUS_FEEDBACK,
+        "chorus feedback cc reports chorus feedback parameter");
+    expect_near(
+        synth_get_chorus_feedback(&s),
+        expected_feedback,
+        0.0001f,
+        "chorus feedback scales across negative and positive feedback");
+}
+
 static void test_applies_eq_cc_values(void)
 {
     midi_mapping mapping;
@@ -1237,6 +1335,9 @@ static void test_loads_effect_macro_mapping(void)
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_RING_MOD), "ring_mod") == 0,
         "ring mod effect page has a name");
     expect_true(
+        strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_CHORUS), "chorus") == 0,
+        "chorus effect page has a name");
+    expect_true(
         strcmp(midi_mapping_effect_name(MIDI_MAPPING_EFFECT_EQ), "eq") == 0,
         "eq effect page has a name");
     expect_true(
@@ -1290,6 +1391,12 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         effect == MIDI_MAPPING_EFFECT_COMPRESSOR,
         "bank two fourth page is compressor");
+    expect_true(
+        midi_mapping_effect_bank_page(1, 4, &effect),
+        "bank two fifth page has an effect");
+    expect_true(
+        effect == MIDI_MAPPING_EFFECT_CHORUS,
+        "bank two fifth page is chorus");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
         "saturation macro one has a route");
@@ -1359,6 +1466,24 @@ static void test_loads_effect_macro_mapping(void)
     expect_true(
         parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX,
         "ring mod macro three routes to dry wet");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_CHORUS, 0, &parameter),
+        "chorus macro one has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_CHORUS_RATE,
+        "chorus macro one routes to rate");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_CHORUS, 1, &parameter),
+        "chorus macro two has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_CHORUS_DEPTH,
+        "chorus macro two routes to depth");
+    expect_true(
+        midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_CHORUS, 2, &parameter),
+        "chorus macro three has a route");
+    expect_true(
+        parameter == MIDI_MAPPING_PARAM_CHORUS_MIX,
+        "chorus macro three routes to dry wet");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_EQ, 0, &parameter),
         "eq macro one has a route");
@@ -1523,12 +1648,18 @@ static void test_effect_selectors_use_bank_pages(void)
     expect_true(
         mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_COMPRESSOR,
         "bank two value one hundred two chooses compressor");
-    expect_true(apply_cc_value(&mapping, &s, 14, 103, &result), "bank two lower blank step reports selection");
-    expect_true(!result.has_effect, "bank two lower blank step reports blank page");
-    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two blank page clears selected effect");
+    expect_true(apply_cc_value(&mapping, &s, 14, 103, &result), "bank two lower chorus step reports selection");
+    expect_true(result.has_effect, "bank two lower chorus step reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_CHORUS, "bank two selector reports chorus");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_CHORUS,
+        "bank two value one hundred three chooses chorus");
     expect_true(apply_cc_value(&mapping, &s, 14, 127, &result), "bank two upper selector reports selection");
-    expect_true(!result.has_effect, "bank two upper selector reports blank page");
-    expect_true(!mapping.effect_banks[1].has_selected_effect, "bank two upper selector remains blank");
+    expect_true(result.has_effect, "bank two upper selector reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_CHORUS, "bank two upper selector reports chorus");
+    expect_true(
+        mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_CHORUS,
+        "bank two value one twenty-seven chooses chorus");
 }
 
 static void test_effect_macros_apply_selected_effect_parameters(void)
@@ -1562,6 +1693,11 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
         SYNTH_RING_MOD_MIN_RECTIFY +
         ((96.0f / 127.0f) *
             (SYNTH_RING_MOD_MAX_RECTIFY - SYNTH_RING_MOD_MIN_RECTIFY));
+    const float expected_chorus_rate =
+        expf(
+            logf(SYNTH_CHORUS_MIN_RATE_HZ) +
+            ((64.0f / 127.0f) *
+                (logf(SYNTH_CHORUS_MAX_RATE_HZ) - logf(SYNTH_CHORUS_MIN_RATE_HZ))));
     const float expected_eq_low =
         SYNTH_EQ_MIN_GAIN_DB +
         ((96.0f / 127.0f) * (SYNTH_EQ_MAX_GAIN_DB - SYNTH_EQ_MIN_GAIN_DB));
@@ -1627,7 +1763,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_near(synth_get_plate_reverb_mix(&s), 44.0f / 127.0f, 0.0001f, "plate reverb macro three scales dry wet");
 
     (void)apply_cc_value(&mapping, &s, 14, 0, 0);
-    pickup_cc(&mapping, &s, 15, 0, 64);
+    pickup_cc(&mapping, &s, 15, 0, 70);
     expect_true(apply_cc_value(&mapping, &s, 15, 64, &result), "flanger macro one applies");
     expect_true(result.effect_bank_index == 1, "flanger macro one reports bank two");
     expect_true(result.has_effect, "flanger macro one reports active effect");
@@ -1733,9 +1869,23 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
         "compressor macro three scales makeup gain");
 
     (void)apply_cc_value(&mapping, &s, 14, 103, 0);
-    expect_true(!apply_cc_value(&mapping, &s, 15, 64, &result), "blank bank two macro one does nothing");
-    expect_true(!apply_cc_value(&mapping, &s, 16, 64, &result), "blank bank two macro two does nothing");
-    expect_true(!apply_cc_value(&mapping, &s, 17, 64, &result), "blank bank two macro three does nothing");
+    pickup_cc(&mapping, &s, 15, 0, 70);
+    expect_true(apply_cc_value(&mapping, &s, 15, 64, &result), "chorus macro one applies");
+    expect_true(result.effect_bank_index == 1, "chorus macro one reports bank two");
+    expect_true(result.has_effect, "chorus macro one reports active effect");
+    expect_true(result.effect == MIDI_MAPPING_EFFECT_CHORUS, "chorus macro one reports selected effect");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_CHORUS_RATE, "chorus macro one reports rate");
+    expect_near(synth_get_chorus_rate(&s), expected_chorus_rate, 0.0001f, "chorus macro one scales rate");
+
+    pickup_cc(&mapping, &s, 16, 0, 89);
+    expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "chorus macro two applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_CHORUS_DEPTH, "chorus macro two reports depth");
+    expect_near(synth_get_chorus_depth(&s), 96.0f / 127.0f, 0.0001f, "chorus macro two scales depth");
+
+    pickup_cc(&mapping, &s, 17, 0, 0);
+    expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "chorus macro three applies");
+    expect_true(result.parameter == MIDI_MAPPING_PARAM_CHORUS_MIX, "chorus macro three reports mix");
+    expect_near(synth_get_chorus_mix(&s), 44.0f / 127.0f, 0.0001f, "chorus macro three scales dry wet");
 }
 
 static void test_effect_macro_pickup_is_independent_per_effect(void)
@@ -1861,6 +2011,7 @@ int main(void)
     test_names_bitcrusher_parameters();
     test_names_flanger_parameters();
     test_names_ring_mod_parameters();
+    test_names_chorus_parameters();
     test_names_eq_parameters();
     test_names_delay_parameters();
     test_names_plate_reverb_parameters();
@@ -1871,6 +2022,7 @@ int main(void)
     test_applies_bitcrusher_cc_values();
     test_applies_flanger_cc_values();
     test_applies_ring_mod_cc_values();
+    test_applies_chorus_cc_values();
     test_applies_eq_cc_values();
     test_applies_compressor_cc_values();
     test_applies_delay_cc_values();

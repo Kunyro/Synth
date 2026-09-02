@@ -17,7 +17,7 @@ easy to play, test, and experiment from a regular computer.
 - Two oscillator controls with level, morph, pitch, fine-tune, octave, and stereo spread
 - Low-pass filter with variable intensity
 - Global morphable LFO
-- Saturation, distortion, bitcrusher, flanger, ring mod, EQ, delay, plate reverb, and compressor
+- Saturation, distortion, bitcrusher, flanger, ring mod, chorus, EQ, delay, plate reverb, and compressor
 - Desktop audio playback through miniaudio
 - Optional MIDI input and controller mapping through runtime-loaded PortMidi
 

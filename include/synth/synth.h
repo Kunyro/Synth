@@ -130,6 +130,18 @@ void synth_set_ring_mod_frequency(synth *s, float hz);
 void synth_set_ring_mod_rectify(synth *s, float rectify);
 // changes the wet/dry mix for ring modulation.
 void synth_set_ring_mod_mix(synth *s, float mix);
+// changes the Juno-style chorus sweep rate in cycles per second.
+void synth_set_chorus_rate(synth *s, float hz);
+// changes how widely the chorus delay voices modulate.
+void synth_set_chorus_depth(synth *s, float depth);
+// changes the wet/dry mix for chorus.
+void synth_set_chorus_mix(synth *s, float mix);
+// changes how far apart the chorus stereo modulation voices are.
+void synth_set_chorus_width(synth *s, float width);
+// changes the center delay time for the chorus voices.
+void synth_set_chorus_delay(synth *s, float seconds);
+// changes how much delayed signal feeds back into the chorus.
+void synth_set_chorus_feedback(synth *s, float feedback);
 // changes the low shelf gain for the post-modulation EQ in decibels.
 void synth_set_eq_low(synth *s, float gain_db);
 // changes the mid bell gain for the post-modulation EQ in decibels.
@@ -197,6 +209,12 @@ float synth_get_flanger_manual(const synth *s);
 float synth_get_ring_mod_frequency(const synth *s);
 float synth_get_ring_mod_rectify(const synth *s);
 float synth_get_ring_mod_mix(const synth *s);
+float synth_get_chorus_rate(const synth *s);
+float synth_get_chorus_depth(const synth *s);
+float synth_get_chorus_mix(const synth *s);
+float synth_get_chorus_width(const synth *s);
+float synth_get_chorus_delay(const synth *s);
+float synth_get_chorus_feedback(const synth *s);
 float synth_get_eq_low(const synth *s);
 float synth_get_eq_mid(const synth *s);
 float synth_get_eq_high(const synth *s);

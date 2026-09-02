@@ -16,7 +16,7 @@ feeds it note/control events and asks it to render audio buffers.
 | `filter.c` | Chained one-pole low-pass filter |
 | `lfo.c` | Global morphable LFO |
 | `midi_types.c` | Portable MIDI note, note off, and pitch bend parsing |
-| `effects/` | Saturation, distortion, bitcrusher, flanger, ring mod, EQ, delay, plate reverb, compressor, and effect-chain code |
+| `effects/` | Saturation, distortion, bitcrusher, flanger, ring mod, chorus, EQ, delay, plate reverb, compressor, and effect-chain code |
 | `internal/` | Private headers used by the engine implementation |
 
 ## Public API
@@ -47,6 +47,7 @@ Current post-filter effects:
 - Bitcrusher with reduced sample rate, bit depth, and wet/dry mix
 - Flanger with rate, intensity, depth, feedback, manual delay, and wet/dry mix
 - Ring modulator with sine frequency, modulator rectification, and wet/dry mix
+- Juno-style multi-voice chorus with rate, depth, width, delay, feedback, and wet/dry mix
 - Three-band EQ with low shelf, mid bell, and high shelf gains
 - Delay with time, feedback, and wet/dry mix
 - Plate reverb with decay, damping, predelay, and wet/dry mix

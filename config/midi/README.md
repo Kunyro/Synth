@@ -70,7 +70,7 @@ Bank 2:
 - values `26` through `51`: ring mod
 - values `52` through `76`: eq
 - values `77` through `102`: compressor
-- values `103` through `127`: blank until more effects are added
+- values `103` through `127`: chorus
 
 The three macro knobs then control the selected page:
 
@@ -85,6 +85,7 @@ The three macro knobs then control the selected page:
 | ring mod | `ring_mod_frequency` | `ring_mod_rectify` | `ring_mod_mix` |
 | eq | `eq_low` | `eq_mid` | `eq_high` |
 | compressor | `compressor_threshold` | `compressor_ratio` | `compressor_makeup_gain` |
+| chorus | `chorus_rate` | `chorus_depth` | `chorus_mix` |
 
 Macro knobs use independent soft takeover for each selector row and effect page,
 so switching pages does not make a knob jump the newly selected effect
@@ -146,6 +147,12 @@ cmake --build --preset dev --target midi_monitor
 - `ring_mod_frequency`
 - `ring_mod_rectify`
 - `ring_mod_mix`
+- `chorus_rate`
+- `chorus_depth`
+- `chorus_mix`
+- `chorus_width`
+- `chorus_delay`
+- `chorus_feedback`
 - `eq_low`
 - `eq_mid`
 - `eq_high`
