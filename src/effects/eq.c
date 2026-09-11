@@ -7,14 +7,14 @@
 #define SYNTH_EQ_TWO_PI 6.28318530717958647692f
 #define SYNTH_EQ_NEUTRAL_GAIN_THRESHOLD 0.1f
 
-// names the three EQ shapes this module can build.
+// names the three eq shapes this module can build
 typedef enum synth_eq_filter_type {
     SYNTH_EQ_FILTER_LOW_SHELF = 0,
     SYNTH_EQ_FILTER_PEAK,
     SYNTH_EQ_FILTER_HIGH_SHELF
 } synth_eq_filter_type;
 
-// prevents division by zero and keeps filter math valid for unusual sample rates.
+// prevents division by zero and keeps filter math valid for unusual sample rates
 static float sanitize_sample_rate(float sample_rate)
 {
     return sample_rate >= SYNTH_EQ_MIN_SAMPLE_RATE ?
@@ -22,7 +22,7 @@ static float sanitize_sample_rate(float sample_rate)
         SYNTH_EQ_MIN_SAMPLE_RATE;
 }
 
-// keeps the EQ band frequency below Nyquist so the digital filter stays valid.
+// keeps the eq band frequency below nyquist so the digital filter stays valid
 static float clamp_frequency(float sample_rate, float frequency_hz)
 {
     const float nyquist = sample_rate * 0.5f;
@@ -31,7 +31,7 @@ static float clamp_frequency(float sample_rate, float frequency_hz)
     return synth_clampf(frequency_hz, 1.0f, max_frequency);
 }
 
-// clears the two memory values each stereo channel carries between samples.
+// clears the two memory values each stereo channel carries between samples
 static void reset_biquad_state(synth_eq_biquad *biquad)
 {
     biquad->left_z1 = 0.0f;
@@ -40,7 +40,7 @@ static void reset_biquad_state(synth_eq_biquad *biquad)
     biquad->right_z2 = 0.0f;
 }
 
-// makes a biquad pass audio through unchanged.
+// makes a biquad pass audio through unchanged
 static void set_biquad_identity(synth_eq_biquad *biquad)
 {
     biquad->b0 = 1.0f;
@@ -50,7 +50,7 @@ static void set_biquad_identity(synth_eq_biquad *biquad)
     biquad->a2 = 0.0f;
 }
 
-// divides every coefficient by a0 so processing does not need to divide per sample.
+// divides every coefficient by a0 so processing does not need to divide per sample
 static void normalize_biquad(
     synth_eq_biquad *biquad,
     float b0,
@@ -72,7 +72,7 @@ static void normalize_biquad(
     biquad->a2 = a2 / a0;
 }
 
-// builds a bell filter that boosts or cuts around one center frequency.
+// builds a bell filter that boosts or cuts around one center frequency
 static void configure_peak(
     synth_eq_biquad *biquad,
     float sample_rate,
@@ -81,13 +81,13 @@ static void configure_peak(
     float gain_db)
 {
     const float frequency = clamp_frequency(sample_rate, frequency_hz);
-    // omega is the center frequency expressed as radians per sample.
+    // omega is the center frequency expressed as radians per sample
     const float omega = SYNTH_EQ_TWO_PI * frequency / sample_rate;
     const float sine = sinf(omega);
     const float cosine = cosf(omega);
-    // amplitude is the dB gain converted into the scale used by the biquad recipe.
+    // amplitude is the db gain converted into the scale used by the biquad recipe
     const float amplitude = powf(10.0f, gain_db / 40.0f);
-    // alpha controls how wide the bell is around the center frequency.
+    // alpha controls how wide the bell is around the center frequency
     const float alpha = sine / (2.0f * q);
 
     normalize_biquad(
@@ -100,7 +100,7 @@ static void configure_peak(
         1.0f - (alpha / amplitude));
 }
 
-// builds a low shelf that boosts or cuts the bass side of the spectrum.
+// builds a low shelf that boosts or cuts the bass side of the spectrum
 static void configure_low_shelf(
     synth_eq_biquad *biquad,
     float sample_rate,
@@ -109,14 +109,14 @@ static void configure_low_shelf(
     float gain_db)
 {
     const float frequency = clamp_frequency(sample_rate, frequency_hz);
-    // omega is the shelf corner frequency expressed as radians per sample.
+    // omega is the shelf corner frequency expressed as radians per sample
     const float omega = SYNTH_EQ_TWO_PI * frequency / sample_rate;
     const float sine = sinf(omega);
     const float cosine = cosf(omega);
-    // amplitude is the dB gain converted into the scale used by the shelf recipe.
+    // amplitude is the db gain converted into the scale used by the shelf recipe
     const float amplitude = powf(10.0f, gain_db / 40.0f);
     const float sqrt_amplitude = sqrtf(amplitude);
-    // alpha and shelf_term control how steeply the shelf moves from flat to boosted/cut.
+    // alpha and shelf_term control how steeply the shelf moves from flat to boosted/cut
     const float alpha = sine * 0.5f *
         sqrtf(((amplitude + (1.0f / amplitude)) * ((1.0f / shelf_slope) - 1.0f)) + 2.0f);
     const float shelf_term = 2.0f * sqrt_amplitude * alpha;
@@ -131,7 +131,7 @@ static void configure_low_shelf(
         (amplitude + 1.0f) + ((amplitude - 1.0f) * cosine) - shelf_term);
 }
 
-// builds a high shelf that boosts or cuts the bright side of the spectrum.
+// builds a high shelf that boosts or cuts the bright side of the spectrum
 static void configure_high_shelf(
     synth_eq_biquad *biquad,
     float sample_rate,
@@ -140,14 +140,14 @@ static void configure_high_shelf(
     float gain_db)
 {
     const float frequency = clamp_frequency(sample_rate, frequency_hz);
-    // omega is the shelf corner frequency expressed as radians per sample.
+    // omega is the shelf corner frequency expressed as radians per sample
     const float omega = SYNTH_EQ_TWO_PI * frequency / sample_rate;
     const float sine = sinf(omega);
     const float cosine = cosf(omega);
-    // amplitude is the dB gain converted into the scale used by the shelf recipe.
+    // amplitude is the db gain converted into the scale used by the shelf recipe
     const float amplitude = powf(10.0f, gain_db / 40.0f);
     const float sqrt_amplitude = sqrtf(amplitude);
-    // alpha and shelf_term control how steeply the shelf moves from flat to boosted/cut.
+    // alpha and shelf_term control how steeply the shelf moves from flat to boosted/cut
     const float alpha = sine * 0.5f *
         sqrtf(((amplitude + (1.0f / amplitude)) * ((1.0f / shelf_slope) - 1.0f)) + 2.0f);
     const float shelf_term = 2.0f * sqrt_amplitude * alpha;
@@ -162,7 +162,7 @@ static void configure_high_shelf(
         (amplitude + 1.0f) - ((amplitude - 1.0f) * cosine) - shelf_term);
 }
 
-// chooses the right coefficient recipe for one EQ band.
+// chooses the right coefficient recipe for one eq band
 static void configure_biquad(
     synth_eq_biquad *biquad,
     synth_eq_filter_type type,
@@ -170,7 +170,7 @@ static void configure_biquad(
     float frequency_hz,
     float gain_db)
 {
-    // tiny changes around 0 dB are treated as flat so the neutral EQ is exact pass-through.
+    // tiny changes around 0 db are treated as flat so the neutral eq is exact pass-through
     if (fabsf(gain_db) <= SYNTH_EQ_NEUTRAL_GAIN_THRESHOLD) {
         set_biquad_identity(biquad);
         return;
@@ -207,7 +207,7 @@ static void configure_biquad(
     }
 }
 
-// refreshes all three filters after sample rate or stored gains change.
+// refreshes all three filters after sample rate or stored gains change
 static void update_coefficients(synth_eq *eq)
 {
     configure_biquad(
@@ -216,21 +216,24 @@ static void update_coefficients(synth_eq *eq)
         eq->sample_rate,
         SYNTH_EQ_LOW_FREQUENCY_HZ,
         eq->low_gain_db);
+    eq->render_low_gain_db = eq->low_gain_db;
     configure_biquad(
         &eq->mid,
         SYNTH_EQ_FILTER_PEAK,
         eq->sample_rate,
         SYNTH_EQ_MID_FREQUENCY_HZ,
         eq->mid_gain_db);
+    eq->render_mid_gain_db = eq->mid_gain_db;
     configure_biquad(
         &eq->high,
         SYNTH_EQ_FILTER_HIGH_SHELF,
         eq->sample_rate,
         SYNTH_EQ_HIGH_FREQUENCY_HZ,
         eq->high_gain_db);
+    eq->render_high_gain_db = eq->high_gain_db;
 }
 
-// processes one mono sample through one biquad and updates its two memory values.
+// processes one mono sample through one biquad and updates its two memory values
 static float process_biquad_sample(
     const synth_eq_biquad *coefficients,
     float input,
@@ -244,7 +247,7 @@ static float process_biquad_sample(
     return output;
 }
 
-// runs the same biquad shape on both channels, with separate left/right memory.
+// runs the same biquad shape on both channels, with separate left/right memory
 static synth_stereo_sample process_biquad(
     synth_eq_biquad *biquad,
     synth_stereo_sample input)
@@ -264,7 +267,7 @@ static synth_stereo_sample process_biquad(
     return output;
 }
 
-// initializes the EQ flat, with valid sample-rate-dependent filter coefficients.
+// initializes the eq flat, with valid sample-rate-dependent filter coefficients
 void synth_eq_init(synth_eq *eq, float sample_rate)
 {
     eq->sample_rate = sanitize_sample_rate(sample_rate);
@@ -277,7 +280,7 @@ void synth_eq_init(synth_eq *eq, float sample_rate)
     update_coefficients(eq);
 }
 
-// changes sample rate and clears old filter memory from the previous rate.
+// changes sample rate and clears old filter memory from the previous rate
 void synth_eq_set_sample_rate(synth_eq *eq, float sample_rate)
 {
     eq->sample_rate = sanitize_sample_rate(sample_rate);
@@ -287,7 +290,7 @@ void synth_eq_set_sample_rate(synth_eq *eq, float sample_rate)
     update_coefficients(eq);
 }
 
-// stores the low-band gain and rebuilds only the low shelf coefficients.
+// stores the low-band gain and rebuilds only the low shelf coefficients
 void synth_eq_set_low(synth_eq *eq, float gain_db)
 {
     eq->low_gain_db = synth_clampf(
@@ -300,9 +303,10 @@ void synth_eq_set_low(synth_eq *eq, float gain_db)
         eq->sample_rate,
         SYNTH_EQ_LOW_FREQUENCY_HZ,
         eq->low_gain_db);
+    eq->render_low_gain_db = eq->low_gain_db;
 }
 
-// stores the mid-band gain and rebuilds only the mid bell coefficients.
+// stores the mid-band gain and rebuilds only the mid bell coefficients
 void synth_eq_set_mid(synth_eq *eq, float gain_db)
 {
     eq->mid_gain_db = synth_clampf(
@@ -315,9 +319,10 @@ void synth_eq_set_mid(synth_eq *eq, float gain_db)
         eq->sample_rate,
         SYNTH_EQ_MID_FREQUENCY_HZ,
         eq->mid_gain_db);
+    eq->render_mid_gain_db = eq->mid_gain_db;
 }
 
-// stores the high-band gain and rebuilds only the high shelf coefficients.
+// stores the high-band gain and rebuilds only the high shelf coefficients
 void synth_eq_set_high(synth_eq *eq, float gain_db)
 {
     eq->high_gain_db = synth_clampf(
@@ -330,35 +335,75 @@ void synth_eq_set_high(synth_eq *eq, float gain_db)
         eq->sample_rate,
         SYNTH_EQ_HIGH_FREQUENCY_HZ,
         eq->high_gain_db);
+    eq->render_high_gain_db = eq->high_gain_db;
 }
 
-// returns the current low shelf gain in dB.
+// returns the current low shelf gain in db
 float synth_eq_get_low(const synth_eq *eq)
 {
     return eq->low_gain_db;
 }
 
-// returns the current mid bell gain in dB.
+// returns the current mid bell gain in db
 float synth_eq_get_mid(const synth_eq *eq)
 {
     return eq->mid_gain_db;
 }
 
-// returns the current high shelf gain in dB.
+// returns the current high shelf gain in db
 float synth_eq_get_high(const synth_eq *eq)
 {
     return eq->high_gain_db;
 }
 
-// sends audio through low, mid, and high filters in that order.
-synth_stereo_sample synth_eq_process(
+// sends audio through low, mid, and high filters in that order
+synth_stereo_sample synth_eq_process_with_params(
     synth_eq *eq,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_eq_params *params)
 {
     synth_stereo_sample output = input;
+    // these comparisons cache coefficient calculations, not another copy of the
+    // patch reconfigure only changed bands; never reset their left/right memories
+    // as modulation sweeps through boosts, cuts, or the neutral setting
+    if (eq->render_low_gain_db != params->low_gain_db) {
+        configure_biquad(&eq->low, SYNTH_EQ_FILTER_LOW_SHELF, eq->sample_rate,
+                         SYNTH_EQ_LOW_FREQUENCY_HZ, params->low_gain_db);
+        eq->render_low_gain_db = params->low_gain_db;
+    }
+    if (eq->render_mid_gain_db != params->mid_gain_db) {
+        configure_biquad(&eq->mid, SYNTH_EQ_FILTER_PEAK, eq->sample_rate,
+                         SYNTH_EQ_MID_FREQUENCY_HZ, params->mid_gain_db);
+        eq->render_mid_gain_db = params->mid_gain_db;
+    }
+    if (eq->render_high_gain_db != params->high_gain_db) {
+        configure_biquad(&eq->high, SYNTH_EQ_FILTER_HIGH_SHELF, eq->sample_rate,
+                         SYNTH_EQ_HIGH_FREQUENCY_HZ, params->high_gain_db);
+        eq->render_high_gain_db = params->high_gain_db;
+    }
 
     output = process_biquad(&eq->low, output);
     output = process_biquad(&eq->mid, output);
     output = process_biquad(&eq->high, output);
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_eq_params synth_eq_get_params(const synth_eq *effect)
+{
+    const synth_eq_params params = {
+        effect->low_gain_db,
+        effect->mid_gain_db,
+        effect->high_gain_db
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_eq_process(
+    synth_eq *effect,
+    synth_stereo_sample input)
+{
+    const synth_eq_params params = synth_eq_get_params(effect);
+    return synth_eq_process_with_params(effect, input, &params);
 }

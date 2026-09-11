@@ -1,21 +1,25 @@
 # Synth Engine
 
 The portable synth engine lives in `src/` with public headers in
-`../include/synth/`. It does not depend on miniaudio or PortMidi; platform code
-feeds it note/control events and asks it to render audio buffers.
+`../include/synth/`. It has no dependency on MIDI, config syntax, controller layouts, audio backends,
+or operating-system APIs. Adapters feed it musical note/control operations and
+ask it to render audio buffers. All adapters depend on the engine.
 
 ## Main Modules
 
 | Path | Purpose |
 | --- | --- |
-| `synth.c` | Main synth state, voice control, parameter setters, rendering |
+| `synth.c` | Main synth state, voice control, and base parameter setters |
+| `synth_render.c` | Shared stereo/mono rendering pipeline |
+| `parameter.c` | Immutable parameter metadata, base access, and effective control resolution |
+| `modulation.c` | Signed route amounts and common modulation evaluation |
 | `voice.c` | Per-voice note state and oscillator/envelope behavior |
 | `oscillator.c` | Waveform selection and oscillator rendering |
 | `wavetable.c` | Spectral bandlimited wavetable generation and lookup |
 | `envelope.c` | ADSR envelope implementation |
 | `filter.c` | Chained one-pole low-pass filter |
 | `lfo.c` | Global morphable LFO |
-| `midi_types.c` | Portable MIDI note, note off, and pitch bend parsing |
+| `pitch.c` | Equal-tempered note-number to frequency conversion |
 | `effects/` | Saturation, distortion, bitcrusher, flanger, ring mod, chorus, EQ, delay, plate reverb, compressor, and effect-chain code |
 | `internal/` | Private headers used by the engine implementation |
 
@@ -26,7 +30,7 @@ Most engine users should start with `../include/synth/synth.h`.
 Important entry points:
 
 - `synth_init()` initializes a synth with defaults; call `synth_uninit()` before discarding it.
-- `synth_note_on()`, `synth_note_off()`, and `synth_all_notes_off()` manage MIDI notes.
+- `synth_note_on()`, `synth_note_off()`, and `synth_all_notes_off()` manage numbered musical notes.
 - `synth_note_on_frequency()` starts a direct-frequency voice.
 - `synth_set_*()` functions update envelope, oscillator, filter, LFO, and effect parameters.
 - `synth_render_stereo()` renders planar stereo audio.
@@ -83,27 +87,48 @@ range before rendering.
 The global LFO runs continuously, including while no voices are active. It uses
 the same wavetable morph shape as the audio oscillators.
 
-The LFO can modulate:
+The LFO has 52 destinations: every actual synth parameter exposed by the desktop
+config, including all ten effects. Global LFO controls, chord mode, selectors,
+and controller macros are excluded. All route amounts and global depth start
+at zero.
 
-- First oscillator morph
-- Second oscillator morph
-- First oscillator volume
-- Second oscillator volume
-- Filter cutoff
+```c
+synth_set_delay_mix(&instrument, 0.5f);
+synth_set_lfo_rate(&instrument, 2.0f);
+synth_set_lfo_amount(&instrument, SYNTH_PARAM_DELAY_MIX, -0.5f);
+synth_set_lfo_depth(&instrument, 0.8f);
+```
 
-`lfo_depth` is a master multiplier for every route amount. Morph modulation
-moves each oscillator around its stored base morph. Volume modulation moves down
-from each stored base gain. Filter modulation moves the stored cutoff
-exponentially by up to eight octaves in either direction. Render-time modulation
-does not overwrite the underlying knob settings.
+Amounts range from `-1` to `1`. A negative amount reverses direction. Each
+parameter has a fixed excursion in its linear or logarithmic domain, multiplied
+by the signed amount and global depth. Getters always return stored base values.
 
-## MIDI Parsing
+The immutable catalog in `parameter.h` / `parameter.c` exposes IDs, names, units,
+bounds, types, and modulation spans. Generic `synth_get_parameter()` and
+`synth_set_parameter()` use the same base settings as the named API. No `.def`
+file, generator, or separate mutable parameter store is involved. A small
+stack-local frame carries effective controls into each module's typed
+`process_with_params()` API; persistent DSP history stays in the module.
 
-`midi_types.c` contains the portable MIDI parser used by desktop MIDI input and
-tests. It parses short MIDI packets into note on, note off, and pitch bend
-messages.
+Octave/semitone tuning, filter poles, and bit depth snap independently to steps.
+Filter topology transitions blend over 2 ms; tuning preserves oscillator phase
+without pitch glide. The bitcrusher keeps its clock and updates quantization
+on its next sampling tick. ADSR modulation is captured at note-on, including
+release; explicit manual ADSR edits retain their existing whole-envelope
+replacement behavior. Delay-time modulation moves fractional read heads and
+produces pitch bends. Flanger intensity contributes before direct depth and
+feedback routes, with final clamping afterward.
 
-Pitch bend messages are normalized to `-1.0..+1.0`. A full-up message such as
-`e0 7f 7f` becomes value `8191`, normalized to `+1.0`. The synth maps the wheel
-to a two-semitone span: `-1` semitone at full down, center at `0`, and `+1`
-semitone at full up.
+See [the modulation contract](../docs/modulation.md) for all destinations,
+spans, state behavior, config examples, and API migration details.
+
+## Hosting the Engine
+
+Configure with `SYNTH_BUILD_DESKTOP=OFF` to build and test only the portable
+engine. Hosts provide sample rate, buffers, and synchronization; initialize and
+release resource-owning modules outside the audio callback. Parameter changes
+and rendering on the same synth instance must be serialized by the host.
+
+MIDI packet parsing is in `platform/desktop/midi/midi_types.c`. That adapter
+normalizes pitch bend to `-1..1` and passes musical operations to the engine.
+The existing engine bend span remains one semitone in either direction.

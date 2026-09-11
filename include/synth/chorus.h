@@ -18,6 +18,16 @@
 #define SYNTH_CHORUS_MAX_FEEDBACK 0.35f
 #define SYNTH_CHORUS_VOICE_COUNT 3
 
+// effective controls, separate from persistent dsp history
+typedef struct synth_chorus_params {
+    float rate_hz;
+    float depth;
+    float mix;
+    float width;
+    float delay_seconds;
+    float feedback;
+} synth_chorus_params;
+
 typedef struct synth_chorus_delay_line {
     float *left;
     float *right;
@@ -55,5 +65,14 @@ float synth_chorus_get_feedback(const synth_chorus *chorus);
 synth_stereo_sample synth_chorus_process(
     synth_chorus *chorus,
     synth_stereo_sample input);
+
+// returns a copy of stored controls; processing overrides never change those bases
+synth_chorus_params synth_chorus_get_params(const synth_chorus *effect);
+// effective controls must be finite and within the module bounds
+// advances dsp history without storing controls or calling parameter setters
+synth_stereo_sample synth_chorus_process_with_params(
+    synth_chorus *effect,
+    synth_stereo_sample input,
+    const synth_chorus_params *params);
 
 #endif

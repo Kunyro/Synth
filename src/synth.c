@@ -4,20 +4,21 @@
 #include <string.h>
 
 #include "internal/synth_internal.h"
+#include "internal/render_parameters.h"
 
-// converts a semitone offset into a frequency multiplier.
+// converts a semitone offset into a frequency multiplier
 static float pitch_bend_ratio(float semitones)
 {
     return powf(2.0f, semitones / 12.0f);
 }
 
-// applies the current synth bend to a base frequency.
+// applies the current synth bend to a base frequency
 static float bend_frequency(const synth *s, float base_frequency)
 {
     return base_frequency * pitch_bend_ratio(s->pitch_bend_semitones);
 }
 
-// totals the second oscillator pitch offset in semitones.
+// totals the second oscillator pitch offset in semitones
 static float second_oscillator_semitones(const synth *s)
 {
     return (float)(s->second_oscillator_octave * 12) +
@@ -25,26 +26,27 @@ static float second_oscillator_semitones(const synth *s)
            (s->second_oscillator_fine_tune_cents / 100.0f);
 }
 
-// applies the current second oscillator tuning to a primary frequency.
+// applies the current second oscillator tuning to a primary frequency
 static float second_oscillator_frequency(const synth *s, float primary_frequency)
 {
     return primary_frequency * pitch_bend_ratio(second_oscillator_semitones(s));
 }
 
-static int voice_is_releasable_for_note(const synth_voice *voice, int midi_note)
+// matches a held voice for this note; a voice already fading out is not released again
+static int voice_is_releasable_for_note(const synth_voice *voice, int note_number)
 {
     return voice->active &&
-        voice->midi_note == midi_note &&
+        voice->note_number == note_number &&
         voice->envelope.stage != SYNTH_ENV_RELEASE;
 }
 
-// finds the held voice that should respond to a midi note-off.
-static synth_voice *find_releasable_voice_for_note(synth *s, int midi_note)
+// finds the held voice that should respond to a numbered note-off
+static synth_voice *find_releasable_voice_for_note(synth *s, int note_number)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice *voice = &s->voices[i];
 
-        if (voice_is_releasable_for_note(voice, midi_note)) {
+        if (voice_is_releasable_for_note(voice, note_number)) {
             return voice;
         }
     }
@@ -52,7 +54,7 @@ static synth_voice *find_releasable_voice_for_note(synth *s, int midi_note)
     return 0;
 }
 
-// finds a free voice or steals the quietest one.
+// finds a free voice or steals the quietest one
 static synth_voice *find_available_voice(synth *s)
 {
     synth_voice *quietest = &s->voices[0];
@@ -72,7 +74,7 @@ static synth_voice *find_available_voice(synth *s)
     return quietest;
 }
 
-// retunes one voice without changing its original note or phase.
+// retunes one voice without changing its original note or phase
 static void retune_voice(synth *s, synth_voice *voice)
 {
     const float primary_frequency = bend_frequency(s, voice->base_frequency);
@@ -81,7 +83,7 @@ static void retune_voice(synth *s, synth_voice *voice)
     synth_voice_set_frequencies(voice, primary_frequency, secondary_frequency);
 }
 
-// retunes active voices without changing their original note or phase.
+// retunes active voices without changing their original note or phase
 static void retune_active_voices(synth *s)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
@@ -93,27 +95,27 @@ static void retune_active_voices(synth *s)
     }
 }
 
-// starts a voice and reapplies the synth's current tuning and morph settings.
+// starts a voice and reapplies the synth's current tuning and morph settings
 static void start_voice(
     synth *s,
     synth_voice *voice,
-    int midi_note,
+    int note_number,
     float base_frequency,
     float velocity)
 {
     synth_voice_note_on(
         voice,
-        midi_note,
+        note_number,
         base_frequency,
         velocity,
         s->waveform,
-        s->envelope);
+        synth_capture_modulated_adsr(s));
     retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
     synth_voice_set_second_oscillator_morph(voice, s->second_oscillator_morph);
 }
 
-// sets up the synth with defaults.
+// sets up the synth with defaults
 void synth_init(synth *s, float sample_rate)
 {
     const synth_adsr default_envelope = {0.01f, 0.08f, 0.75f, 0.16f};
@@ -134,11 +136,6 @@ void synth_init(synth *s, float sample_rate)
     s->second_oscillator_fine_tune_cents = 0.0f;
     synth_lfo_init(&s->lfo, SYNTH_DEFAULT_LFO_RATE_HZ);
     s->lfo_depth = 0.0f;
-    s->lfo_first_oscillator_morph_amount = 0.0f;
-    s->lfo_second_oscillator_morph_amount = 0.0f;
-    s->lfo_first_oscillator_gain_amount = 0.0f;
-    s->lfo_second_oscillator_gain_amount = 0.0f;
-    s->lfo_filter_amount = 0.0f;
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
     synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
@@ -158,12 +155,13 @@ void synth_uninit(synth *s)
     synth_effect_chain_uninit(&s->effects);
 }
 
-void synth_note_on(synth *s, int midi_note, float velocity)
+// converts a musical note number to pitch and starts the next available voice
+void synth_note_on(synth *s, int note_number, float velocity)
 {
     synth_voice *voice = find_available_voice(s);
-    const float base_frequency = synth_midi_note_to_frequency(midi_note);
+    const float base_frequency = synth_note_to_frequency(note_number);
 
-    start_voice(s, voice, midi_note, base_frequency, velocity);
+    start_voice(s, voice, note_number, base_frequency, velocity);
 }
 
 void synth_note_on_frequency(synth *s, float frequency, float velocity)
@@ -173,9 +171,10 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
     start_voice(s, voice, -1, frequency, velocity);
 }
 
-void synth_note_off(synth *s, int midi_note)
+// releases one held instance of a note, allowing repeated note-ons to be released separately
+void synth_note_off(synth *s, int note_number)
 {
-    synth_voice *voice = find_releasable_voice_for_note(s, midi_note);
+    synth_voice *voice = find_releasable_voice_for_note(s, note_number);
 
     if (voice != 0) {
         synth_voice_note_off(voice);
@@ -303,31 +302,6 @@ void synth_set_lfo_shape_morph(synth *s, float morph)
 void synth_set_lfo_depth(synth *s, float depth)
 {
     s->lfo_depth = synth_clampf(depth, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_first_oscillator_morph_amount(synth *s, float amount)
-{
-    s->lfo_first_oscillator_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_second_oscillator_morph_amount(synth *s, float amount)
-{
-    s->lfo_second_oscillator_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount)
-{
-    s->lfo_first_oscillator_gain_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount)
-{
-    s->lfo_second_oscillator_gain_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_filter_amount(synth *s, float amount)
-{
-    s->lfo_filter_amount = synth_clampf(amount, 0.0f, 1.0f);
 }
 
 void synth_set_saturation_drive(synth *s, float drive)
@@ -583,31 +557,6 @@ float synth_get_lfo_shape_morph(const synth *s)
 float synth_get_lfo_depth(const synth *s)
 {
     return s->lfo_depth;
-}
-
-float synth_get_lfo_first_oscillator_morph_amount(const synth *s)
-{
-    return s->lfo_first_oscillator_morph_amount;
-}
-
-float synth_get_lfo_second_oscillator_morph_amount(const synth *s)
-{
-    return s->lfo_second_oscillator_morph_amount;
-}
-
-float synth_get_lfo_first_oscillator_gain_amount(const synth *s)
-{
-    return s->lfo_first_oscillator_gain_amount;
-}
-
-float synth_get_lfo_second_oscillator_gain_amount(const synth *s)
-{
-    return s->lfo_second_oscillator_gain_amount;
-}
-
-float synth_get_lfo_filter_amount(const synth *s)
-{
-    return s->lfo_filter_amount;
 }
 
 float synth_get_saturation_drive(const synth *s)

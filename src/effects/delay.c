@@ -23,7 +23,7 @@ static size_t max_delay_frames_for_sample_rate(float sample_rate)
     return frames;
 }
 
-// converts seconds into the circular-buffer distance used by the read head.
+// converts seconds into the circular-buffer distance used by the read head
 static float delay_frames_for_time(const synth_delay *delay, float seconds)
 {
     const float frames = seconds * delay->sample_rate;
@@ -31,7 +31,7 @@ static float delay_frames_for_time(const synth_delay *delay, float seconds)
     return synth_clampf(frames, 1.0f, (float)delay->max_delay_frames);
 }
 
-// turns the crossfade time into a sample count.
+// turns the crossfade time into a sample count
 static size_t crossfade_frames_for_sample_rate(float sample_rate)
 {
     const size_t frames = (size_t)((SYNTH_DELAY_TIME_CROSSFADE_SECONDS * sample_rate) + 0.5f);
@@ -43,7 +43,7 @@ static size_t crossfade_frames_for_sample_rate(float sample_rate)
     return frames;
 }
 
-// turns the knob-settle time into a sample count.
+// turns the knob-settle time into a sample count
 static size_t settle_frames_for_sample_rate(float sample_rate)
 {
     const size_t frames = (size_t)((SYNTH_DELAY_TIME_SETTLE_SECONDS * sample_rate) + 0.5f);
@@ -55,7 +55,7 @@ static size_t settle_frames_for_sample_rate(float sample_rate)
     return frames;
 }
 
-// wraps fractional read positions back into the delay buffer.
+// wraps fractional read positions back into the delay buffer
 static float wrap_read_position(float position, size_t capacity_frames)
 {
     const float capacity = (float)capacity_frames;
@@ -71,14 +71,14 @@ static float wrap_read_position(float position, size_t capacity_frames)
     return position;
 }
 
-// reads between samples so delay taps are not limited to whole frames.
+// reads between samples so delay taps are not limited to whole frames
 static float interpolate_sample(const float *buffer, size_t capacity_frames, float position)
 {
     const size_t first_index = (size_t)position;
     const size_t second_index = (first_index + 1) % capacity_frames;
     const float fraction = position - (float)first_index;
 
-    // blends neighboring samples for smooth fractional delay times.
+    // blends neighboring samples for smooth fractional delay times
     return buffer[first_index] + ((buffer[second_index] - buffer[first_index]) * fraction);
 }
 
@@ -90,12 +90,12 @@ static int delay_line_has_storage(const synth_delay_line *line)
 static int allocate_delay_line(synth_delay_line *line, size_t capacity_frames)
 {
     line->capacity_frames = capacity_frames;
-    // keeps the large delay buffers off the stack.
+    // keeps the large delay buffers off the stack
     line->left = (float *)calloc(capacity_frames, sizeof(float));
     line->right = (float *)calloc(capacity_frames, sizeof(float));
 
     if (!delay_line_has_storage(line)) {
-        // cleans up a partial allocation so later checks see a disabled line.
+        // cleans up a partial allocation so later checks see a disabled line
         free(line->left);
         free(line->right);
         line->left = 0;
@@ -137,17 +137,21 @@ static void clear_delay_line(const synth_delay_line *line)
         return;
     }
 
-    // preserves the allocated buffers while clearing old audio history.
+    // preserves the allocated buffers while clearing old audio history
     memset(line->left, 0, sizeof(float) * line->capacity_frames);
     memset(line->right, 0, sizeof(float) * line->capacity_frames);
 }
 
-// reads the delayed stereo sample from one independent delay line.
-static synth_stereo_sample read_delay_line(const synth_delay_line *line)
+// reads the delayed stereo sample from one independent delay line
+static synth_stereo_sample read_delay_line(const synth_delay_line *line, float time_offset_frames)
 {
-    // the read head trails the write head by the current delay time.
+    // keep the tap at least one sample behind the writer and within retained audio
+    // fractional distances interpolate between samples, allowing pitch-bending motion
+    const float effective_frames = synth_clampf(line->delay_frames + time_offset_frames,
+                                                1.0f, (float)line->capacity_frames);
+    // modulation moves read heads, including retained tails, without changing history
     const float read_position = wrap_read_position(
-        (float)line->write_index - line->delay_frames,
+        (float)line->write_index - effective_frames,
         line->capacity_frames);
     synth_stereo_sample delayed;
 
@@ -156,7 +160,7 @@ static synth_stereo_sample read_delay_line(const synth_delay_line *line)
     return delayed;
 }
 
-// clears a line so a new delay time starts with its own clean history.
+// clears a line so a new delay time starts with its own clean history
 static void reset_delay_line(synth_delay_line *line, float delay_frames, size_t write_index)
 {
     clear_delay_line(line);
@@ -164,7 +168,7 @@ static void reset_delay_line(synth_delay_line *line, float delay_frames, size_t 
     line->write_index = write_index;
 }
 
-// prepares a voice for a new role in the delay engine.
+// prepares a voice for a new role in the delay engine
 static void reset_delay_voice(
     synth_delay_voice *voice,
     float delay_frames,
@@ -179,15 +183,15 @@ static void reset_delay_voice(
     voice->last_level = 0.0f;
 }
 
-// advances one delay line and returns its wet sample.
+// advances one delay line and returns its wet sample
 static synth_stereo_sample process_delay_line(
     synth_delay_line *line,
     synth_stereo_sample input,
-    float feedback)
+    float feedback, float time_offset_frames)
 {
-    const synth_stereo_sample delayed = read_delay_line(line);
+    const synth_stereo_sample delayed = read_delay_line(line, time_offset_frames);
 
-    // writes dry input plus feedback so repeats decay through the same line.
+    // writes dry input plus feedback so repeats decay through the same line
     line->left[line->write_index] = input.left + (delayed.left * feedback);
     line->right[line->write_index] = input.right + (delayed.right * feedback);
     line->write_index = (line->write_index + 1) % line->capacity_frames;
@@ -195,7 +199,7 @@ static synth_stereo_sample process_delay_line(
     return delayed;
 }
 
-// blends from fully dry to fully delayed.
+// blends from fully dry to fully delayed
 static float mix_sample(float dry, float wet, float mix)
 {
     return dry + ((wet - dry) * mix);
@@ -233,7 +237,7 @@ static int voice_is_recyclable(const synth_delay_voice *voice)
     return voice->state == SYNTH_DELAY_VOICE_INACTIVE;
 }
 
-// tails need a full delay interval before silence proves they are done.
+// tails need a full delay interval before silence proves they are done
 static size_t quiet_frame_limit_for_voice(const synth_delay_voice *voice)
 {
     const size_t delay_frames = (size_t)(voice->line.delay_frames + 1.0f);
@@ -245,7 +249,7 @@ static size_t quiet_frame_limit_for_voice(const synth_delay_voice *voice)
     return delay_frames;
 }
 
-// marks quiet tails inactive without touching their buffers.
+// marks quiet tails inactive without touching their buffers
 static void retire_quiet_tail(synth_delay_voice *voice)
 {
     if (voice->state != SYNTH_DELAY_VOICE_TAIL) {
@@ -258,7 +262,7 @@ static void retire_quiet_tail(synth_delay_voice *voice)
     }
 }
 
-// inactive voices are preferred, then the quietest old tail is recycled.
+// inactive voices are preferred, then the quietest old tail is recycled
 static size_t choose_voice_for_new_main(synth_delay *delay)
 {
     size_t quietest_tail_index = delay->main_voice_index;
@@ -273,12 +277,12 @@ static size_t choose_voice_for_new_main(synth_delay *delay)
             continue;
         }
 
-        // unused voices can become the new main delay without cutting off tails.
+        // unused voices can become the new main delay without cutting off tails
         if (voice_is_recyclable(voice)) {
             return i;
         }
 
-        // if all voices are busy, reuse the quietest tail that has faded longest.
+        // if all voices are busy, reuse the quietest tail that has faded longest
         if (voice->state == SYNTH_DELAY_VOICE_TAIL &&
             (!found_tail ||
                 voice->quiet_frames > quietest_tail_frames ||
@@ -294,14 +298,14 @@ static size_t choose_voice_for_new_main(synth_delay *delay)
     return quietest_tail_index;
 }
 
-// turns the old main delay into a tail and starts a fresh main delay.
+// turns the old main delay into a tail and starts a fresh main delay
 static void start_delay_time_transition(synth_delay *delay, float target_delay_frames)
 {
     synth_delay_voice *old_main = main_delay_voice(delay);
     const size_t new_main_index = choose_voice_for_new_main(delay);
     const size_t aligned_write_index = old_main->line.write_index;
 
-    // keeps the new delay line phase-aligned with the old one during handoff.
+    // keeps the new delay line phase-aligned with the old one during handoff
     delay->crossfade_position = 0;
     delay->crossfading = delay->crossfade_frames > 0 &&
         old_main->line.delay_frames != target_delay_frames;
@@ -316,7 +320,7 @@ static void start_delay_time_transition(synth_delay *delay, float target_delay_f
     old_main->output_gain = 1.0f;
     old_main->quiet_frames = 0;
 
-    // the new main starts silent and fades in while the old main becomes a tail.
+    // the new main starts silent and fades in while the old main becomes a tail
     reset_delay_voice(
         &delay->voices[new_main_index],
         target_delay_frames,
@@ -326,7 +330,7 @@ static void start_delay_time_transition(synth_delay *delay, float target_delay_f
     delay->main_voice_index = new_main_index;
 }
 
-// retargets the fresh main delay without creating another tail.
+// retargets the fresh main delay without creating another tail
 static void retarget_delay_time_transition(synth_delay *delay, float target_delay_frames)
 {
     synth_delay_voice *main = main_delay_voice(delay);
@@ -345,7 +349,7 @@ static void retarget_delay_time_transition(synth_delay *delay, float target_dela
         output_gain);
 }
 
-// installs a delay time without leaving any transition state behind.
+// installs a delay time without leaving any transition state behind
 static void set_delay_time_immediately(synth_delay *delay, float delay_frames)
 {
     for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i) {
@@ -367,7 +371,7 @@ static void set_delay_time_immediately(synth_delay *delay, float delay_frames)
     delay->has_pending_time_change = 0;
 }
 
-// applies a settled knob value after midi has stopped sending changes.
+// applies a settled knob value after the control has stopped changing
 static void apply_pending_delay_time(synth_delay *delay)
 {
     if (!delay->has_pending_time_change) {
@@ -376,7 +380,7 @@ static void apply_pending_delay_time(synth_delay *delay)
 
     if (delay->settle_frames_remaining > 0) {
         --delay->settle_frames_remaining;
-        // waits for rapid MIDI/controller changes to stop before rebuilding.
+        // waits for rapid control changes to stop before rebuilding
         if (delay->settle_frames_remaining > 0) {
             return;
         }
@@ -388,11 +392,11 @@ static void apply_pending_delay_time(synth_delay *delay)
         start_delay_time_transition(delay, delay->pending_delay_frames);
     }
 
-    // one pending time change has now been consumed.
+    // one pending time change has now been consumed
     delay->has_pending_time_change = 0;
 }
 
-// finishes the main fade-in while old tails keep decaying.
+// finishes the main fade-in while old tails keep decaying
 static void advance_main_fade(synth_delay *delay)
 {
     synth_delay_voice *main = main_delay_voice(delay);
@@ -402,7 +406,7 @@ static void advance_main_fade(synth_delay *delay)
         return;
     }
 
-    // ramps the fresh main delay up over the crossfade window.
+    // ramps the fresh main delay up over the crossfade window
     main->output_gain = (float)delay->crossfade_position / (float)delay->crossfade_frames;
     ++delay->crossfade_position;
 
@@ -413,8 +417,9 @@ static void advance_main_fade(synth_delay *delay)
     }
 }
 
-// processes every active delay voice with separate feedback histories.
-static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo_sample input)
+// processes every active delay voice with separate feedback histories
+static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo_sample input,
+                                               const synth_delay_params *params)
 {
     const synth_stereo_sample silence = {0.0f, 0.0f};
     synth_stereo_sample output = {0.0f, 0.0f};
@@ -430,14 +435,17 @@ static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo
             continue;
         }
 
-        // allocation failure disables delay output instead of crashing audio.
+        // allocation failure disables delay output instead of crashing audio
         if (!delay_line_has_storage(&voice->line)) {
             continue;
         }
 
-        // tails keep ringing without receiving new input.
+        // tails keep ringing without receiving new input
         voice_input = voice->state == SYNTH_DELAY_VOICE_MAIN ? input : silence;
-        voice_output = process_delay_line(&voice->line, voice_input, delay->feedback);
+        // convert only the lfo's time change to frames each voice keeps its own
+        // manual tap position, so older tails and a newly selected tap move together
+        voice_output = process_delay_line(&voice->line, voice_input, params->feedback,
+            (params->time_seconds - delay->time_seconds) * delay->sample_rate);
         voice->last_level = sample_level(voice_output);
         if (voice->last_level <= SYNTH_DELAY_TAIL_SILENCE_THRESHOLD) {
             ++voice->quiet_frames;
@@ -446,7 +454,12 @@ static synth_stereo_sample process_delay_voices(synth_delay *delay, synth_stereo
         }
 
         output = add_samples(output, scaled_sample(voice_output, voice->output_gain));
-        retire_quiet_tail(voice);
+        // a moved tap may revisit older audio while its offset is nonzero, wait
+        // for a whole buffer's worth of quiet before using the normal tail-retirement check
+        if (params->time_seconds == delay->time_seconds ||
+            voice->quiet_frames > voice->line.capacity_frames) {
+            retire_quiet_tail(voice);
+        }
     }
 
     return output;
@@ -508,11 +521,11 @@ void synth_delay_set_time(synth_delay *delay, float seconds)
 
     delay->time_seconds = requested_delay_frames / delay->sample_rate;
 
-    // before audio starts, the delay can jump straight to its first setting.
+    // before audio starts, the delay can jump straight to its first setting
     if (!delay->has_processed) {
         set_delay_time_immediately(delay, requested_delay_frames);
     } else {
-        // while the knob is moving, only remember the newest destination.
+        // while the knob is moving, only remember the newest destination
         delay->pending_delay_frames = requested_delay_frames;
         delay->settle_frames_remaining = delay->settle_frames;
         delay->has_pending_time_change = 1;
@@ -544,21 +557,45 @@ float synth_delay_get_mix(const synth_delay *delay)
     return delay->mix;
 }
 
-synth_stereo_sample synth_delay_process(
+// runs existing delay voices with temporary read times, feedback, and mix,
+// while still honoring any manual time change already waiting to settle
+synth_stereo_sample synth_delay_process_with_params(
     synth_delay *delay,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_delay_params *params)
 {
     synth_stereo_sample output_delayed;
     synth_stereo_sample output;
 
-    // wait for the time knob to stop moving before changing delay voices.
+    // only manual edits enter this settling path; lfo values move the read heads
+    // directly below and never restart the timer or request a new delay voice
     apply_pending_delay_time(delay);
 
-    output_delayed = process_delay_voices(delay, input);
+    output_delayed = process_delay_voices(delay, input, params);
 
-    output.left = mix_sample(input.left, output_delayed.left, delay->mix);
-    output.right = mix_sample(input.right, output_delayed.right, delay->mix);
+    output.left = mix_sample(input.left, output_delayed.left, params->mix);
+    output.right = mix_sample(input.right, output_delayed.right, params->mix);
 
     delay->has_processed = 1;
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_delay_params synth_delay_get_params(const synth_delay *effect)
+{
+    const synth_delay_params params = {
+        effect->time_seconds,
+        effect->feedback,
+        effect->mix
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_delay_process(
+    synth_delay *effect,
+    synth_stereo_sample input)
+{
+    const synth_delay_params params = synth_delay_get_params(effect);
+    return synth_delay_process_with_params(effect, input, &params);
 }

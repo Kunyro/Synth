@@ -141,14 +141,15 @@ static float lfo_value_at_phase(float phase)
 }
 
 // converts the depth knob into how far the chorus delay can move
-static float modulation_seconds(const synth_chorus *chorus)
+static float modulation_seconds(const synth_chorus_params *params)
 {
-    return SYNTH_CHORUS_MAX_MODULATION_SECONDS * chorus->depth;
+    return SYNTH_CHORUS_MAX_MODULATION_SECONDS * params->depth;
 }
 
 // finds the current echo time for one chorus voice
 static float delay_seconds_for_voice(
     const synth_chorus *chorus,
+    const synth_chorus_params *params,
     size_t voice_index,
     float channel_offset)
 {
@@ -156,18 +157,21 @@ static float delay_seconds_for_voice(
         voice_phase_offsets[voice_index] +
         channel_offset;
     const float bipolar = lfo_value_at_phase(phase);
+    // shift -1..1 to 0..1 so the sweep adds delay above the base time
     const float unipolar = (bipolar + 1.0f) * 0.5f;
 
-    return chorus->delay_seconds + (modulation_seconds(chorus) * unipolar);
+    return params->delay_seconds + (modulation_seconds(params) * unipolar);
 }
 
 // moves every chorus voice forward by one audio sample
-static void advance_phases(synth_chorus *chorus)
+static void advance_phases(synth_chorus *chorus, float rate_hz)
 {
+    // slightly different voice speeds keep the echoes from moving in lockstep
+    // divide hz by the sample rate to get each voice's phase change per frame
     for (size_t i = 0; i < SYNTH_CHORUS_VOICE_COUNT; ++i) {
         chorus->phases[i] = synth_wrap_phase(
             chorus->phases[i] +
-            ((chorus->rate_hz * voice_rate_multipliers[i]) / chorus->sample_rate));
+            ((rate_hz * voice_rate_multipliers[i]) / chorus->sample_rate));
     }
 }
 
@@ -290,9 +294,10 @@ float synth_chorus_get_feedback(const synth_chorus *chorus)
 }
 
 // processes one stereo sample through the chorus
-synth_stereo_sample synth_chorus_process(
+synth_stereo_sample synth_chorus_process_with_params(
     synth_chorus *chorus,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_chorus_params *params)
 {
     synth_stereo_sample wet = {0.0f, 0.0f};
     synth_stereo_sample output;
@@ -301,15 +306,18 @@ synth_stereo_sample synth_chorus_process(
         return input;
     }
 
-    // gather the delayed sound from each chorus voice.
+    // gather the delayed sound from each chorus voice
     for (size_t i = 0; i < SYNTH_CHORUS_VOICE_COUNT; ++i) {
-        const float channel_offset = 0.25f * chorus->width;
+        // full width puts the right sweep a quarter cycle ahead; zero aligns both
+        const float channel_offset = 0.25f * params->width;
         const float left_delay_frames = delay_seconds_for_voice(
             chorus,
+            params,
             i,
             0.0f) * chorus->sample_rate;
         const float right_delay_frames = delay_seconds_for_voice(
             chorus,
+            params,
             i,
             channel_offset) * chorus->sample_rate;
 
@@ -325,23 +333,46 @@ synth_stereo_sample synth_chorus_process(
             right_delay_frames);
     }
 
-    // average the voices so the chorus stays controlled instead of just louder.
+    // average the voices so the chorus stays controlled instead of just louder
     wet.left /= (float)SYNTH_CHORUS_VOICE_COUNT;
     wet.right /= (float)SYNTH_CHORUS_VOICE_COUNT;
 
-    // save the new sound so future samples can hear it as a short moving echo.
+    // save the new sound so future samples can hear it as a short moving echo
     chorus->delay.left[chorus->delay.write_index] =
-        input.left + (wet.left * chorus->feedback);
+        input.left + (wet.left * params->feedback);
     chorus->delay.right[chorus->delay.write_index] =
-        input.right + (wet.right * chorus->feedback);
+        input.right + (wet.right * params->feedback);
     chorus->delay.write_index =
         (chorus->delay.write_index + 1) % chorus->delay.capacity_frames;
 
-    // move the chorus voices forward so the next sample uses slightly new timing.
-    advance_phases(chorus);
+    // move the chorus voices forward so the next sample uses slightly new timing
+    advance_phases(chorus, params->rate_hz);
 
-    // blend the original sound with the chorus sound.
-    output.left = mix_sample(input.left, wet.left, chorus->mix);
-    output.right = mix_sample(input.right, wet.right, chorus->mix);
+    // blend the original sound with the chorus sound
+    output.left = mix_sample(input.left, wet.left, params->mix);
+    output.right = mix_sample(input.right, wet.right, params->mix);
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_chorus_params synth_chorus_get_params(const synth_chorus *effect)
+{
+    const synth_chorus_params params = {
+        effect->rate_hz,
+        effect->depth,
+        effect->mix,
+        effect->width,
+        effect->delay_seconds,
+        effect->feedback
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_chorus_process(
+    synth_chorus *effect,
+    synth_stereo_sample input)
+{
+    const synth_chorus_params params = synth_chorus_get_params(effect);
+    return synth_chorus_process_with_params(effect, input, &params);
 }

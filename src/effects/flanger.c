@@ -103,26 +103,31 @@ static float read_delay_sample(
     return interpolate_sample(buffer, capacity_frames, read_position);
 }
 
+// reads the flanger's internal triangle sweep at a normalized cycle position
 static float lfo_value_at_phase(float phase)
 {
     phase = synth_wrap_phase(phase);
 
-    // turns the sine wave into triangle like wave for a more obvious effect
+    // a 0..1 triangle rises for half a cycle and falls for the other half,
+    // moving the delay tap at a steady speed within each half of the sweep
     return phase < 0.5f ? phase * 2.0f : 2.0f - (phase * 2.0f);
 }
 
-static float delay_seconds_for_lfo(const synth_flanger *flanger, float lfo)
+// starts at the manual delay and uses depth to sweep through the remaining safe delay range
+static float delay_seconds_for_lfo(const synth_flanger_params *params, float lfo)
 {
-    const float sweep_seconds = SYNTH_FLANGER_MAX_DELAY_SECONDS - flanger->manual_delay_seconds;
+    // the internal wave is 0..1 use only the space above the manual delay so
+    // combining a large manual time with full depth cannot exceed the delay limit
+    const float sweep_seconds = SYNTH_FLANGER_MAX_DELAY_SECONDS - params->manual_delay_seconds;
 
-    return flanger->manual_delay_seconds + (sweep_seconds * flanger->depth * lfo);
+    return params->manual_delay_seconds + (sweep_seconds * params->depth * lfo);
 }
 
 static float feedback_for_intensity(float intensity)
 {
     const float shaped = sqrtf(synth_clampf(intensity, 0.0f, 1.0f));
 
-    // intensity brings feedback in early so the comb filter becomes recognizable fast.
+    // intensity brings feedback in early so the comb filter becomes recognizable fast
     return SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK +
         (shaped * (SYNTH_FLANGER_MAX_FEEDBACK - SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK));
 }
@@ -137,14 +142,16 @@ static float mix_sample(float dry, float wet, float mix)
 {
     const float compensated_gain = 1.0f + (mix * SYNTH_FLANGER_OUTPUT_COMPENSATION);
 
-    // flanging needs dry plus wet interference, so mix controls added wet level.
+    // flanging needs dry plus wet interference, so mix controls added wet level
     return (dry + (wet * mix)) / compensated_gain;
 }
 
-static void advance_phase(synth_flanger *flanger)
+// advances the flanger's own modulation clock at the effective rate without restarting it
+static void advance_phase(synth_flanger *flanger, float rate_hz)
 {
+    // convert cycles per second to cycles per sample, retaining the current phase
     flanger->phase = synth_wrap_phase(
-        flanger->phase + (flanger->rate_hz / flanger->sample_rate));
+        flanger->phase + (rate_hz / flanger->sample_rate));
 }
 
 void synth_flanger_init(synth_flanger *flanger, float sample_rate)
@@ -249,9 +256,11 @@ float synth_flanger_get_manual(const synth_flanger *flanger)
     return flanger->manual_delay_seconds;
 }
 
-synth_stereo_sample synth_flanger_process(
+// moves the flanger's stereo taps with temporary controls, keeping its clock and echo history
+synth_stereo_sample synth_flanger_process_with_params(
     synth_flanger *flanger,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_flanger_params *params)
 {
     synth_stereo_sample delayed;
     synth_stereo_sample output;
@@ -262,11 +271,13 @@ synth_stereo_sample synth_flanger_process(
         return input;
     }
 
+    // delay helpers return seconds; multiplying by sample rate gives buffer frames
+    // a quarter-cycle offset makes the channels sweep at different times for stereo width
     left_delay_frames = delay_seconds_for_lfo(
-        flanger,
+        params,
         lfo_value_at_phase(flanger->phase)) * flanger->sample_rate;
     right_delay_frames = delay_seconds_for_lfo(
-        flanger,
+        params,
         lfo_value_at_phase(flanger->phase + SYNTH_FLANGER_STEREO_PHASE_OFFSET)) *
         flanger->sample_rate;
 
@@ -282,14 +293,51 @@ synth_stereo_sample synth_flanger_process(
         right_delay_frames);
 
     flanger->delay.left[flanger->delay.write_index] =
-        input.left + (delayed.left * flanger->feedback);
+        input.left + (delayed.left * params->feedback);
     flanger->delay.right[flanger->delay.write_index] =
-        input.right + (delayed.right * flanger->feedback);
+        input.right + (delayed.right * params->feedback);
     flanger->delay.write_index =
         (flanger->delay.write_index + 1) % flanger->delay.capacity_frames;
-    advance_phase(flanger);
+    advance_phase(flanger, params->rate_hz);
 
-    output.left = mix_sample(input.left, -delayed.left, flanger->mix);
-    output.right = mix_sample(input.right, -delayed.right, flanger->mix);
+    output.left = mix_sample(input.left, -delayed.left, params->mix);
+    output.right = mix_sample(input.right, -delayed.right, params->mix);
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_flanger_params synth_flanger_get_params(const synth_flanger *effect)
+{
+    const synth_flanger_params params = {
+        effect->rate_hz,
+        effect->intensity,
+        effect->depth,
+        effect->feedback,
+        effect->mix,
+        effect->manual_delay_seconds
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_flanger_process(
+    synth_flanger *effect,
+    synth_stereo_sample input)
+{
+    const synth_flanger_params params = synth_flanger_get_params(effect);
+    return synth_flanger_process_with_params(effect, input, &params);
+}
+
+// adds only the depth/feedback change caused by intensity, preserving manual component edits
+void synth_flanger_resolve_intensity(synth_flanger_params *params, float intensity)
+{
+    // apply only the macro's change, retaining manually adjusted component bases
+    // subtract the old curve result from the new one; assigning the new curve alone
+    // would overwrite a user's separate feedback setting on every audio frame
+    params->depth += intensity - params->intensity;
+    params->feedback += feedback_for_intensity(intensity) - feedback_for_intensity(params->intensity);
+    params->intensity = intensity;
+    // components are clamped after their direct modulation is added for example,
+    // depth 0.9 + intensity change 0.5 - direct change 0.5 should remain 0.9;
+    // clamping the intermediate 1.4 would incorrectly produce 0.5
 }

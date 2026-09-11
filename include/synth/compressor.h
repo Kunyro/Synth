@@ -20,6 +20,15 @@
 #define SYNTH_COMPRESSOR_DEFAULT_RELEASE_SECONDS 0.100f
 #define SYNTH_COMPRESSOR_MIN_SAMPLE_RATE 1.0f
 
+// effective controls, separate from persistent dsp history
+typedef struct synth_compressor_params {
+    float threshold_db;
+    float ratio;
+    float makeup_gain_db;
+    float attack_seconds;
+    float release_seconds;
+} synth_compressor_params;
+
 typedef struct synth_compressor {
     float sample_rate;
     float threshold_db;
@@ -30,6 +39,10 @@ typedef struct synth_compressor {
     float attack_coefficient;
     float release_coefficient;
     float detector_square;
+    // last effective times used to build coefficients; these are cache keys,
+    // while attack_seconds/release_seconds above remain the stored base controls
+    float render_attack_seconds;
+    float render_release_seconds;
 } synth_compressor;
 
 void synth_compressor_init(synth_compressor *compressor, float sample_rate);
@@ -47,5 +60,14 @@ float synth_compressor_get_release(const synth_compressor *compressor);
 synth_stereo_sample synth_compressor_process(
     synth_compressor *compressor,
     synth_stereo_sample input);
+
+// returns a copy of stored controls; processing overrides never change those bases
+synth_compressor_params synth_compressor_get_params(const synth_compressor *effect);
+// effective controls must be finite and within the module bounds
+// advances dsp history without storing controls or calling parameter setters
+synth_stereo_sample synth_compressor_process_with_params(
+    synth_compressor *effect,
+    synth_stereo_sample input,
+    const synth_compressor_params *params);
 
 #endif

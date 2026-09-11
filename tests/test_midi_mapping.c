@@ -121,26 +121,30 @@ static void test_loads_akai_mapping(void)
         "configured major chord pad requires the configured channel");
 }
 
+// checks that desktop metadata still exposes base controls through their engine ids
 static void test_parameter_metadata(void)
 {
-    const midi_mapping_parameter_info *cutoff_info;
-    const midi_mapping_parameter_info *bits_info;
-    const midi_mapping_parameter_info *saturation_drive_info;
+    midi_mapping_parameter_info cutoff_info_storage;
+    const midi_mapping_parameter_info *cutoff_info = &cutoff_info_storage;
+    midi_mapping_parameter_info bits_info_storage;
+    const midi_mapping_parameter_info *bits_info = &bits_info_storage;
+    midi_mapping_parameter_info saturation_drive_info_storage;
+    const midi_mapping_parameter_info *saturation_drive_info = &saturation_drive_info_storage;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 60, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 107, "metadata lists every mappable parameter");
 
-    cutoff_info = midi_mapping_parameter_info_by_name("filter_cutoff");
+    expect_true(midi_mapping_parameter_info_by_name("filter_cutoff", &cutoff_info_storage), "metadata lookup succeeds");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
-    expect_true(cutoff_info->parameter == MIDI_MAPPING_PARAM_FILTER_CUTOFF, "filter cutoff metadata names parameter");
+    expect_true(cutoff_info->parameter == SYNTH_PARAM_FILTER_CUTOFF, "filter cutoff metadata names parameter");
     expect_true(cutoff_info->default_scale == MIDI_MAPPING_SCALE_LOG, "filter cutoff defaults to log scale");
     expect_near(cutoff_info->default_min_value, 20.0f, 0.0001f, "filter cutoff metadata min");
     expect_near(cutoff_info->default_max_value, 20000.0f, 0.0001f, "filter cutoff metadata max");
 
-    saturation_drive_info = midi_mapping_parameter_info_by_name("saturation_drive");
+    expect_true(midi_mapping_parameter_info_by_name("saturation_drive", &saturation_drive_info_storage), "metadata lookup succeeds");
     expect_true(saturation_drive_info != 0, "saturation drive metadata is findable");
     expect_true(
-        saturation_drive_info->parameter == MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        saturation_drive_info->parameter == SYNTH_PARAM_SATURATION_DRIVE,
         "saturation drive metadata names parameter");
     expect_true(
         saturation_drive_info->default_scale == MIDI_MAPPING_SCALE_LINEAR,
@@ -156,7 +160,7 @@ static void test_parameter_metadata(void)
         0.0001f,
         "saturation drive metadata max");
 
-    bits_info = midi_mapping_parameter_info_at(28);
+    expect_true(midi_mapping_parameter_info_at(SYNTH_PARAM_BITCRUSHER_BITS, &bits_info_storage), "indexed metadata lookup succeeds");
     expect_true(bits_info != 0, "bitcrusher bits metadata is findable by index");
     expect_true(
         strcmp(bits_info->name, "bitcrusher_bits") == 0,
@@ -169,6 +173,7 @@ static void test_parameter_metadata(void)
     expect_true(!midi_mapping_parse_scale_name("curve", &scale), "unknown scale does not parse");
 }
 
+// checks cc scaling and whole-envelope base edits for all four adsr controls
 static void test_applies_adsr_cc_values(void)
 {
     midi_mapping mapping;
@@ -186,7 +191,7 @@ static void test_applies_adsr_cc_values(void)
     expect_true(
         apply_cc_value(&mapping, &s, 1, 127, &result),
         "attack cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_ATTACK, "attack cc reports attack parameter");
+    expect_true(result.parameter == SYNTH_PARAM_ATTACK, "attack cc reports attack parameter");
     expect_near(synth_get_adsr(&s).attack_seconds, 2.0f, 0.0001f, "attack cc scales to max attack");
 
     pickup_cc(&mapping, &s, 3, 127, 0);
@@ -200,6 +205,7 @@ static void test_applies_adsr_cc_values(void)
         "wrong channel does not apply");
 }
 
+// checks that a mapped knob updates stored master gain through the engine catalog
 static void test_applies_master_gain_cc_value(void)
 {
     midi_mapping mapping;
@@ -216,10 +222,11 @@ static void test_applies_master_gain_cc_value(void)
     expect_true(
         apply_cc_value(&mapping, &s, 8, 64, &result),
         "master gain cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN, "master gain cc reports master gain parameter");
+    expect_true(result.parameter == SYNTH_PARAM_MASTER_GAIN, "master gain cc reports master gain parameter");
     expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "master gain cc scales to normalized gain");
 }
 
+// checks cutoff and discrete pole-count edits through ordinary base bindings
 static void test_applies_filter_cc_values(void)
 {
     midi_mapping mapping;
@@ -241,7 +248,7 @@ static void test_applies_filter_cc_values(void)
     expect_true(
         apply_cc_value(&mapping, &s, 5, 127, &result),
         "filter cutoff cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_FILTER_CUTOFF, "filter cutoff cc reports filter cutoff parameter");
+    expect_true(result.parameter == SYNTH_PARAM_FILTER_CUTOFF, "filter cutoff cc reports filter cutoff parameter");
     expect_near(synth_get_filter_cutoff(&s), 20000.0f, 0.01f, "filter cutoff cc scales to max cutoff");
     expect_near(s.right_filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff keeps stereo filters in sync");
 
@@ -249,7 +256,7 @@ static void test_applies_filter_cc_values(void)
     expect_true(
         apply_cc_value(&mapping, &s, 6, 75, &result),
         "filter poles cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_FILTER_POLES, "filter poles cc reports filter poles parameter");
+    expect_true(result.parameter == SYNTH_PARAM_FILTER_POLES, "filter poles cc reports filter poles parameter");
     expect_true(synth_get_filter_poles(&s) == 5, "filter poles cc steps to five poles");
     expect_true(s.right_filter.pole_count == 5, "filter poles keep stereo filters in sync");
     expect_near(result.synth_value, 5.0f, 0.0001f, "filter poles result reports stepped value");
@@ -265,6 +272,7 @@ static void test_applies_filter_cc_values(void)
     expect_true(synth_get_filter_poles(&s) == 8, "filter poles max steps to eight poles");
 }
 
+// checks that a base morph knob still reaches the oscillator control
 static void test_applies_oscillator_morph_cc_value(void)
 {
     midi_mapping mapping;
@@ -282,12 +290,13 @@ static void test_applies_oscillator_morph_cc_value(void)
         apply_cc_value(&mapping, &s, 7, 76, &result),
         "oscillator morph cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_OSCILLATOR_MORPH,
+        result.parameter == SYNTH_PARAM_OSCILLATOR_MORPH,
         "oscillator morph cc reports oscillator morph parameter");
     expect_near(result.synth_value, 76.0f / 127.0f, 0.0001f, "oscillator morph result reports normalized value");
     expect_near(synth_get_oscillator_morph(&s), 76.0f / 127.0f, 0.0001f, "oscillator morph cc scales to normalized morph");
 }
 
+// checks base octave, semitone, and fine-tune knobs retain their scaling behavior
 static void test_applies_second_oscillator_cc_values(void)
 {
     midi_mapping mapping;
@@ -305,7 +314,7 @@ static void test_applies_second_oscillator_cc_values(void)
         apply_cc_value(&mapping, &s, 9, 58, &result),
         "second oscillator octave cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_OCTAVE,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_OCTAVE,
         "second oscillator octave cc reports octave parameter");
     expect_true(synth_get_second_oscillator_octave(&s) == 0, "second oscillator octave cc 58 steps to zero");
     expect_near(result.synth_value, 0.0f, 0.0001f, "second oscillator octave result reports stepped value");
@@ -315,7 +324,7 @@ static void test_applies_second_oscillator_cc_values(void)
         apply_cc_value(&mapping, &s, 10, 123, &result),
         "second oscillator pitch cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_PITCH,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_PITCH,
         "second oscillator pitch cc reports pitch parameter");
     expect_true(synth_get_second_oscillator_pitch(&s) == 6, "second oscillator pitch cc 123 steps to plus six");
     expect_near(result.synth_value, 6.0f, 0.0001f, "second oscillator pitch result reports stepped value");
@@ -325,7 +334,7 @@ static void test_applies_second_oscillator_cc_values(void)
         apply_cc_value(&mapping, &s, 11, 76, &result),
         "second oscillator fine tune cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_FINE_TUNE,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_FINE_TUNE,
         "second oscillator fine tune cc reports fine tune parameter");
     expect_near(
         synth_get_second_oscillator_fine_tune(&s),
@@ -339,6 +348,7 @@ static void test_applies_second_oscillator_cc_values(void)
         "second oscillator fine tune result reports cents");
 }
 
+// checks that each oscillator level knob addresses the correct base control
 static void test_applies_oscillator_mix_cc_values(void)
 {
     midi_mapping mapping;
@@ -356,7 +366,7 @@ static void test_applies_oscillator_mix_cc_values(void)
         apply_cc_value(&mapping, &s, 13, 119, &result),
         "first oscillator gain cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FIRST_OSCILLATOR_GAIN,
+        result.parameter == SYNTH_PARAM_FIRST_OSCILLATOR_GAIN,
         "first oscillator gain cc reports first oscillator gain parameter");
     expect_near(synth_get_first_oscillator_gain(&s), 119.0f / 127.0f, 0.0001f, "first oscillator gain cc scales to normalized gain");
 
@@ -365,7 +375,7 @@ static void test_applies_oscillator_mix_cc_values(void)
         apply_cc_value(&mapping, &s, 14, 59, &result),
         "second oscillator gain cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_GAIN,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_GAIN,
         "second oscillator gain cc reports second oscillator gain parameter");
     expect_near(synth_get_second_oscillator_gain(&s), 59.0f / 127.0f, 0.0001f, "second oscillator gain cc scales to normalized gain");
 
@@ -374,7 +384,7 @@ static void test_applies_oscillator_mix_cc_values(void)
         apply_cc_value(&mapping, &s, 15, 117, &result),
         "second oscillator morph cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SECOND_OSCILLATOR_MORPH,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_MORPH,
         "second oscillator morph cc reports second oscillator morph parameter");
     expect_near(synth_get_second_oscillator_morph(&s), 117.0f / 127.0f, 0.0001f, "second oscillator morph cc scales to normalized morph");
 
@@ -383,11 +393,12 @@ static void test_applies_oscillator_mix_cc_values(void)
         apply_cc_value(&mapping, &s, 16, 29, &result),
         "second master gain cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN,
+        result.parameter == SYNTH_PARAM_MASTER_GAIN,
         "second master gain cc reports master gain parameter");
     expect_near(synth_get_master_gain(&s), 29.0f / 127.0f, 0.0001f, "second master gain cc scales to normalized gain");
 }
 
+// checks the stereo-spread base binding independently of modulation
 static void test_applies_stereo_spread_cc_value(void)
 {
     midi_mapping mapping;
@@ -405,11 +416,12 @@ static void test_applies_stereo_spread_cc_value(void)
         apply_cc_value(&mapping, &s, 12, 41, &result),
         "stereo spread cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_STEREO_SPREAD,
+        result.parameter == SYNTH_PARAM_STEREO_SPREAD,
         "stereo spread cc reports stereo spread parameter");
     expect_near(synth_get_stereo_spread(&s), 41.0f / 127.0f, 0.0001f, "stereo spread cc scales to normalized width");
 }
 
+// checks global lfo controls and migrated amount bindings, including their target identities
 static void test_applies_lfo_cc_values(void)
 {
     midi_mapping mapping;
@@ -426,21 +438,21 @@ static void test_applies_lfo_cc_values(void)
     pickup_cc(&mapping, &s, 21, 0, 127);
     expect_true(apply_cc_value(&mapping, &s, 21, 116, &result), "lfo rate cc applies");
     expected_rate = expf(logf(0.05f) + ((116.0f / 127.0f) * (logf(20.0f) - logf(0.05f))));
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_RATE, "lfo rate cc reports rate parameter");
+    expect_true(result.parameter == SYNTH_PARAM_LFO_RATE, "lfo rate cc reports rate parameter");
     expect_near(synth_get_lfo_rate(&s), expected_rate, 0.0001f, "lfo rate cc uses logarithmic hz scaling");
 
     pickup_cc(&mapping, &s, 22, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 22, 57, &result), "lfo depth cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_LFO_DEPTH, "lfo depth cc reports depth parameter");
+    expect_true(result.parameter == SYNTH_PARAM_LFO_DEPTH, "lfo depth cc reports depth parameter");
     expect_near(synth_get_lfo_depth(&s), 57.0f / 127.0f, 0.0001f, "lfo depth cc scales to normalized depth");
 
     pickup_cc(&mapping, &s, 19, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 19, 75, &result), "first oscillator morph lfo amount cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_MORPH_AMOUNT,
+        result.parameter == SYNTH_PARAM_OSCILLATOR_MORPH,
         "first oscillator morph lfo cc reports its route");
     expect_near(
-        synth_get_lfo_first_oscillator_morph_amount(&s),
+        synth_get_lfo_amount(&s, SYNTH_PARAM_OSCILLATOR_MORPH),
         75.0f / 127.0f,
         0.0001f,
         "first oscillator morph lfo amount scales normally");
@@ -448,10 +460,10 @@ static void test_applies_lfo_cc_values(void)
     pickup_cc(&mapping, &s, 20, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 20, 21, &result), "second oscillator morph lfo amount cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_MORPH_AMOUNT,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_MORPH,
         "second oscillator morph lfo cc reports its route");
     expect_near(
-        synth_get_lfo_second_oscillator_morph_amount(&s),
+        synth_get_lfo_amount(&s, SYNTH_PARAM_SECOND_OSCILLATOR_MORPH),
         21.0f / 127.0f,
         0.0001f,
         "second oscillator morph lfo amount scales normally");
@@ -459,32 +471,33 @@ static void test_applies_lfo_cc_values(void)
     pickup_cc(&mapping, &s, 24, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 24, 21, &result), "lfo shape morph cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_SHAPE_MORPH,
+        result.parameter == SYNTH_PARAM_LFO_SHAPE_MORPH,
         "lfo shape cc reports shape morph parameter");
     expect_near(synth_get_lfo_shape_morph(&s), 21.0f / 127.0f, 0.0001f, "lfo shape morph cc scales normally");
 
     pickup_cc(&mapping, &s, 17, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 17, 0, &result), "first oscillator lfo amount cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_FIRST_OSCILLATOR_GAIN_AMOUNT,
+        result.parameter == SYNTH_PARAM_FIRST_OSCILLATOR_GAIN,
         "first oscillator lfo cc reports its route");
-    expect_near(synth_get_lfo_first_oscillator_gain_amount(&s), 0.0f, 0.0001f, "first oscillator lfo amount reaches zero");
+    expect_near(synth_get_lfo_amount(&s, SYNTH_PARAM_FIRST_OSCILLATOR_GAIN), 0.0f, 0.0001f, "first oscillator lfo amount reaches zero");
 
     pickup_cc(&mapping, &s, 18, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 18, 74, &result), "second oscillator lfo amount cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_SECOND_OSCILLATOR_GAIN_AMOUNT,
+        result.parameter == SYNTH_PARAM_SECOND_OSCILLATOR_GAIN,
         "second oscillator lfo cc reports its route");
-    expect_near(synth_get_lfo_second_oscillator_gain_amount(&s), 74.0f / 127.0f, 0.0001f, "second oscillator lfo amount scales normally");
+    expect_near(synth_get_lfo_amount(&s, SYNTH_PARAM_SECOND_OSCILLATOR_GAIN), 74.0f / 127.0f, 0.0001f, "second oscillator lfo amount scales normally");
 
     pickup_cc(&mapping, &s, 23, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 23, 75, &result), "filter lfo amount cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_LFO_FILTER_AMOUNT,
+        result.parameter == SYNTH_PARAM_FILTER_CUTOFF,
         "filter lfo cc reports its route");
-    expect_near(synth_get_lfo_filter_amount(&s), 75.0f / 127.0f, 0.0001f, "filter lfo amount scales normally");
+    expect_near(synth_get_lfo_amount(&s, SYNTH_PARAM_FILTER_CUTOFF), 75.0f / 127.0f, 0.0001f, "filter lfo amount scales normally");
 }
 
+// checks that a distant knob position cannot change a setting before reaching pickup
 static void test_waits_for_pickup_before_first_knob_change(void)
 {
     midi_mapping mapping;
@@ -504,163 +517,174 @@ static void test_waits_for_pickup_before_first_knob_change(void)
     expect_near(synth_get_master_gain(&s), SYNTH_DEFAULT_MASTER_GAIN, 0.0001f, "same-side waiting cc leaves master gain unchanged");
 
     expect_true(apply_cc_value(&mapping, &s, 8, 25, &result), "gain cc applies when it reaches pickup");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_MASTER_GAIN, "pickup reports master gain parameter");
+    expect_true(result.parameter == SYNTH_PARAM_MASTER_GAIN, "pickup reports master gain parameter");
 
     expect_true(apply_cc_value(&mapping, &s, 8, 64, &result), "picked-up gain cc keeps applying");
     expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "picked-up gain cc updates normally");
 }
 
+// checks canonical distortion control names and metadata after moving parameter identity into the engine
 static void test_names_distortion_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DISTORTION_DRIVE), "distortion_drive") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_DISTORTION_DRIVE), "distortion_drive") == 0,
         "distortion drive has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DISTORTION_MIX), "distortion_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_DISTORTION_MIX), "distortion_mix") == 0,
         "distortion mix has a midi mapping name");
 }
 
+// checks canonical saturation control names and metadata after moving parameter identity into the engine
 static void test_names_saturation_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_SATURATION_DRIVE), "saturation_drive") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_SATURATION_DRIVE), "saturation_drive") == 0,
         "saturation drive has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_SATURATION_MIX), "saturation_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_SATURATION_MIX), "saturation_mix") == 0,
         "saturation mix has a midi mapping name");
 }
 
+// checks canonical delay control names and metadata after moving parameter identity into the engine
 static void test_names_delay_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DELAY_TIME), "delay_time") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_DELAY_TIME), "delay_time") == 0,
         "delay time has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DELAY_FEEDBACK), "delay_feedback") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_DELAY_FEEDBACK), "delay_feedback") == 0,
         "delay feedback has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_DELAY_MIX), "delay_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_DELAY_MIX), "delay_mix") == 0,
         "delay mix has a midi mapping name");
 }
 
+// checks canonical plate reverb control names and metadata after moving parameter identity into the engine
 static void test_names_plate_reverb_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY), "plate_reverb_decay") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_PLATE_REVERB_DECAY), "plate_reverb_decay") == 0,
         "plate reverb decay has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING), "plate_reverb_damping") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_PLATE_REVERB_DAMPING), "plate_reverb_damping") == 0,
         "plate reverb damping has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_MIX), "plate_reverb_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_PLATE_REVERB_MIX), "plate_reverb_mix") == 0,
         "plate reverb mix has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY), "plate_reverb_predelay") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_PLATE_REVERB_PREDELAY), "plate_reverb_predelay") == 0,
         "plate reverb predelay has a midi mapping name");
 }
 
+// checks canonical bitcrusher control names and metadata after moving parameter identity into the engine
 static void test_names_bitcrusher_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_BITCRUSHER_SAMPLE_RATE), "bitcrusher_sample_rate") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_BITCRUSHER_SAMPLE_RATE), "bitcrusher_sample_rate") == 0,
         "bitcrusher sample rate has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_BITCRUSHER_BITS), "bitcrusher_bits") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_BITCRUSHER_BITS), "bitcrusher_bits") == 0,
         "bitcrusher bits has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_BITCRUSHER_MIX), "bitcrusher_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_BITCRUSHER_MIX), "bitcrusher_mix") == 0,
         "bitcrusher mix has a midi mapping name");
 }
 
+// checks canonical flanger control names and metadata after moving parameter identity into the engine
 static void test_names_flanger_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_RATE), "flanger_rate") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_FLANGER_RATE), "flanger_rate") == 0,
         "flanger rate has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_INTENSITY), "flanger_intensity") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_FLANGER_INTENSITY), "flanger_intensity") == 0,
         "flanger intensity has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_DEPTH), "flanger_depth") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_FLANGER_DEPTH), "flanger_depth") == 0,
         "flanger depth has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_FEEDBACK), "flanger_feedback") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_FLANGER_FEEDBACK), "flanger_feedback") == 0,
         "flanger feedback has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_MIX), "flanger_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_FLANGER_MIX), "flanger_mix") == 0,
         "flanger mix has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_FLANGER_MANUAL), "flanger_manual") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_FLANGER_MANUAL), "flanger_manual") == 0,
         "flanger manual delay has a midi mapping name");
 }
 
+// checks canonical ring mod control names and metadata after moving parameter identity into the engine
 static void test_names_ring_mod_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY), "ring_mod_frequency") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_RING_MOD_FREQUENCY), "ring_mod_frequency") == 0,
         "ring mod frequency has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_RING_MOD_RECTIFY), "ring_mod_rectify") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_RING_MOD_RECTIFY), "ring_mod_rectify") == 0,
         "ring mod rectify has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_RING_MOD_MIX), "ring_mod_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_RING_MOD_MIX), "ring_mod_mix") == 0,
         "ring mod mix has a midi mapping name");
 }
 
+// checks canonical chorus control names and metadata after moving parameter identity into the engine
 static void test_names_chorus_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_RATE), "chorus_rate") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_CHORUS_RATE), "chorus_rate") == 0,
         "chorus rate has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_DEPTH), "chorus_depth") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_CHORUS_DEPTH), "chorus_depth") == 0,
         "chorus depth has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_MIX), "chorus_mix") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_CHORUS_MIX), "chorus_mix") == 0,
         "chorus mix has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_WIDTH), "chorus_width") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_CHORUS_WIDTH), "chorus_width") == 0,
         "chorus width has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_DELAY), "chorus_delay") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_CHORUS_DELAY), "chorus_delay") == 0,
         "chorus delay has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_CHORUS_FEEDBACK), "chorus_feedback") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_CHORUS_FEEDBACK), "chorus_feedback") == 0,
         "chorus feedback has a midi mapping name");
 }
 
+// checks canonical eq control names and metadata after moving parameter identity into the engine
 static void test_names_eq_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_EQ_LOW), "eq_low") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_EQ_LOW), "eq_low") == 0,
         "eq low has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_EQ_MID), "eq_mid") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_EQ_MID), "eq_mid") == 0,
         "eq mid has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_EQ_HIGH), "eq_high") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_EQ_HIGH), "eq_high") == 0,
         "eq high has a midi mapping name");
 }
 
+// checks canonical compressor control names and metadata after moving parameter identity into the engine
 static void test_names_compressor_parameters(void)
 {
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD), "compressor_threshold") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_COMPRESSOR_THRESHOLD), "compressor_threshold") == 0,
         "compressor threshold has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_RATIO), "compressor_ratio") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_COMPRESSOR_RATIO), "compressor_ratio") == 0,
         "compressor ratio has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN), "compressor_makeup_gain") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN), "compressor_makeup_gain") == 0,
         "compressor makeup gain has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_ATTACK_SECONDS), "compressor_attack_seconds") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_COMPRESSOR_ATTACK_SECONDS), "compressor_attack_seconds") == 0,
         "compressor attack has a midi mapping name");
     expect_true(
-        strcmp(midi_mapping_parameter_name(MIDI_MAPPING_PARAM_COMPRESSOR_RELEASE_SECONDS), "compressor_release_seconds") == 0,
+        strcmp(midi_mapping_parameter_name(SYNTH_PARAM_COMPRESSOR_RELEASE_SECONDS), "compressor_release_seconds") == 0,
         "compressor release has a midi mapping name");
 }
 
+// checks the distortion mix base binding after the registry migration
 static void test_applies_distortion_mix_cc_value(void)
 {
     midi_mapping mapping;
@@ -676,7 +700,7 @@ static void test_applies_distortion_mix_cc_value(void)
     pickup_cc(&mapping, &s, 25, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 25, 44, &result), "distortion mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_DISTORTION_MIX,
+        result.parameter == SYNTH_PARAM_DISTORTION_MIX,
         "distortion mix cc reports distortion mix parameter");
     expect_near(
         synth_get_distortion_mix(&s),
@@ -686,6 +710,7 @@ static void test_applies_distortion_mix_cc_value(void)
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "distortion mix result reports normalized value");
 }
 
+// checks the distortion drive base binding after the registry migration
 static void test_applies_distortion_drive_cc_value(void)
 {
     midi_mapping mapping;
@@ -704,7 +729,7 @@ static void test_applies_distortion_drive_cc_value(void)
     pickup_cc(&mapping, &s, 26, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 26, 96, &result), "distortion drive cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_DISTORTION_DRIVE,
+        result.parameter == SYNTH_PARAM_DISTORTION_DRIVE,
         "distortion drive cc reports distortion drive parameter");
     expect_near(
         synth_get_distortion_drive(&s),
@@ -714,6 +739,7 @@ static void test_applies_distortion_drive_cc_value(void)
     expect_near(result.synth_value, expected_drive, 0.0001f, "distortion drive result reports scaled value");
 }
 
+// checks that mapped ccs still update the expected saturation base controls
 static void test_applies_saturation_cc_values(void)
 {
     midi_mapping mapping;
@@ -725,7 +751,7 @@ static void test_applies_saturation_cc_values(void)
 
     midi_mapping_init(&mapping);
     mapping.binding_count = 2;
-    mapping.bindings[0].parameter = MIDI_MAPPING_PARAM_SATURATION_MIX;
+    mapping.bindings[0].parameter = SYNTH_PARAM_SATURATION_MIX;
     mapping.bindings[0].source_type = MIDI_MAPPING_SOURCE_CC;
     mapping.bindings[0].channel = 1;
     mapping.bindings[0].control = 33;
@@ -733,7 +759,7 @@ static void test_applies_saturation_cc_values(void)
     mapping.bindings[0].min_value = 0.0f;
     mapping.bindings[0].max_value = 1.0f;
     mapping.bindings[0].pickup.picked_up = 1;
-    mapping.bindings[1].parameter = MIDI_MAPPING_PARAM_SATURATION_DRIVE;
+    mapping.bindings[1].parameter = SYNTH_PARAM_SATURATION_DRIVE;
     mapping.bindings[1].source_type = MIDI_MAPPING_SOURCE_CC;
     mapping.bindings[1].channel = 1;
     mapping.bindings[1].control = 34;
@@ -745,7 +771,7 @@ static void test_applies_saturation_cc_values(void)
 
     expect_true(apply_cc_value(&mapping, &s, 33, 44, &result), "saturation mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX,
+        result.parameter == SYNTH_PARAM_SATURATION_MIX,
         "saturation mix cc reports saturation mix parameter");
     expect_near(
         synth_get_saturation_mix(&s),
@@ -756,7 +782,7 @@ static void test_applies_saturation_cc_values(void)
 
     expect_true(apply_cc_value(&mapping, &s, 34, 96, &result), "saturation drive cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        result.parameter == SYNTH_PARAM_SATURATION_DRIVE,
         "saturation drive cc reports saturation drive parameter");
     expect_near(
         synth_get_saturation_drive(&s),
@@ -766,6 +792,7 @@ static void test_applies_saturation_cc_values(void)
     expect_near(result.synth_value, expected_drive, 0.0001f, "saturation drive result reports scaled value");
 }
 
+// checks that mapped ccs still update the expected bitcrusher base controls
 static void test_applies_bitcrusher_cc_values(void)
 {
     midi_mapping mapping;
@@ -783,7 +810,7 @@ static void test_applies_bitcrusher_cc_values(void)
     pickup_cc(&mapping, &s, 27, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 27, 44, &result), "bitcrusher mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_BITCRUSHER_MIX,
+        result.parameter == SYNTH_PARAM_BITCRUSHER_MIX,
         "bitcrusher mix cc reports bitcrusher mix parameter");
     expect_near(
         synth_get_bitcrusher_mix(&s),
@@ -795,7 +822,7 @@ static void test_applies_bitcrusher_cc_values(void)
     pickup_cc(&mapping, &s, 28, 0, 127);
     expect_true(apply_cc_value(&mapping, &s, 28, 64, &result), "bitcrusher sample rate cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_BITCRUSHER_SAMPLE_RATE,
+        result.parameter == SYNTH_PARAM_BITCRUSHER_SAMPLE_RATE,
         "bitcrusher sample rate cc reports bitcrusher sample rate parameter");
     expect_near(
         synth_get_bitcrusher_sample_rate(&s),
@@ -807,12 +834,13 @@ static void test_applies_bitcrusher_cc_values(void)
     pickup_cc(&mapping, &s, 29, 127, 127);
     expect_true(apply_cc_value(&mapping, &s, 29, 85, &result), "bitcrusher bits cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_BITCRUSHER_BITS,
+        result.parameter == SYNTH_PARAM_BITCRUSHER_BITS,
         "bitcrusher bits cc reports bitcrusher bits parameter");
     expect_true(synth_get_bitcrusher_bits(&s) == 11, "bitcrusher bits cc steps to eleven bits");
     expect_near(result.synth_value, 11.0f, 0.0001f, "bitcrusher bits result reports stepped value");
 }
 
+// checks that mapped ccs still update the expected flanger base controls
 static void test_applies_flanger_cc_values(void)
 {
     midi_mapping mapping;
@@ -844,7 +872,7 @@ static void test_applies_flanger_cc_values(void)
     pickup_cc(&mapping, &s, 45, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 45, 64, &result), "flanger rate cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FLANGER_RATE,
+        result.parameter == SYNTH_PARAM_FLANGER_RATE,
         "flanger rate cc reports flanger rate parameter");
     expect_near(
         synth_get_flanger_rate(&s),
@@ -856,7 +884,7 @@ static void test_applies_flanger_cc_values(void)
     pickup_cc(&mapping, &s, 50, 0, 83);
     expect_true(apply_cc_value(&mapping, &s, 50, 96, &result), "flanger intensity cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FLANGER_INTENSITY,
+        result.parameter == SYNTH_PARAM_FLANGER_INTENSITY,
         "flanger intensity cc reports flanger intensity parameter");
     expect_near(
         synth_get_flanger_intensity(&s),
@@ -877,14 +905,14 @@ static void test_applies_flanger_cc_values(void)
     pickup_cc(&mapping, &s, 46, 0, 96);
     expect_true(apply_cc_value(&mapping, &s, 46, 96, &result), "flanger depth cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FLANGER_DEPTH,
+        result.parameter == SYNTH_PARAM_FLANGER_DEPTH,
         "flanger depth cc reports flanger depth parameter");
     expect_near(synth_get_flanger_depth(&s), 96.0f / 127.0f, 0.0001f, "flanger depth scales");
 
     pickup_cc(&mapping, &s, 47, 127, 86);
     expect_true(apply_cc_value(&mapping, &s, 47, 96, &result), "flanger feedback cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FLANGER_FEEDBACK,
+        result.parameter == SYNTH_PARAM_FLANGER_FEEDBACK,
         "flanger feedback cc reports flanger feedback parameter");
     expect_near(
         synth_get_flanger_feedback(&s),
@@ -895,14 +923,14 @@ static void test_applies_flanger_cc_values(void)
     pickup_cc(&mapping, &s, 48, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 48, 44, &result), "flanger mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FLANGER_MIX,
+        result.parameter == SYNTH_PARAM_FLANGER_MIX,
         "flanger mix cc reports flanger mix parameter");
     expect_near(synth_get_flanger_mix(&s), 44.0f / 127.0f, 0.0001f, "flanger mix scales");
 
     pickup_cc(&mapping, &s, 49, 0, 29);
     expect_true(apply_cc_value(&mapping, &s, 49, 44, &result), "flanger manual cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_FLANGER_MANUAL,
+        result.parameter == SYNTH_PARAM_FLANGER_MANUAL,
         "flanger manual cc reports flanger manual parameter");
     expect_near(
         synth_get_flanger_manual(&s),
@@ -911,6 +939,7 @@ static void test_applies_flanger_cc_values(void)
         "flanger manual delay scales to seconds");
 }
 
+// checks that mapped ccs still update the expected ring mod base controls
 static void test_applies_ring_mod_cc_values(void)
 {
     midi_mapping mapping;
@@ -936,7 +965,7 @@ static void test_applies_ring_mod_cc_values(void)
     pickup_cc(&mapping, &s, 51, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 51, 64, &result), "ring mod frequency cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY,
+        result.parameter == SYNTH_PARAM_RING_MOD_FREQUENCY,
         "ring mod frequency cc reports ring mod frequency parameter");
     expect_near(
         synth_get_ring_mod_frequency(&s),
@@ -948,7 +977,7 @@ static void test_applies_ring_mod_cc_values(void)
     pickup_cc(&mapping, &s, 52, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 52, 96, &result), "ring mod rectify cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_RING_MOD_RECTIFY,
+        result.parameter == SYNTH_PARAM_RING_MOD_RECTIFY,
         "ring mod rectify cc reports ring mod rectify parameter");
     expect_near(
         synth_get_ring_mod_rectify(&s),
@@ -960,12 +989,13 @@ static void test_applies_ring_mod_cc_values(void)
     pickup_cc(&mapping, &s, 53, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 53, 44, &result), "ring mod mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX,
+        result.parameter == SYNTH_PARAM_RING_MOD_MIX,
         "ring mod mix cc reports ring mod mix parameter");
     expect_near(synth_get_ring_mod_mix(&s), 44.0f / 127.0f, 0.0001f, "ring mod mix scales");
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "ring mod mix result reports normalized value");
 }
 
+// checks that mapped ccs still update the expected chorus base controls
 static void test_applies_chorus_cc_values(void)
 {
     midi_mapping mapping;
@@ -993,7 +1023,7 @@ static void test_applies_chorus_cc_values(void)
     pickup_cc(&mapping, &s, 62, 0, 70);
     expect_true(apply_cc_value(&mapping, &s, 62, 64, &result), "chorus rate cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_CHORUS_RATE,
+        result.parameter == SYNTH_PARAM_CHORUS_RATE,
         "chorus rate cc reports chorus rate parameter");
     expect_near(
         synth_get_chorus_rate(&s),
@@ -1005,35 +1035,35 @@ static void test_applies_chorus_cc_values(void)
     pickup_cc(&mapping, &s, 63, 0, 89);
     expect_true(apply_cc_value(&mapping, &s, 63, 96, &result), "chorus depth cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_CHORUS_DEPTH,
+        result.parameter == SYNTH_PARAM_CHORUS_DEPTH,
         "chorus depth cc reports chorus depth parameter");
     expect_near(synth_get_chorus_depth(&s), 96.0f / 127.0f, 0.0001f, "chorus depth scales");
 
     pickup_cc(&mapping, &s, 64, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 64, 44, &result), "chorus mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_CHORUS_MIX,
+        result.parameter == SYNTH_PARAM_CHORUS_MIX,
         "chorus mix cc reports chorus mix parameter");
     expect_near(synth_get_chorus_mix(&s), 44.0f / 127.0f, 0.0001f, "chorus mix scales");
 
     pickup_cc(&mapping, &s, 65, 127, 127);
     expect_true(apply_cc_value(&mapping, &s, 65, 80, &result), "chorus width cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_CHORUS_WIDTH,
+        result.parameter == SYNTH_PARAM_CHORUS_WIDTH,
         "chorus width cc reports chorus width parameter");
     expect_near(synth_get_chorus_width(&s), 80.0f / 127.0f, 0.0001f, "chorus width scales");
 
     pickup_cc(&mapping, &s, 66, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 66, 44, &result), "chorus delay cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_CHORUS_DELAY,
+        result.parameter == SYNTH_PARAM_CHORUS_DELAY,
         "chorus delay cc reports chorus delay parameter");
     expect_near(synth_get_chorus_delay(&s), expected_delay, 0.0001f, "chorus delay scales to seconds");
 
     pickup_cc(&mapping, &s, 67, 127, 63);
     expect_true(apply_cc_value(&mapping, &s, 67, 96, &result), "chorus feedback cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_CHORUS_FEEDBACK,
+        result.parameter == SYNTH_PARAM_CHORUS_FEEDBACK,
         "chorus feedback cc reports chorus feedback parameter");
     expect_near(
         synth_get_chorus_feedback(&s),
@@ -1042,6 +1072,7 @@ static void test_applies_chorus_cc_values(void)
         "chorus feedback scales across negative and positive feedback");
 }
 
+// checks that mapped ccs still update the expected eq base controls
 static void test_applies_eq_cc_values(void)
 {
     midi_mapping mapping;
@@ -1065,23 +1096,24 @@ static void test_applies_eq_cc_values(void)
 
     pickup_cc(&mapping, &s, 54, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 54, 96, &result), "eq low cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_EQ_LOW, "eq low cc reports eq low parameter");
+    expect_true(result.parameter == SYNTH_PARAM_EQ_LOW, "eq low cc reports eq low parameter");
     expect_near(synth_get_eq_low(&s), expected_low, 0.0001f, "eq low cc scales to decibels");
     expect_near(result.synth_value, expected_low, 0.0001f, "eq low result reports decibels");
 
     pickup_cc(&mapping, &s, 55, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 55, 32, &result), "eq mid cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_EQ_MID, "eq mid cc reports eq mid parameter");
+    expect_true(result.parameter == SYNTH_PARAM_EQ_MID, "eq mid cc reports eq mid parameter");
     expect_near(synth_get_eq_mid(&s), expected_mid, 0.0001f, "eq mid cc scales to decibels");
     expect_near(result.synth_value, expected_mid, 0.0001f, "eq mid result reports decibels");
 
     pickup_cc(&mapping, &s, 56, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 56, 80, &result), "eq high cc applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_EQ_HIGH, "eq high cc reports eq high parameter");
+    expect_true(result.parameter == SYNTH_PARAM_EQ_HIGH, "eq high cc reports eq high parameter");
     expect_near(synth_get_eq_high(&s), expected_high, 0.0001f, "eq high cc scales to decibels");
     expect_near(result.synth_value, expected_high, 0.0001f, "eq high result reports decibels");
 }
 
+// checks that mapped ccs still update the expected compressor base controls
 static void test_applies_compressor_cc_values(void)
 {
     midi_mapping mapping;
@@ -1121,7 +1153,7 @@ static void test_applies_compressor_cc_values(void)
     pickup_cc(&mapping, &s, 57, 127, 127);
     expect_true(apply_cc_value(&mapping, &s, 57, 64, &result), "compressor threshold cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_THRESHOLD,
         "compressor threshold cc reports compressor threshold parameter");
     expect_near(
         synth_get_compressor_threshold(&s),
@@ -1138,7 +1170,7 @@ static void test_applies_compressor_cc_values(void)
     pickup_cc(&mapping, &s, 58, 0, 127);
     expect_true(apply_cc_value(&mapping, &s, 58, 96, &result), "compressor ratio cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RATIO,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_RATIO,
         "compressor ratio cc reports compressor ratio parameter");
     expect_near(
         synth_get_compressor_ratio(&s),
@@ -1150,7 +1182,7 @@ static void test_applies_compressor_cc_values(void)
     pickup_cc(&mapping, &s, 59, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 59, 44, &result), "compressor makeup gain cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN,
         "compressor makeup gain cc reports compressor makeup gain parameter");
     expect_near(
         synth_get_compressor_makeup_gain(&s),
@@ -1162,7 +1194,7 @@ static void test_applies_compressor_cc_values(void)
     pickup_cc(&mapping, &s, 60, 0, 127);
     expect_true(apply_cc_value(&mapping, &s, 60, 64, &result), "compressor attack cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_ATTACK_SECONDS,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_ATTACK_SECONDS,
         "compressor attack cc reports compressor attack parameter");
     expect_near(
         synth_get_compressor_attack_seconds(&s),
@@ -1174,7 +1206,7 @@ static void test_applies_compressor_cc_values(void)
     pickup_cc(&mapping, &s, 61, 0, 127);
     expect_true(apply_cc_value(&mapping, &s, 61, 96, &result), "compressor release cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RELEASE_SECONDS,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_RELEASE_SECONDS,
         "compressor release cc reports compressor release parameter");
     expect_near(
         synth_get_compressor_release_seconds(&s),
@@ -1186,6 +1218,7 @@ static void test_applies_compressor_cc_values(void)
     synth_uninit(&s);
 }
 
+// checks that mapped ccs still update the expected delay base controls
 static void test_applies_delay_cc_values(void)
 {
     midi_mapping mapping;
@@ -1203,7 +1236,7 @@ static void test_applies_delay_cc_values(void)
     pickup_cc(&mapping, &s, 30, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 30, 44, &result), "delay mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_DELAY_MIX,
+        result.parameter == SYNTH_PARAM_DELAY_MIX,
         "delay mix cc reports delay mix parameter");
     expect_near(synth_get_delay_mix(&s), 44.0f / 127.0f, 0.0001f, "delay mix cc scales to normalized dry wet");
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "delay mix result reports normalized value");
@@ -1211,7 +1244,7 @@ static void test_applies_delay_cc_values(void)
     pickup_cc(&mapping, &s, 31, 0, 16);
     expect_true(apply_cc_value(&mapping, &s, 31, 64, &result), "delay time cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME,
+        result.parameter == SYNTH_PARAM_DELAY_TIME,
         "delay time cc reports delay time parameter");
     expect_near(synth_get_delay_time(&s), expected_time, 0.0001f, "delay time cc scales to seconds");
     expect_near(result.synth_value, expected_time, 0.0001f, "delay time result reports seconds");
@@ -1219,12 +1252,13 @@ static void test_applies_delay_cc_values(void)
     pickup_cc(&mapping, &s, 32, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 32, 96, &result), "delay feedback cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_DELAY_FEEDBACK,
+        result.parameter == SYNTH_PARAM_DELAY_FEEDBACK,
         "delay feedback cc reports delay feedback parameter");
     expect_near(synth_get_delay_feedback(&s), expected_feedback, 0.0001f, "delay feedback cc scales to bounded feedback");
     expect_near(result.synth_value, expected_feedback, 0.0001f, "delay feedback result reports scaled value");
 }
 
+// checks that mapped ccs still update the expected plate reverb base controls
 static void test_applies_plate_reverb_cc_values(void)
 {
     midi_mapping mapping;
@@ -1247,7 +1281,7 @@ static void test_applies_plate_reverb_cc_values(void)
     pickup_cc(&mapping, &s, 41, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 41, 44, &result), "plate reverb mix cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX,
+        result.parameter == SYNTH_PARAM_PLATE_REVERB_MIX,
         "plate reverb mix cc reports plate reverb mix parameter");
     expect_near(
         synth_get_plate_reverb_mix(&s),
@@ -1258,7 +1292,7 @@ static void test_applies_plate_reverb_cc_values(void)
     pickup_cc(&mapping, &s, 42, 0, 22);
     expect_true(apply_cc_value(&mapping, &s, 42, 64, &result), "plate reverb decay cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY,
+        result.parameter == SYNTH_PARAM_PLATE_REVERB_DECAY,
         "plate reverb decay cc reports plate reverb decay parameter");
     expect_near(
         synth_get_plate_reverb_decay(&s),
@@ -1270,7 +1304,7 @@ static void test_applies_plate_reverb_cc_values(void)
     pickup_cc(&mapping, &s, 43, 0, 44);
     expect_true(apply_cc_value(&mapping, &s, 43, 96, &result), "plate reverb damping cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING,
+        result.parameter == SYNTH_PARAM_PLATE_REVERB_DAMPING,
         "plate reverb damping cc reports plate reverb damping parameter");
     expect_near(
         synth_get_plate_reverb_damping(&s),
@@ -1281,7 +1315,7 @@ static void test_applies_plate_reverb_cc_values(void)
     pickup_cc(&mapping, &s, 44, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 44, 44, &result), "plate reverb predelay cc applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_PREDELAY,
+        result.parameter == SYNTH_PARAM_PLATE_REVERB_PREDELAY,
         "plate reverb predelay cc reports plate reverb predelay parameter");
     expect_near(
         synth_get_plate_reverb_predelay(&s),
@@ -1290,6 +1324,7 @@ static void test_applies_plate_reverb_cc_values(void)
         "plate reverb predelay cc scales to seconds");
 }
 
+// checks that selector/macro assignments still load alongside direct parameter bindings
 static void test_loads_effect_macro_mapping(void)
 {
     midi_mapping mapping;
@@ -1401,7 +1436,7 @@ static void test_loads_effect_macro_mapping(void)
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 0, &parameter),
         "saturation macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_SATURATION_DRIVE,
+        parameter == SYNTH_PARAM_SATURATION_DRIVE,
         "saturation macro one routes to drive");
     expect_true(
         !midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 1, &parameter),
@@ -1410,115 +1445,115 @@ static void test_loads_effect_macro_mapping(void)
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_SATURATION, 2, &parameter),
         "saturation macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_SATURATION_MIX,
+        parameter == SYNTH_PARAM_SATURATION_MIX,
         "saturation macro three routes to dry wet");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_PLATE_REVERB, 0, &parameter),
         "plate reverb macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY,
+        parameter == SYNTH_PARAM_PLATE_REVERB_DECAY,
         "plate reverb macro one routes to decay");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_PLATE_REVERB, 1, &parameter),
         "plate reverb macro two has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING,
+        parameter == SYNTH_PARAM_PLATE_REVERB_DAMPING,
         "plate reverb macro two routes to damping");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_PLATE_REVERB, 2, &parameter),
         "plate reverb macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX,
+        parameter == SYNTH_PARAM_PLATE_REVERB_MIX,
         "plate reverb macro three routes to dry wet");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_FLANGER, 0, &parameter),
         "flanger macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_FLANGER_RATE,
+        parameter == SYNTH_PARAM_FLANGER_RATE,
         "flanger macro one routes to rate");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_FLANGER, 1, &parameter),
         "flanger macro two has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_FLANGER_INTENSITY,
+        parameter == SYNTH_PARAM_FLANGER_INTENSITY,
         "flanger macro two routes to intensity");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_FLANGER, 2, &parameter),
         "flanger macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_FLANGER_MIX,
+        parameter == SYNTH_PARAM_FLANGER_MIX,
         "flanger macro three routes to dry wet");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_RING_MOD, 0, &parameter),
         "ring mod macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY,
+        parameter == SYNTH_PARAM_RING_MOD_FREQUENCY,
         "ring mod macro one routes to frequency");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_RING_MOD, 1, &parameter),
         "ring mod macro two has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_RING_MOD_RECTIFY,
+        parameter == SYNTH_PARAM_RING_MOD_RECTIFY,
         "ring mod macro two routes to rectification");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_RING_MOD, 2, &parameter),
         "ring mod macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX,
+        parameter == SYNTH_PARAM_RING_MOD_MIX,
         "ring mod macro three routes to dry wet");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_CHORUS, 0, &parameter),
         "chorus macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_CHORUS_RATE,
+        parameter == SYNTH_PARAM_CHORUS_RATE,
         "chorus macro one routes to rate");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_CHORUS, 1, &parameter),
         "chorus macro two has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_CHORUS_DEPTH,
+        parameter == SYNTH_PARAM_CHORUS_DEPTH,
         "chorus macro two routes to depth");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_CHORUS, 2, &parameter),
         "chorus macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_CHORUS_MIX,
+        parameter == SYNTH_PARAM_CHORUS_MIX,
         "chorus macro three routes to dry wet");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_EQ, 0, &parameter),
         "eq macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_EQ_LOW,
+        parameter == SYNTH_PARAM_EQ_LOW,
         "eq macro one routes to low band");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_EQ, 1, &parameter),
         "eq macro two has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_EQ_MID,
+        parameter == SYNTH_PARAM_EQ_MID,
         "eq macro two routes to mid band");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_EQ, 2, &parameter),
         "eq macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_EQ_HIGH,
+        parameter == SYNTH_PARAM_EQ_HIGH,
         "eq macro three routes to high band");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_COMPRESSOR, 0, &parameter),
         "compressor macro one has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD,
+        parameter == SYNTH_PARAM_COMPRESSOR_THRESHOLD,
         "compressor macro one routes to threshold");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_COMPRESSOR, 1, &parameter),
         "compressor macro two has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RATIO,
+        parameter == SYNTH_PARAM_COMPRESSOR_RATIO,
         "compressor macro two routes to ratio");
     expect_true(
         midi_mapping_effect_macro_parameter(MIDI_MAPPING_EFFECT_COMPRESSOR, 2, &parameter),
         "compressor macro three has a route");
     expect_true(
-        parameter == MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN,
+        parameter == SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN,
         "compressor macro three routes to makeup gain");
 }
 
@@ -1662,6 +1697,7 @@ static void test_effect_selectors_use_bank_pages(void)
         "bank two value one twenty-seven chooses chorus");
 }
 
+// checks that a macro writes the base parameter belonging to the selected effect page
 static void test_effect_macros_apply_selected_effect_parameters(void)
 {
     midi_mapping mapping;
@@ -1731,17 +1767,17 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(result.effect_bank_index == 0, "delay macro one reports bank one");
     expect_true(result.has_effect, "delay macro one reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_DELAY, "delay macro one reports selected effect");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "delay macro one reports delay time");
+    expect_true(result.parameter == SYNTH_PARAM_DELAY_TIME, "delay macro one reports delay time");
     expect_near(synth_get_delay_time(&s), expected_time, 0.0001f, "delay macro one scales delay time");
 
     pickup_cc(&mapping, &s, 12, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 12, 96, &result), "delay macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_FEEDBACK, "delay macro two reports delay feedback");
+    expect_true(result.parameter == SYNTH_PARAM_DELAY_FEEDBACK, "delay macro two reports delay feedback");
     expect_near(synth_get_delay_feedback(&s), expected_feedback, 0.0001f, "delay macro two scales delay feedback");
 
     pickup_cc(&mapping, &s, 13, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 13, 44, &result), "delay macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_MIX, "delay macro three reports delay mix");
+    expect_true(result.parameter == SYNTH_PARAM_DELAY_MIX, "delay macro three reports delay mix");
     expect_near(synth_get_delay_mix(&s), 44.0f / 127.0f, 0.0001f, "delay macro three scales delay dry wet");
 
     (void)apply_cc_value(&mapping, &s, 10, 127, 0);
@@ -1749,17 +1785,17 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(apply_cc_value(&mapping, &s, 11, 64, &result), "plate reverb macro one applies");
     expect_true(result.effect_bank_index == 0, "plate reverb macro one reports bank one");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_PLATE_REVERB, "plate reverb macro one reports selected effect");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DECAY, "plate reverb macro one reports decay");
+    expect_true(result.parameter == SYNTH_PARAM_PLATE_REVERB_DECAY, "plate reverb macro one reports decay");
     expect_near(synth_get_plate_reverb_decay(&s), expected_decay, 0.0001f, "plate reverb macro one scales decay");
 
     pickup_cc(&mapping, &s, 12, 0, 44);
     expect_true(apply_cc_value(&mapping, &s, 12, 96, &result), "plate reverb macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_DAMPING, "plate reverb macro two reports damping");
+    expect_true(result.parameter == SYNTH_PARAM_PLATE_REVERB_DAMPING, "plate reverb macro two reports damping");
     expect_near(synth_get_plate_reverb_damping(&s), 96.0f / 127.0f, 0.0001f, "plate reverb macro two scales damping");
 
     pickup_cc(&mapping, &s, 13, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 13, 44, &result), "plate reverb macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_PLATE_REVERB_MIX, "plate reverb macro three reports mix");
+    expect_true(result.parameter == SYNTH_PARAM_PLATE_REVERB_MIX, "plate reverb macro three reports mix");
     expect_near(synth_get_plate_reverb_mix(&s), 44.0f / 127.0f, 0.0001f, "plate reverb macro three scales dry wet");
 
     (void)apply_cc_value(&mapping, &s, 14, 0, 0);
@@ -1768,12 +1804,12 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(result.effect_bank_index == 1, "flanger macro one reports bank two");
     expect_true(result.has_effect, "flanger macro one reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_FLANGER, "flanger macro one reports selected effect");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_FLANGER_RATE, "flanger macro one reports rate");
+    expect_true(result.parameter == SYNTH_PARAM_FLANGER_RATE, "flanger macro one reports rate");
     expect_near(synth_get_flanger_rate(&s), expected_flanger_rate, 0.0001f, "flanger macro one scales rate");
 
     pickup_cc(&mapping, &s, 16, 0, 96);
     expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "flanger macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_FLANGER_INTENSITY, "flanger macro two reports intensity");
+    expect_true(result.parameter == SYNTH_PARAM_FLANGER_INTENSITY, "flanger macro two reports intensity");
     expect_near(synth_get_flanger_intensity(&s), 96.0f / 127.0f, 0.0001f, "flanger macro two scales intensity");
     expect_near(synth_get_flanger_depth(&s), 96.0f / 127.0f, 0.0001f, "flanger macro two controls depth");
     expect_near(
@@ -1784,7 +1820,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
 
     pickup_cc(&mapping, &s, 17, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "flanger macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_FLANGER_MIX, "flanger macro three reports mix");
+    expect_true(result.parameter == SYNTH_PARAM_FLANGER_MIX, "flanger macro three reports mix");
     expect_near(synth_get_flanger_mix(&s), 44.0f / 127.0f, 0.0001f, "flanger macro three scales dry wet");
 
     (void)apply_cc_value(&mapping, &s, 14, 26, 0);
@@ -1793,7 +1829,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(result.effect_bank_index == 1, "ring mod macro one reports bank two");
     expect_true(result.has_effect, "ring mod macro one reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_RING_MOD, "ring mod macro one reports selected effect");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_RING_MOD_FREQUENCY, "ring mod macro one reports frequency");
+    expect_true(result.parameter == SYNTH_PARAM_RING_MOD_FREQUENCY, "ring mod macro one reports frequency");
     expect_near(
         synth_get_ring_mod_frequency(&s),
         expected_ring_mod_frequency,
@@ -1802,7 +1838,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
 
     pickup_cc(&mapping, &s, 16, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "ring mod macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_RING_MOD_RECTIFY, "ring mod macro two reports rectify");
+    expect_true(result.parameter == SYNTH_PARAM_RING_MOD_RECTIFY, "ring mod macro two reports rectify");
     expect_near(
         synth_get_ring_mod_rectify(&s),
         expected_ring_mod_rectify,
@@ -1811,7 +1847,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
 
     pickup_cc(&mapping, &s, 17, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "ring mod macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_RING_MOD_MIX, "ring mod macro three reports mix");
+    expect_true(result.parameter == SYNTH_PARAM_RING_MOD_MIX, "ring mod macro three reports mix");
     expect_near(synth_get_ring_mod_mix(&s), 44.0f / 127.0f, 0.0001f, "ring mod macro three scales dry wet");
 
     (void)apply_cc_value(&mapping, &s, 14, 52, 0);
@@ -1820,17 +1856,17 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(result.effect_bank_index == 1, "eq macro one reports bank two");
     expect_true(result.has_effect, "eq macro one reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_EQ, "eq macro one reports selected effect");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_EQ_LOW, "eq macro one reports low");
+    expect_true(result.parameter == SYNTH_PARAM_EQ_LOW, "eq macro one reports low");
     expect_near(synth_get_eq_low(&s), expected_eq_low, 0.0001f, "eq macro one scales low band");
 
     pickup_cc(&mapping, &s, 16, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 16, 32, &result), "eq macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_EQ_MID, "eq macro two reports mid");
+    expect_true(result.parameter == SYNTH_PARAM_EQ_MID, "eq macro two reports mid");
     expect_near(synth_get_eq_mid(&s), expected_eq_mid, 0.0001f, "eq macro two scales mid band");
 
     pickup_cc(&mapping, &s, 17, 0, 64);
     expect_true(apply_cc_value(&mapping, &s, 17, 80, &result), "eq macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_EQ_HIGH, "eq macro three reports high");
+    expect_true(result.parameter == SYNTH_PARAM_EQ_HIGH, "eq macro three reports high");
     expect_near(synth_get_eq_high(&s), expected_eq_high, 0.0001f, "eq macro three scales high band");
 
     (void)apply_cc_value(&mapping, &s, 14, 77, 0);
@@ -1840,7 +1876,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(result.has_effect, "compressor macro one reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_COMPRESSOR, "compressor macro one reports selected effect");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_THRESHOLD,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_THRESHOLD,
         "compressor macro one reports threshold");
     expect_near(
         synth_get_compressor_threshold(&s),
@@ -1850,7 +1886,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
 
     pickup_cc(&mapping, &s, 16, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "compressor macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_RATIO, "compressor macro two reports ratio");
+    expect_true(result.parameter == SYNTH_PARAM_COMPRESSOR_RATIO, "compressor macro two reports ratio");
     expect_near(
         synth_get_compressor_ratio(&s),
         expected_compressor_ratio,
@@ -1860,7 +1896,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     pickup_cc(&mapping, &s, 17, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "compressor macro three applies");
     expect_true(
-        result.parameter == MIDI_MAPPING_PARAM_COMPRESSOR_MAKEUP_GAIN,
+        result.parameter == SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN,
         "compressor macro three reports makeup gain");
     expect_near(
         synth_get_compressor_makeup_gain(&s),
@@ -1874,20 +1910,21 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(result.effect_bank_index == 1, "chorus macro one reports bank two");
     expect_true(result.has_effect, "chorus macro one reports active effect");
     expect_true(result.effect == MIDI_MAPPING_EFFECT_CHORUS, "chorus macro one reports selected effect");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_CHORUS_RATE, "chorus macro one reports rate");
+    expect_true(result.parameter == SYNTH_PARAM_CHORUS_RATE, "chorus macro one reports rate");
     expect_near(synth_get_chorus_rate(&s), expected_chorus_rate, 0.0001f, "chorus macro one scales rate");
 
     pickup_cc(&mapping, &s, 16, 0, 89);
     expect_true(apply_cc_value(&mapping, &s, 16, 96, &result), "chorus macro two applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_CHORUS_DEPTH, "chorus macro two reports depth");
+    expect_true(result.parameter == SYNTH_PARAM_CHORUS_DEPTH, "chorus macro two reports depth");
     expect_near(synth_get_chorus_depth(&s), 96.0f / 127.0f, 0.0001f, "chorus macro two scales depth");
 
     pickup_cc(&mapping, &s, 17, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "chorus macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_CHORUS_MIX, "chorus macro three reports mix");
+    expect_true(result.parameter == SYNTH_PARAM_CHORUS_MIX, "chorus macro three reports mix");
     expect_near(synth_get_chorus_mix(&s), 44.0f / 127.0f, 0.0001f, "chorus macro three scales dry wet");
 }
 
+// checks that reaching pickup on one effect does not pick up the same knob on another page
 static void test_effect_macro_pickup_is_independent_per_effect(void)
 {
     midi_mapping mapping;
@@ -1904,7 +1941,7 @@ static void test_effect_macro_pickup_is_independent_per_effect(void)
     (void)apply_cc_value(&mapping, &s, 10, 77, 0);
     pickup_cc(&mapping, &s, 11, 0, 16);
     expect_true(apply_cc_value(&mapping, &s, 11, 127, &result), "delay macro one is picked up");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_DELAY_TIME, "picked-up delay macro one reports delay time");
+    expect_true(result.parameter == SYNTH_PARAM_DELAY_TIME, "picked-up delay macro one reports delay time");
 
     (void)apply_cc_value(&mapping, &s, 10, 52, 0);
     expect_true(
@@ -1917,6 +1954,7 @@ static void test_effect_macro_pickup_is_independent_per_effect(void)
         "waiting bitcrusher macro leaves sample rate unchanged");
 }
 
+// checks that returning to an effect page requires pickup again rather than jumping its controls
 static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
 {
     midi_mapping mapping;
@@ -1932,7 +1970,7 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
     (void)apply_cc_value(&mapping, &s, 10, 0, 0);
     pickup_cc(&mapping, &s, 13, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 13, 127, &result), "saturation mix reaches one hundred percent");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "saturation mix macro reports saturation mix");
+    expect_true(result.parameter == SYNTH_PARAM_SATURATION_MIX, "saturation mix macro reports saturation mix");
     expect_near(synth_get_saturation_mix(&s), 1.0f, 0.0001f, "saturation mix is at one hundred percent");
     expect_true(
         mapping.effect_banks[0].pickups[MIDI_MAPPING_EFFECT_SATURATION][2].picked_up,
@@ -1946,7 +1984,7 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
     (void)apply_cc_value(&mapping, &s, 10, 26, 0);
     pickup_cc(&mapping, &s, 13, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 13, 19, &result), "distortion mix reaches about fifteen percent");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_DISTORTION_MIX, "distortion mix macro reports distortion mix");
+    expect_true(result.parameter == SYNTH_PARAM_DISTORTION_MIX, "distortion mix macro reports distortion mix");
     expect_near(synth_get_distortion_mix(&s), 19.0f / 127.0f, 0.0001f, "distortion mix is about fifteen percent");
 
     (void)apply_cc_value(&mapping, &s, 10, 0, 0);
@@ -1963,10 +2001,11 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
         "rearmed saturation mix does not jump to the distortion knob position");
 
     expect_true(apply_cc_value(&mapping, &s, 13, 127, &result), "saturation mix applies again at pickup point");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "rearmed macro reports saturation mix");
+    expect_true(result.parameter == SYNTH_PARAM_SATURATION_MIX, "rearmed macro reports saturation mix");
     expect_near(synth_get_saturation_mix(&s), 1.0f, 0.0001f, "saturation mix remains at pickup value");
 }
 
+// checks that an unused page slot does nothing while direct bindings continue to work
 static void test_effect_macros_leave_unused_macro_empty_and_direct_bindings_working(void)
 {
     midi_mapping mapping;
@@ -1984,12 +2023,12 @@ static void test_effect_macros_leave_unused_macro_empty_and_direct_bindings_work
 
     pickup_cc(&mapping, &s, 13, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 13, 64, &result), "saturation macro three applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_SATURATION_MIX, "saturation macro three reports dry wet");
+    expect_true(result.parameter == SYNTH_PARAM_SATURATION_MIX, "saturation macro three reports dry wet");
     expect_near(synth_get_saturation_mix(&s), 64.0f / 127.0f, 0.0001f, "saturation macro three scales dry wet");
 
     pickup_cc(&mapping, &s, 1, 0, 0);
     expect_true(apply_cc_value(&mapping, &s, 1, 127, &result), "direct attack binding still applies");
-    expect_true(result.parameter == MIDI_MAPPING_PARAM_ATTACK, "direct binding reports attack");
+    expect_true(result.parameter == SYNTH_PARAM_ATTACK, "direct binding reports attack");
     expect_near(synth_get_adsr(&s).attack_seconds, 2.0f, 0.0001f, "direct binding updates attack");
 }
 

@@ -7,6 +7,7 @@
 
 #define SYNTH_COMPRESSOR_MIN_DETECTOR_LEVEL 0.01f
 
+// keeps time-to-sample calculations above the module's minimum supported rate
 static float safe_sample_rate(float sample_rate)
 {
     if (sample_rate < SYNTH_COMPRESSOR_MIN_SAMPLE_RATE) {
@@ -16,24 +17,32 @@ static float safe_sample_rate(float sample_rate)
     return sample_rate;
 }
 
+// converts a response time into how much of the previous detector value survives each sample
 static float smoothing_coefficient(float seconds, float sample_rate)
 {
+    // seconds * rate is the response time in samples this exponential retains
+    // about 37% of a level gap after that time; longer times follow changes more slowly
     return expf(-1.0f / (seconds * safe_sample_rate(sample_rate)));
 }
 
+// refreshes both cached response speeds from the stored attack/release settings
 static void update_smoothing_coefficients(synth_compressor *compressor)
 {
+    compressor->render_attack_seconds = compressor->attack_seconds;
+    compressor->render_release_seconds = compressor->release_seconds;
     compressor->attack_coefficient =
         smoothing_coefficient(compressor->attack_seconds, compressor->sample_rate);
     compressor->release_coefficient =
         smoothing_coefficient(compressor->release_seconds, compressor->sample_rate);
 }
 
+// converts decibels to an amplitude multiplier; 20 db corresponds to ten times the amplitude
 static float db_to_linear(float db)
 {
     return powf(10.0f, db / 20.0f);
 }
 
+// converts amplitude to decibels, using a quiet-signal floor to avoid taking log(0)
 static float linear_to_db(float level)
 {
     const float safe_level =
@@ -44,7 +53,7 @@ static float linear_to_db(float level)
     return 20.0f * log10f(safe_level);
 }
 
-// a linked detector listens to both channels and makes one gain decision.
+// a linked detector listens to both channels and makes one gain decision
 static float linked_input_square(synth_stereo_sample input)
 {
     const float left_square = input.left * input.left;
@@ -53,7 +62,7 @@ static float linked_input_square(synth_stereo_sample input)
     return (left_square + right_square) * 0.5f;
 }
 
-// attack is used when the signal gets louder; release is used as it fades.
+// attack is used when the signal gets louder; release is used as it fades
 static float smooth_detector_square(synth_compressor *compressor, float target_square)
 {
     const float coefficient =
@@ -66,24 +75,27 @@ static float smooth_detector_square(synth_compressor *compressor, float target_s
     return compressor->detector_square;
 }
 
-// the gain computer leaves quiet signals alone and turns down sound above the threshold.
-static float compression_gain_db(const synth_compressor *compressor, float input_db)
+// the gain computer leaves quiet signals alone and turns down sound above the threshold
+static float compression_gain_db(const synth_compressor_params *params, float input_db)
 {
-    const float over_threshold_db = input_db - compressor->threshold_db;
+    const float over_threshold_db = input_db - params->threshold_db;
 
-    if (compressor->ratio <= SYNTH_COMPRESSOR_MIN_RATIO || over_threshold_db <= 0.0f) {
+    if (params->ratio <= SYNTH_COMPRESSOR_MIN_RATIO || over_threshold_db <= 0.0f) {
         return 0.0f;
     }
 
-    return -over_threshold_db * (1.0f - (1.0f / compressor->ratio));
+    // at 4:1, only a quarter of the db above threshold remains: remove the other
+    // three quarters the negative sign turns that reduction into a gain cut
+    return -over_threshold_db * (1.0f - (1.0f / params->ratio));
 }
 
-static float current_gain(const synth_compressor *compressor, float detector_square)
+// converts the smoothed energy estimate to rms level, then combines compression and makeup gain
+static float current_gain(const synth_compressor_params *params, float detector_square)
 {
     const float rms = sqrtf(detector_square);
     const float detector_db = linear_to_db(rms);
     const float gain_db =
-        compression_gain_db(compressor, detector_db) + compressor->makeup_gain_db;
+        compression_gain_db(params, detector_db) + params->makeup_gain_db;
 
     return db_to_linear(gain_db);
 }
@@ -173,16 +185,49 @@ float synth_compressor_get_release(const synth_compressor *compressor)
     return compressor->release_seconds;
 }
 
-synth_stereo_sample synth_compressor_process(
+// applies temporary dynamics settings while preserving the detector's running level estimate
+synth_stereo_sample synth_compressor_process_with_params(
     synth_compressor *compressor,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_compressor_params *params)
 {
     synth_stereo_sample output;
-    const float detector_square =
-        smooth_detector_square(compressor, linked_input_square(input));
-    const float gain = current_gain(compressor, detector_square);
+    float detector_square;
+    // rebuild coefficients only when effective times change the detector keeps
+    // its current energy estimate, so an lfo change does not restart compression
+    if (params->attack_seconds != compressor->render_attack_seconds ||
+        params->release_seconds != compressor->render_release_seconds) {
+        compressor->attack_coefficient = smoothing_coefficient(params->attack_seconds, compressor->sample_rate);
+        compressor->release_coefficient = smoothing_coefficient(params->release_seconds, compressor->sample_rate);
+        compressor->render_attack_seconds = params->attack_seconds;
+        compressor->render_release_seconds = params->release_seconds;
+    }
+    detector_square = smooth_detector_square(compressor, linked_input_square(input));
+    const float gain = current_gain(params, detector_square);
 
     output.left = input.left * gain;
     output.right = input.right * gain;
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_compressor_params synth_compressor_get_params(const synth_compressor *effect)
+{
+    const synth_compressor_params params = {
+        effect->threshold_db,
+        effect->ratio,
+        effect->makeup_gain_db,
+        effect->attack_seconds,
+        effect->release_seconds
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_compressor_process(
+    synth_compressor *effect,
+    synth_stereo_sample input)
+{
+    const synth_compressor_params params = synth_compressor_get_params(effect);
+    return synth_compressor_process_with_params(effect, input, &params);
 }

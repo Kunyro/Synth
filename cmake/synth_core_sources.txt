@@ -1,4 +1,4 @@
-src/midi_types.c
+src/pitch.c
 src/wavetable.c
 src/oscillator.c
 src/envelope.c
@@ -18,3 +18,5 @@ src/effects/effect_chain.c
 src/synth.c
 src/synth_render.c
 src/lfo.c
+src/parameter.c
+src/modulation.c

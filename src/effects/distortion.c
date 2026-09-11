@@ -19,7 +19,7 @@ static float odd_bite_for_drive(float drive)
     return SYNTH_DISTORTION_MAX_ODD_BITE * powf(amount, 0.75f);
 }
 
-// tanh gives a symmetric soft clip, so it naturally produces odd harmonics.
+// tanh gives a symmetric soft clip, so it naturally produces odd harmonics
 static float soft_clip_sample(float input, float drive)
 {
     const float ceiling = tanhf(drive);
@@ -31,7 +31,7 @@ static float soft_clip_sample(float input, float drive)
     return tanhf(input * drive) / ceiling;
 }
 
-// a small cubic boost keeps the curve odd-symmetric while adding metallic bite.
+// a small cubic boost keeps the curve odd-symmetric while adding metallic bite
 static float add_odd_harmonic_bite(float input, float drive)
 {
     const float amount = odd_bite_for_drive(drive);
@@ -44,7 +44,7 @@ static float distort_sample(float input, float drive)
     return add_odd_harmonic_bite(soft_clip_sample(input, drive), drive);
 }
 
-// blends from clean signal to fully distorted signal.
+// blends from clean signal to fully distorted signal
 static float mix_sample(float dry, float wet, float mix)
 {
     return dry + ((wet - dry) * mix);
@@ -79,23 +79,45 @@ float synth_distortion_get_mix(const synth_distortion *distortion)
     return distortion->mix;
 }
 
-synth_stereo_sample synth_distortion_process(
+// shapes both channels using temporary drive and blends the result with the dry input
+synth_stereo_sample synth_distortion_process_with_params(
     const synth_distortion *distortion,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_distortion_params *params)
 {
     synth_stereo_sample output;
 
-    if (distortion->mix == 0.0f) {
+    (void)distortion;
+    if (params->mix == 0.0f) {
         return input;
     }
 
     output.left = mix_sample(
         input.left,
-        distort_sample(input.left, distortion->drive),
-        distortion->mix);
+        distort_sample(input.left, params->drive),
+        params->mix);
     output.right = mix_sample(
         input.right,
-        distort_sample(input.right, distortion->drive),
-        distortion->mix);
+        distort_sample(input.right, params->drive),
+        params->mix);
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_distortion_params synth_distortion_get_params(const synth_distortion *effect)
+{
+    const synth_distortion_params params = {
+        effect->drive,
+        effect->mix
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_distortion_process(
+    const synth_distortion *effect,
+    synth_stereo_sample input)
+{
+    const synth_distortion_params params = synth_distortion_get_params(effect);
+    return synth_distortion_process_with_params(effect, input, &params);
 }

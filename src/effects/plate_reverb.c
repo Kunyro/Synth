@@ -150,17 +150,20 @@ static float process_delay_line(
     return output;
 }
 
-static float process_predelay(synth_plate_reverb *reverb, float input)
+// reads a temporary input delay before feeding the reverb; zero keeps the existing bypass behavior
+static float process_predelay(synth_plate_reverb *reverb, float input, float seconds)
 {
     float output;
 
-    if (reverb->predelay_seconds <= 0.0f) {
+    if (seconds <= 0.0f) {
+        // keep existing zero-predelay behavior: bypass without advancing or clearing
+        // the line its saved audio resumes if predelay becomes positive again
         return input;
     }
 
     output = read_fractional_delay(
         &reverb->predelay,
-        reverb->predelay_seconds * reverb->sample_rate);
+        seconds * reverb->sample_rate);
 
     if (delay_line_has_storage(&reverb->predelay)) {
         reverb->predelay.samples[reverb->predelay.write_index] = input;
@@ -215,12 +218,17 @@ static float branch_seconds(float sample_rate, size_t delay_a, size_t delay_b)
         sample_rate;
 }
 
+// chooses how much sound survives each tank loop to achieve the requested decay time
 static float decay_feedback_for_seconds(float seconds, float sample_rate)
 {
+    // average the two tank branches' circulation times their reference delay
+    // lengths come from the plate design; branch_seconds scales them to this rate
     const float loop_seconds =
         (branch_seconds(sample_rate, 4453, 4217) +
          branch_seconds(sample_rate, 3720, 3163)) *
         0.5f;
+    // a 0.001 amplitude is -60 db choose the per-loop multiplier so repeated
+    // loops fall to that level after the requested decay time
     const float feedback = powf(
         0.001f,
         loop_seconds / synth_clampf(
@@ -247,24 +255,25 @@ static float process_input_diffusion(synth_plate_reverb *reverb, float input)
     return sample;
 }
 
+// circulates the sound through the two reverb branches using temporary damping and decay feedback
 static synth_stereo_sample process_tank(
     synth_plate_reverb *reverb,
-    float input)
+    float input, float damping_value, float feedback)
 {
     synth_plate_reverb_tank *tank = &reverb->tank;
-    const float damping = damping_coefficient(reverb->damping);
+    const float damping = damping_coefficient(damping_value);
     float left;
     float right;
     synth_stereo_sample wet;
 
-    left = input + (tank->right_feedback * reverb->feedback);
+    left = input + (tank->right_feedback * feedback);
     left = process_allpass(&tank->left_diffuser_1, left);
     left = process_delay_line(&tank->left_delay_1, left);
     left = process_one_pole(&tank->left_damping_filter, left, damping);
     left = process_allpass(&tank->left_diffuser_2, left);
     left = process_delay_line(&tank->left_delay_2, left);
 
-    right = input + (tank->left_feedback * reverb->feedback);
+    right = input + (tank->left_feedback * feedback);
     right = process_allpass(&tank->right_diffuser_1, right);
     right = process_delay_line(&tank->right_delay_1, right);
     right = process_one_pole(&tank->right_damping_filter, right, damping);
@@ -489,9 +498,11 @@ float synth_plate_reverb_get_predelay(const synth_plate_reverb *reverb)
     return reverb->predelay_seconds;
 }
 
-synth_stereo_sample synth_plate_reverb_process(
+// uses temporary reverb controls without clearing the tank or replacing the stored patch
+synth_stereo_sample synth_plate_reverb_process_with_params(
     synth_plate_reverb *reverb,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_plate_reverb_params *params)
 {
     const float mono_input =
         ((input.left + input.right) * 0.5f) * SYNTH_PLATE_REVERB_INPUT_GAIN;
@@ -501,19 +512,46 @@ synth_stereo_sample synth_plate_reverb_process(
     synth_stereo_sample wet;
     synth_stereo_sample output;
 
-    if (reverb->mix == 0.0f || !reverb_has_storage(reverb)) {
+    // preserve the existing fully dry bypass: the tank pauses, rather than being
+    // cleared modulation above zero resumes from the retained history
+    if (params->mix == 0.0f || !reverb_has_storage(reverb)) {
         return input;
     }
 
-    predelayed = process_predelay(reverb, mono_input);
+    predelayed = process_predelay(reverb, mono_input, params->predelay_seconds);
     bandwidth_limited = process_one_pole(
         &reverb->bandwidth_filter,
         predelayed,
         SYNTH_PLATE_REVERB_INPUT_BANDWIDTH);
     diffused = process_input_diffusion(reverb, bandwidth_limited);
-    wet = process_tank(reverb, diffused);
+    // reuse the manual feedback coefficient when decay is unchanged otherwise
+    // derive a temporary one without calling a setter or disturbing tank memory
+    wet = process_tank(reverb, diffused, params->damping,
+        params->decay_seconds == reverb->decay_seconds ? reverb->feedback :
+        decay_feedback_for_seconds(params->decay_seconds, reverb->sample_rate));
 
-    output.left = mix_sample(input.left, wet.left, reverb->mix);
-    output.right = mix_sample(input.right, wet.right, reverb->mix);
+    output.left = mix_sample(input.left, wet.left, params->mix);
+    output.right = mix_sample(input.right, wet.right, params->mix);
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_plate_reverb_params synth_plate_reverb_get_params(const synth_plate_reverb *effect)
+{
+    const synth_plate_reverb_params params = {
+        effect->decay_seconds,
+        effect->damping,
+        effect->mix,
+        effect->predelay_seconds
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_plate_reverb_process(
+    synth_plate_reverb *effect,
+    synth_stereo_sample input)
+{
+    const synth_plate_reverb_params params = synth_plate_reverb_get_params(effect);
+    return synth_plate_reverb_process_with_params(effect, input, &params);
 }

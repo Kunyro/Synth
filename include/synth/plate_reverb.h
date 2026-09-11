@@ -14,6 +14,14 @@
 #define SYNTH_PLATE_REVERB_MAX_FEEDBACK 0.97f
 #define SYNTH_PLATE_REVERB_INPUT_ALLPASS_COUNT 4
 
+// effective controls, separate from persistent dsp history
+typedef struct synth_plate_reverb_params {
+    float decay_seconds;
+    float damping;
+    float mix;
+    float predelay_seconds;
+} synth_plate_reverb_params;
+
 typedef struct synth_plate_reverb_delay_line {
     float *samples;
     size_t write_index;
@@ -71,5 +79,14 @@ float synth_plate_reverb_get_predelay(const synth_plate_reverb *reverb);
 synth_stereo_sample synth_plate_reverb_process(
     synth_plate_reverb *reverb,
     synth_stereo_sample input);
+
+// returns a copy of stored controls; processing overrides never change those bases
+synth_plate_reverb_params synth_plate_reverb_get_params(const synth_plate_reverb *effect);
+// effective controls must be finite and within the module bounds
+// advances dsp history without storing controls or calling parameter setters
+synth_stereo_sample synth_plate_reverb_process_with_params(
+    synth_plate_reverb *effect,
+    synth_stereo_sample input,
+    const synth_plate_reverb_params *params);
 
 #endif

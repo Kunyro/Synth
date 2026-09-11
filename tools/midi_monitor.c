@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -43,7 +44,7 @@ typedef enum learn_bind_result {
     LEARN_BIND_EXITED
 } learn_bind_result;
 
-// reads one command line and trims it in place.
+// reads one command line and trims it in place
 static int read_line(char *line, size_t line_size)
 {
     char *trimmed;
@@ -60,7 +61,7 @@ static int read_line(char *line, size_t line_size)
     return 1;
 }
 
-// returns a friendly name for a midi note number.
+// returns a friendly name for a midi note number
 static const char *note_name(int note)
 {
     static const char *names[] = {
@@ -81,13 +82,13 @@ static const char *note_name(int note)
     return names[note % 12];
 }
 
-// prints a midi note as name and octave.
+// prints a midi note as name and octave
 static void print_note(int note)
 {
     printf("%s%d", note_name(note), (note / 12) - 1);
 }
 
-// prints one raw short midi message in a useful form.
+// prints one raw short midi message in a useful form
 static void print_short_message(void *user_data, const unsigned char *data, unsigned short length)
 {
     const unsigned char status = data[0] & 0xF0;
@@ -234,7 +235,7 @@ static void print_short_message(void *user_data, const unsigned char *data, unsi
     fflush(stdout);
 }
 
-// captures the first control-change message while a bind prompt is waiting.
+// captures the first control-change message while a bind prompt is waiting
 static void capture_cc_message(void *user_data, const unsigned char *data, unsigned short length)
 {
     learn_context *context = (learn_context *)user_data;
@@ -274,7 +275,7 @@ static void capture_cc_message(void *user_data, const unsigned char *data, unsig
     }
 }
 
-// prints why midi monitoring could not start.
+// prints why midi monitoring could not start
 static void print_midi_status(int stream_count, const midi_portmidi_input *midi, const char *running_text)
 {
     if (stream_count > 0) {
@@ -407,12 +408,13 @@ static size_t effect_control_binding_count(const midi_mapping *mapping)
     return count;
 }
 
+// finds an existing assignment for this parameter and property; base and amount are separate
 static const midi_mapping_binding *find_first_binding(
     const midi_mapping *mapping,
-    midi_mapping_parameter parameter)
+    midi_mapping_parameter parameter, midi_mapping_target_kind kind)
 {
     for (size_t i = 0; i < mapping->binding_count; ++i) {
-        if (mapping->bindings[i].parameter == parameter) {
+        if (mapping->bindings[i].parameter == parameter && mapping->bindings[i].target_kind == kind) {
             return &mapping->bindings[i];
         }
     }
@@ -420,9 +422,10 @@ static const midi_mapping_binding *find_first_binding(
     return 0;
 }
 
+// accepts either a displayed list number or a canonical base/amount name
 static int parse_parameter_selection(
     const char *text,
-    const midi_mapping_parameter_info **info)
+    midi_mapping_parameter_info *info)
 {
     char *end;
     long index;
@@ -437,21 +440,22 @@ static int parse_parameter_selection(
             return 0;
         }
 
-        *info = midi_mapping_parameter_info_at((size_t)index - 1);
-        return *info != 0;
+        return midi_mapping_parameter_info_at((size_t)index - 1, info);
     }
 
-    *info = midi_mapping_parameter_info_by_name(text);
-    return *info != 0;
+    return midi_mapping_parameter_info_by_name(text, info);
 }
 
+// shows every discoverable control and its bindings, followed by adapter navigation and chord controls
 static void print_parameter_list(const midi_mapping *mapping)
 {
     printf("\n%s\n", mapping->name);
     printf("parameter bindings:\n");
 
     for (size_t i = 0; i < midi_mapping_parameter_count(); ++i) {
-        const midi_mapping_parameter_info *info = midi_mapping_parameter_info_at(i);
+        midi_mapping_parameter_info metadata;
+        const midi_mapping_parameter_info *info = &metadata;
+        if (!midi_mapping_parameter_info_at(i, &metadata)) continue;
         int printed_binding = 0;
 
         printf("%2zu  %-42s ", i + 1, info->name);
@@ -459,7 +463,7 @@ static void print_parameter_list(const midi_mapping *mapping)
         for (size_t binding_index = 0; binding_index < mapping->binding_count; ++binding_index) {
             const midi_mapping_binding *binding = &mapping->bindings[binding_index];
 
-            if (binding->parameter == info->parameter) {
+            if (binding->parameter == info->parameter && binding->target_kind == info->target_kind) {
                 if (printed_binding) {
                     printf("\n    %-42s ", "");
                 }
@@ -551,12 +555,15 @@ static void print_parameter_list(const midi_mapping *mapping)
     }
 }
 
-static void remove_bindings_for_parameter(midi_mapping *mapping, midi_mapping_parameter parameter)
+// removes assignments for exactly one base/amount target, compacting the remaining bindings
+static void remove_bindings_for_parameter(midi_mapping *mapping, midi_mapping_parameter parameter,
+                                          midi_mapping_target_kind kind)
 {
     size_t write_index = 0;
 
     for (size_t read_index = 0; read_index < mapping->binding_count; ++read_index) {
-        if (mapping->bindings[read_index].parameter != parameter) {
+        if (mapping->bindings[read_index].parameter != parameter ||
+            mapping->bindings[read_index].target_kind != kind) {
             mapping->bindings[write_index] = mapping->bindings[read_index];
             write_index += 1;
         }
@@ -565,11 +572,12 @@ static void remove_bindings_for_parameter(midi_mapping *mapping, midi_mapping_pa
     mapping->binding_count = write_index;
 }
 
+// warns if this physical cc already drives a different parameter or property
 static int control_is_already_bound(
     const midi_mapping *mapping,
     int channel,
     int control,
-    midi_mapping_parameter ignored_parameter)
+    midi_mapping_parameter ignored_parameter, midi_mapping_target_kind ignored_kind)
 {
     for (size_t i = 0; i < mapping->binding_count; ++i) {
         const midi_mapping_binding *binding = &mapping->bindings[i];
@@ -577,11 +585,12 @@ static int control_is_already_bound(
         if (binding->source_type == MIDI_MAPPING_SOURCE_CC &&
             binding->channel == channel &&
             binding->control == control &&
-            binding->parameter != ignored_parameter) {
+            (binding->parameter != ignored_parameter || binding->target_kind != ignored_kind)) {
             printf(
-                "warning: cc:%d:%d is already bound to %s\n",
+                "warning: cc:%d:%d is already bound to %s%s\n",
                 channel,
                 control,
+                binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
                 midi_mapping_parameter_name(binding->parameter));
             return 1;
         }
@@ -633,12 +642,13 @@ static int chord_control_is_already_bound(const midi_mapping *mapping, int chann
     return 0;
 }
 
+// parses a finite knob-range endpoint so invalid numbers never reach a saved binding
 static int parse_float_input(const char *text, float *value)
 {
     char *end;
     const float parsed = (float)strtod(text, &end);
 
-    if (*text == '\0' || *end != '\0') {
+    if (*text == '\0' || *end != '\0' || !isfinite(parsed)) {
         return 0;
     }
 
@@ -646,6 +656,7 @@ static int parse_float_input(const char *text, float *value)
     return 1;
 }
 
+// lets the user accept or edit knob scaling, validating the result before it can be stored
 static learn_capture_result prompt_scale_and_range(midi_mapping_binding *binding)
 {
     char line[MIDI_MONITOR_LINE_LENGTH];
@@ -663,6 +674,11 @@ static learn_capture_result prompt_scale_and_range(midi_mapping_binding *binding
         }
 
         if (line[0] == '\0' || strcmp(line, "y") == 0 || strcmp(line, "yes") == 0) {
+            char error[MIDI_MAPPING_ERROR_LENGTH];
+            if (!midi_mapping_validate_binding(binding, error, sizeof(error))) {
+                printf("%s; edit the range before accepting.\n", error);
+                continue;
+            }
             return LEARN_CAPTURE_GOT_CC;
         }
 
@@ -715,7 +731,7 @@ static learn_capture_result prompt_scale_and_range(midi_mapping_binding *binding
     }
 }
 
-// consumes queued midi after a bind so one knob twist cannot bind the next row too.
+// consumes queued midi after a bind so one knob twist cannot bind the next row too
 static void drain_midi_learn_input(midi_portmidi_input *midi, learn_context *context)
 {
     unsigned int elapsed_ms = 0;
@@ -799,17 +815,19 @@ static learn_capture_result wait_for_control_change(
     return LEARN_CAPTURE_GOT_CC;
 }
 
+// combines the learned cc with the selected target and range, then replaces that target's bindings
 static learn_bind_result store_captured_binding(
     midi_mapping *mapping,
     learn_context *context,
     const midi_mapping_parameter_info *info)
 {
     midi_mapping_binding binding;
-    const midi_mapping_binding *existing = find_first_binding(mapping, info->parameter);
+    const midi_mapping_binding *existing = find_first_binding(mapping, info->parameter, info->target_kind);
     learn_capture_result prompt_result;
 
     memset(&binding, 0, sizeof(binding));
     binding.parameter = info->parameter;
+    binding.target_kind = info->target_kind;
     binding.source_type = MIDI_MAPPING_SOURCE_CC;
     binding.channel = context->capture.channel;
     binding.control = context->capture.control;
@@ -824,7 +842,7 @@ static learn_bind_result store_captured_binding(
         binding.max_value = info->default_max_value;
     }
 
-    (void)control_is_already_bound(mapping, binding.channel, binding.control, binding.parameter);
+    (void)control_is_already_bound(mapping, binding.channel, binding.control, binding.parameter, binding.target_kind);
     (void)chord_control_is_already_bound(mapping, binding.channel, binding.control);
     (void)effect_control_is_already_bound(mapping, binding.channel, binding.control);
 
@@ -834,7 +852,7 @@ static learn_bind_result store_captured_binding(
         return prompt_result == LEARN_CAPTURE_CANCELLED ? LEARN_BIND_EXITED : LEARN_BIND_UNCHANGED;
     }
 
-    remove_bindings_for_parameter(mapping, info->parameter);
+    remove_bindings_for_parameter(mapping, info->parameter, info->target_kind);
     if (mapping->binding_count >= MIDI_MAPPING_MAX_BINDINGS) {
         printf("could not bind: too many midi bindings.\n");
         return LEARN_BIND_UNCHANGED;
@@ -868,6 +886,7 @@ static int bind_parameter(
     return bind_result == LEARN_BIND_CHANGED;
 }
 
+// walks the same base/amount list shown by list, allowing each control to be learned or skipped
 static int map_all_parameters(
     midi_mapping *mapping,
     midi_portmidi_input *midi,
@@ -878,7 +897,9 @@ static int map_all_parameters(
     printf("map-all started. parameters are visited in the same order as list.\n");
 
     for (size_t i = 0; i < midi_mapping_parameter_count(); ++i) {
-        const midi_mapping_parameter_info *info = midi_mapping_parameter_info_at(i);
+        midi_mapping_parameter_info metadata;
+        const midi_mapping_parameter_info *info = &metadata;
+        if (!midi_mapping_parameter_info_at(i, &metadata)) continue;
         learn_capture_result capture_result;
 
         printf("\n%zu/%zu  %s\n", i + 1, midi_mapping_parameter_count(), info->name);
@@ -920,78 +941,14 @@ static int map_all_parameters(
     return changed;
 }
 
+// uses the shared config writer and reports a file-specific error to the command-line user
 static int save_mapping_file(const char *path, const midi_mapping *mapping)
 {
-    FILE *file = fopen(path, "w");
-
-    if (file == 0) {
-        fprintf(stderr, "could not write '%s': %s\n", path, strerror(errno));
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    if (!midi_mapping_save(mapping, path, error, sizeof(error))) {
+        fprintf(stderr, "could not save '%s': %s\n", path, error);
         return 0;
     }
-
-    fprintf(file, "# midi controller mapping generated by midi_monitor learn\n");
-    fprintf(file, "name=%s\n\n", mapping->name);
-    fprintf(file, "# format: parameter=cc:channel:control:scale:min:max\n");
-
-    for (size_t i = 0; i < mapping->binding_count; ++i) {
-        const midi_mapping_binding *binding = &mapping->bindings[i];
-
-        if (binding->source_type == MIDI_MAPPING_SOURCE_CC) {
-            fprintf(
-                file,
-                "%s=cc:%d:%d:%s:%.6g:%.6g\n",
-                midi_mapping_parameter_name(binding->parameter),
-                binding->channel,
-                binding->control,
-                midi_mapping_scale_name(binding->scale),
-                binding->min_value,
-                binding->max_value);
-        }
-    }
-
-    fprintf(file, "\n# format: effect_selector_N/effect_N_macro_M=cc:channel:control\n");
-    for (size_t bank_index = 0; bank_index < MIDI_MAPPING_EFFECT_BANK_COUNT; ++bank_index) {
-        const midi_mapping_effect_bank *bank = &mapping->effect_banks[bank_index];
-
-        if (bank->selector.enabled &&
-            bank->selector.source_type == MIDI_MAPPING_SOURCE_CC) {
-            fprintf(
-                file,
-                "%s=cc:%d:%d\n",
-                midi_mapping_effect_selector_name(bank_index),
-                bank->selector.channel,
-                bank->selector.control);
-        }
-
-        for (size_t i = 0; i < MIDI_MAPPING_EFFECT_MACRO_COUNT; ++i) {
-            const midi_mapping_control_binding *binding = &bank->macros[i];
-
-            if (binding->enabled && binding->source_type == MIDI_MAPPING_SOURCE_CC) {
-                fprintf(
-                    file,
-                    "%s=cc:%d:%d\n",
-                    midi_mapping_effect_macro_name(bank_index, i),
-                    binding->channel,
-                    binding->control);
-            }
-        }
-    }
-
-    fprintf(file, "\n# format: chord_pad=cc:channel:control\n");
-    for (size_t i = 0; i < MIDI_CHORD_MODE_PAD_COUNT; ++i) {
-        const midi_mapping_chord_binding *binding = &mapping->chord_bindings[i];
-
-        if (binding->enabled && binding->source_type == MIDI_MAPPING_SOURCE_CC) {
-            fprintf(
-                file,
-                "%s=cc:%d:%d\n",
-                midi_mapping_chord_pad_name(binding->pad),
-                binding->channel,
-                binding->control);
-        }
-    }
-
-    fclose(file);
     return 1;
 }
 
@@ -1068,6 +1025,7 @@ static int print_loaded_mapping(const char *path)
     return 0;
 }
 
+// loads a config through the app's parser, then reports validity and conflicting assignments
 static int validate_mapping_file(const char *path)
 {
     midi_mapping mapping;
@@ -1089,10 +1047,12 @@ static int validate_mapping_file(const char *path)
                 a->channel == b->channel &&
                 a->control == b->control) {
                 printf(
-                    "warning: cc:%d:%d is bound to both %s and %s\n",
+                    "warning: cc:%d:%d is bound to both %s%s and %s%s\n",
                     a->channel,
                     a->control,
+                    a->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
                     midi_mapping_parameter_name(a->parameter),
+                    b->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
                     midi_mapping_parameter_name(b->parameter));
                 warnings += 1;
             }
@@ -1108,9 +1068,10 @@ static int validate_mapping_file(const char *path)
                 parameter->channel == chord->channel &&
                 parameter->control == chord->control) {
                 printf(
-                    "warning: cc:%d:%d is bound to both %s and %s\n",
+                    "warning: cc:%d:%d is bound to both %s%s and %s\n",
                     parameter->channel,
                     parameter->control,
+                    parameter->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
                     midi_mapping_parameter_name(parameter->parameter),
                     midi_mapping_chord_pad_name(chord->pad));
                 warnings += 1;
@@ -1129,9 +1090,10 @@ static int validate_mapping_file(const char *path)
                 parameter->channel == effect_control->channel &&
                 parameter->control == effect_control->control) {
                 printf(
-                    "warning: cc:%d:%d is bound to both %s and %s\n",
+                    "warning: cc:%d:%d is bound to both %s%s and %s\n",
                     parameter->channel,
                     parameter->control,
+                    parameter->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
                     midi_mapping_parameter_name(parameter->parameter),
                     effect_control_name);
                 warnings += 1;
@@ -1153,8 +1115,7 @@ static int validate_mapping_file(const char *path)
                 printf(
                     "warning: cc:%d:%d is bound to both %s and %s\n",
                     a->channel,
-                    a->control,
-                    midi_mapping_chord_pad_name(a->pad),
+                    a->control, midi_mapping_chord_pad_name(a->pad),
                     midi_mapping_chord_pad_name(b->pad));
                 warnings += 1;
             }
@@ -1175,8 +1136,7 @@ static int validate_mapping_file(const char *path)
                 printf(
                     "warning: cc:%d:%d is bound to both %s and %s\n",
                     chord->channel,
-                    chord->control,
-                    midi_mapping_chord_pad_name(chord->pad),
+                    chord->control, midi_mapping_chord_pad_name(chord->pad),
                     effect_control_name);
                 warnings += 1;
             }
@@ -1199,8 +1159,7 @@ static int validate_mapping_file(const char *path)
                 printf(
                     "warning: cc:%d:%d is bound to both %s and %s\n",
                     a->channel,
-                    a->control,
-                    a_name,
+                    a->control, a_name,
                     b_name);
                 warnings += 1;
             }
@@ -1237,6 +1196,7 @@ static void print_learn_help(void)
     printf("  quit                 exit\n");
 }
 
+// runs the interactive mapping editor, including target selection, capture, editing, and saving
 static int run_learn_command(int argc, char **argv)
 {
     midi_mapping mapping;
@@ -1334,14 +1294,15 @@ static int run_learn_command(int argc, char **argv)
         } else if (strcmp(command, "list") == 0) {
             print_parameter_list(&mapping);
         } else if (strcmp(command, "bind") == 0) {
-            const midi_mapping_parameter_info *info;
+            midi_mapping_parameter_info metadata;
+            const midi_mapping_parameter_info *info = &metadata;
 
             if (!has_midi_input) {
                 printf("no midi input stream is open, so bind cannot learn a control.\n");
                 continue;
             }
 
-            if (!parse_parameter_selection(argument, &info)) {
+            if (!parse_parameter_selection(argument, &metadata)) {
                 printf("unknown parameter. use list to see names and numbers.\n");
                 continue;
             }
@@ -1359,14 +1320,15 @@ static int run_learn_command(int argc, char **argv)
                 dirty = 1;
             }
         } else if (strcmp(command, "unbind") == 0) {
-            const midi_mapping_parameter_info *info;
+            midi_mapping_parameter_info metadata;
+            const midi_mapping_parameter_info *info = &metadata;
 
-            if (!parse_parameter_selection(argument, &info)) {
+            if (!parse_parameter_selection(argument, &metadata)) {
                 printf("unknown parameter. use list to see names and numbers.\n");
                 continue;
             }
 
-            remove_bindings_for_parameter(&mapping, info->parameter);
+            remove_bindings_for_parameter(&mapping, info->parameter, info->target_kind);
             dirty = 1;
             printf("unbound %s\n", info->name);
         } else if (strcmp(command, "name") == 0) {
