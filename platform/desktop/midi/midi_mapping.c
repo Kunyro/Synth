@@ -3,10 +3,11 @@
 #include "midi/midi_text.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
-// writes a formatted load error when there is room for one.
+// writes a formatted load error when there is room for one
 static void set_error(char *error, size_t error_size, int line_number, const char *message)
 {
     if (error != 0 && error_size > 0) {
@@ -18,7 +19,7 @@ static void set_error(char *error, size_t error_size, int line_number, const cha
     }
 }
 
-// parses a chord-mode pad name from a config key.
+// parses a chord-mode pad name from a config key
 static int parse_chord_pad(const char *name, midi_chord_mode_pad *pad)
 {
     const midi_mapping_chord_entry *entry = midi_mapping_find_chord_by_name(name);
@@ -31,20 +32,7 @@ static int parse_chord_pad(const char *name, midi_chord_mode_pad *pad)
     return 1;
 }
 
-// parses a synth parameter name from a config key.
-static int parse_parameter(const char *name, midi_mapping_parameter *parameter)
-{
-    const midi_mapping_parameter_entry *entry = midi_mapping_find_parameter_by_name(name);
-
-    if (entry == 0) {
-        return 0;
-    }
-
-    *parameter = entry->parameter;
-    return 1;
-}
-
-// parses the source kind from a config value.
+// parses the source kind from a config value
 static int parse_source_type(const char *name, midi_mapping_source_type *source_type)
 {
     if (strcmp(name, "cc") == 0) {
@@ -55,13 +43,13 @@ static int parse_source_type(const char *name, midi_mapping_source_type *source_
     return 0;
 }
 
-// parses the scaling mode from a config value.
+// parses the scaling mode from a config value
 static int parse_scale(const char *name, midi_mapping_scale *scale)
 {
     return midi_mapping_parse_scale_name(name, scale);
 }
 
-// parses an integer token inside an allowed range.
+// parses an integer token inside an allowed range
 static int parse_int_range(const char *text, int min_value, int max_value, int *value)
 {
     char *end;
@@ -75,13 +63,13 @@ static int parse_int_range(const char *text, int min_value, int max_value, int *
     return 1;
 }
 
-// parses a float token.
+// parses a float token
 static int parse_float_value(const char *text, float *value)
 {
     char *end;
     const float parsed = (float)strtod(text, &end);
 
-    if (*text == '\0' || *end != '\0') {
+    if (*text == '\0' || *end != '\0' || !isfinite(parsed)) {
         return 0;
     }
 
@@ -89,7 +77,22 @@ static int parse_float_value(const char *text, float *value)
     return 1;
 }
 
-// parses a simple cc:channel:control binding from a config value.
+// checks field count and empty fields before strtok(), which would silently skip empty fields
+static int valid_token_count(const char *value, size_t expected)
+{
+    size_t count = 1;
+    const char *token = value;
+    for (const char *p = value; ; ++p) {
+        if (*p == ':' || *p == '\0') {
+            if (p == token) return 0;
+            if (*p == '\0') return count == expected;
+            token = p + 1;
+            ++count;
+        }
+    }
+}
+
+// parses a simple cc:channel:control binding from a config value
 static int parse_control_binding(
     char *value,
     midi_mapping_control_binding *binding,
@@ -102,6 +105,10 @@ static int parse_control_binding(
     char *control_text;
     char *extra_text;
 
+    if (!valid_token_count(value, 3)) {
+        set_error(error, error_size, line_number, "wrong number of fields or an empty field");
+        return 0;
+    }
     source_name = strtok(value, ":");
     channel_text = strtok(0, ":");
     control_text = strtok(0, ":");
@@ -135,7 +142,7 @@ static int parse_control_binding(
     return 1;
 }
 
-// parses an effect selector config key into a zero-based bank index.
+// parses an effect selector config key into a zero-based bank index
 static int parse_effect_selector_key(const char *key, size_t *bank_index)
 {
     for (size_t i = 0; i < MIDI_MAPPING_EFFECT_BANK_COUNT; ++i) {
@@ -150,7 +157,7 @@ static int parse_effect_selector_key(const char *key, size_t *bank_index)
     return 0;
 }
 
-// parses an effect macro config key into zero-based bank and macro indexes.
+// parses an effect macro config key into zero-based bank and macro indexes
 static int parse_effect_macro_key(
     const char *key,
     size_t *bank_index,
@@ -175,7 +182,7 @@ static int parse_effect_macro_key(
     return 0;
 }
 
-// adds one chord-mode pad binding from a config line.
+// adds one chord-mode pad binding from a config line
 static int add_chord_binding(
     midi_mapping *mapping,
     const char *key,
@@ -206,7 +213,7 @@ static int add_chord_binding(
     return 1;
 }
 
-// adds one effect macro control binding from a config line.
+// adds one effect macro control binding from a config line
 static int add_effect_control_binding(
     midi_mapping *mapping,
     const char *key,
@@ -239,7 +246,7 @@ static int add_effect_control_binding(
     return 0;
 }
 
-// adds one binding from a config line.
+// adds one binding from a config line
 static int add_binding(
     midi_mapping *mapping,
     const char *key,
@@ -255,6 +262,7 @@ static int add_binding(
     char *min_text;
     char *max_text;
     midi_mapping_binding binding;
+    midi_mapping_parameter_info info;
 
     memset(&binding, 0, sizeof(binding));
 
@@ -263,11 +271,17 @@ static int add_binding(
         return 0;
     }
 
-    if (!parse_parameter(key, &binding.parameter)) {
-        set_error(error, error_size, line_number, "unknown synth parameter");
+    if (!midi_mapping_parameter_info_by_name(key, &info)) {
+        set_error(error, error_size, line_number, "unknown or excluded parameter; route keys use lfo_amount.<base parameter>");
         return 0;
     }
 
+    binding.parameter = info.parameter;
+    binding.target_kind = info.target_kind;
+    if (!valid_token_count(value, 6)) {
+        set_error(error, error_size, line_number, "expected six nonempty binding fields");
+        return 0;
+    }
     source_name = strtok(value, ":");
     channel_text = strtok(0, ":");
     control_text = strtok(0, ":");
@@ -318,23 +332,19 @@ static int add_binding(
         return 0;
     }
 
-    if (binding.max_value <= binding.min_value) {
-        set_error(error, error_size, line_number, "max must be greater than min");
-        return 0;
+    {
+        char detail[MIDI_MAPPING_ERROR_LENGTH];
+        if (!midi_mapping_validate_binding(&binding, detail, sizeof(detail))) {
+            set_error(error, error_size, line_number, detail);
+            return 0;
+        }
     }
-
-    if (binding.scale == MIDI_MAPPING_SCALE_LOG &&
-        (binding.min_value <= 0.0f || binding.max_value <= 0.0f)) {
-        set_error(error, error_size, line_number, "log scale min and max must be above zero");
-        return 0;
-    }
-
     mapping->bindings[mapping->binding_count] = binding;
     mapping->binding_count += 1;
     return 1;
 }
 
-// clears a midi mapping and gives it a fallback name.
+// clears a midi mapping and gives it a fallback name
 void midi_mapping_init(midi_mapping *mapping)
 {
     memset(mapping, 0, sizeof(*mapping));
@@ -346,7 +356,7 @@ void midi_mapping_init(midi_mapping *mapping)
     }
 }
 
-// loads a midi mapping from a config file.
+// loads a midi mapping from a config file
 int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size_t error_size)
 {
     FILE *file;
@@ -366,6 +376,11 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
         char *value;
 
         line_number += 1;
+        if (strchr(line, '\n') == NULL && !feof(file)) {
+            fclose(file);
+            set_error(error, error_size, line_number, "config line is too long");
+            return 0;
+        }
         key = midi_text_trim(line);
         if (*key == '\0' || *key == '#') {
             continue;
@@ -401,11 +416,16 @@ int midi_mapping_load(midi_mapping *mapping, const char *path, char *error, size
         }
     }
 
+    if (ferror(file)) {
+        fclose(file);
+        set_error(error, error_size, line_number, "could not read midi mapping file");
+        return 0;
+    }
     fclose(file);
     return 1;
 }
 
-// copies loaded chord pad bindings into a chord-mode processor.
+// copies loaded chord pad bindings into a chord-mode processor
 void midi_mapping_configure_chord_mode(const midi_mapping *mapping, midi_chord_mode *mode)
 {
     size_t index;

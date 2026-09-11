@@ -4,7 +4,7 @@
 #include <math.h>
 #include <string.h>
 
-// clamps a float without depending on synth internals from the desktop layer.
+// clamps a float without depending on synth internals from the desktop layer
 static float clampf(float value, float min_value, float max_value)
 {
     if (value < min_value) {
@@ -18,22 +18,38 @@ static float clampf(float value, float min_value, float max_value)
     return value;
 }
 
-// scales a midi value into a synth value.
+// identifies the full signed linear range that needs a reachable zero at the knob's center
+static int is_bipolar_amount(const midi_mapping_binding *binding)
+{
+    return binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT &&
+        binding->scale == MIDI_MAPPING_SCALE_LINEAR &&
+        binding->min_value == -1.0f && binding->max_value == 1.0f;
+}
+
+// scales a midi value into a synth value
 static float scale_midi_value(const midi_mapping_binding *binding, int midi_value)
 {
+    // a seven-bit cc supplies 128 positions, numbered 0..127
     const float normalized = (float)midi_value / 127.0f;
+    if (is_bipolar_amount(binding)) {
+        // there is no single middle cc value give 63 and 64 exact zero, then
+        // spread each half over 63 steps: cc 0 reaches -1 and cc 127 reaches +1
+        return midi_value <= 63 ? (float)(midi_value - 63) / 63.0f :
+                                 (float)(midi_value - 64) / 63.0f;
+    }
 
     switch (binding->scale) {
         case MIDI_MAPPING_SCALE_LOG:
-            // log scaling gives knobs more room in the low frequency range.
+            // interpolate between logarithms so equal knob travel gives equal
+            // ratios (for example, successive doublings), then convert back
             return expf(
                 logf(binding->min_value) +
                 (normalized * (logf(binding->max_value) - logf(binding->min_value))));
 
         case MIDI_MAPPING_SCALE_STEP:
-            // step scaling snaps continuous midi values to whole-number choices.
+            // step scaling snaps continuous midi values to whole-number choices
             return binding->min_value +
-                (float)(int)((normalized * (binding->max_value - binding->min_value)) + 0.5f);
+                roundf(normalized * (binding->max_value - binding->min_value));
 
         case MIDI_MAPPING_SCALE_LINEAR:
         default:
@@ -41,24 +57,27 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
     }
 }
 
-// returns the current synth-side value for a mapped parameter.
-static float current_parameter_value(const synth *s, midi_mapping_parameter parameter)
+// soft takeover follows stored controls, never render-time effective values
+static float current_parameter_value(const synth *s, const midi_mapping_binding *binding)
 {
-    const midi_mapping_parameter_entry *entry = midi_mapping_find_parameter(parameter);
-
-    if (entry == 0 || entry->get == 0) {
-        return 0.0f;
-    }
-
-    return entry->get(s);
+    return binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT
+        ? synth_get_lfo_amount(s, binding->parameter)
+        : synth_get_parameter(s, binding->parameter);
 }
 
-// converts the current synth value back into the midi range for pickup checks.
+// converts the current synth value back into the midi range for pickup checks
 static float synth_value_to_midi_value(const midi_mapping_binding *binding, float synth_value)
 {
     const float bounded_value = clampf(synth_value, binding->min_value, binding->max_value);
     float normalized;
 
+    if (is_bipolar_amount(binding)) {
+        // reverse the two half-range formulas used above the virtual center
+        // 63.5 puts cc 63 and 64 equally close to zero for the pickup check
+        if (bounded_value == 0.0f) return 63.5f;
+        return bounded_value < 0.0f ? 63.0f + bounded_value * 63.0f :
+                                     64.0f + bounded_value * 63.0f;
+    }
     if (binding->max_value == binding->min_value) {
         return 0.0f;
     }
@@ -82,7 +101,7 @@ static float synth_value_to_midi_value(const midi_mapping_binding *binding, floa
     return clampf(normalized, 0.0f, 1.0f) * 127.0f;
 }
 
-// checks whether a new midi value has reached or crossed the pickup point.
+// checks whether a new midi value has reached or crossed the pickup point
 static int midi_value_reaches_pickup(
     const midi_mapping_pickup *pickup,
     float pickup_midi_value,
@@ -106,10 +125,10 @@ static int midi_value_reaches_pickup(
     return 0;
 }
 
-// tracks soft takeover state and tells the caller when this binding can write.
+// tracks soft takeover state and tells the caller when this binding can write
 static int binding_has_pickup(midi_mapping_binding *binding, const synth *s, int midi_value)
 {
-    const float synth_value = current_parameter_value(s, binding->parameter);
+    const float synth_value = current_parameter_value(s, binding);
     const float pickup_midi_value = synth_value_to_midi_value(binding, synth_value);
 
     if (binding->pickup.picked_up) {
@@ -126,17 +145,20 @@ static int binding_has_pickup(midi_mapping_binding *binding, const synth *s, int
     return 0;
 }
 
-// writes one mapped value into the synth.
-static void apply_synth_value(synth *s, midi_mapping_parameter parameter, float synth_value)
+// sends an accepted knob edit to the matching engine base-value or route-amount api
+static void apply_synth_value(synth *s, const midi_mapping_binding *binding, float value)
 {
-    const midi_mapping_parameter_entry *entry = midi_mapping_find_parameter(parameter);
-
-    if (entry != 0 && entry->set != 0) {
-        entry->set(s, synth_value);
+    if (binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT) {
+        synth_set_lfo_amount(s, binding->parameter, value);
+    } else {
+        const synth_parameter_info *info = synth_parameter_info_at(binding->parameter);
+        // preserve manual cc behavior: step scaling rounds; other integer bindings truncate
+        if (info != NULL && info->type == SYNTH_PARAMETER_INTEGER) value = truncf(value);
+        synth_set_parameter(s, binding->parameter, value);
     }
 }
 
-// returns the selector bank page selected by the knob's five fixed ranges.
+// returns the selector bank page selected by the knob's five fixed ranges
 static size_t effect_page_for_selector_value(int midi_value)
 {
     const size_t page =
@@ -191,6 +213,7 @@ static void select_effect(
     }
 }
 
+// builds a temporary base-control binding for the selected effect page and its own pickup state
 static int fill_macro_parameter_binding(
     midi_mapping_effect_bank *bank,
     size_t macro_index,
@@ -198,7 +221,7 @@ static int fill_macro_parameter_binding(
 {
     const midi_mapping_effect effect = bank->selected_effect;
     midi_mapping_parameter parameter;
-    const midi_mapping_parameter_entry *entry;
+    midi_mapping_parameter_info info;
 
     if (!bank->has_selected_effect) {
         return 0;
@@ -208,22 +231,25 @@ static int fill_macro_parameter_binding(
         return 0;
     }
 
-    entry = midi_mapping_find_parameter(parameter);
-    if (entry == 0) {
+    if (!midi_mapping_parameter_info_for(parameter, MIDI_MAPPING_TARGET_BASE, &info)) {
         return 0;
     }
 
-    binding->parameter = entry->parameter;
+    binding->parameter = info.parameter;
+    // effect-page macros always edit bases; direct amount bindings do not move
+    // when the user changes the selected effect page
+    binding->target_kind = MIDI_MAPPING_TARGET_BASE;
     binding->source_type = MIDI_MAPPING_SOURCE_CC;
     binding->channel = bank->macros[macro_index].channel;
     binding->control = bank->macros[macro_index].control;
-    binding->scale = entry->default_scale;
-    binding->min_value = entry->default_min_value;
-    binding->max_value = entry->default_max_value;
+    binding->scale = info.default_scale;
+    binding->min_value = info.default_min_value;
+    binding->max_value = info.default_max_value;
     binding->pickup = bank->pickups[effect][macro_index];
     return 1;
 }
 
+// waits for pickup, applies the scaled knob value, and reports which property changed
 static int apply_parameter_binding(
     midi_mapping_binding *binding,
     size_t effect_bank_index,
@@ -241,11 +267,12 @@ static int apply_parameter_binding(
         return 0;
     }
 
-    apply_synth_value(s, binding->parameter, synth_value);
+    apply_synth_value(s, binding, synth_value);
 
     if (result != 0) {
         result->kind = MIDI_MAPPING_APPLY_PARAMETER;
         result->parameter = binding->parameter;
+        result->target_kind = binding->target_kind;
         result->effect_bank_index = effect_bank_index;
         result->has_effect = has_effect;
         result->effect = effect;
@@ -291,7 +318,7 @@ static int apply_effect_macro(
     return applied;
 }
 
-// applies a raw midi message to the synth when it matches a binding.
+// applies a raw midi message to the synth when it matches a binding
 int midi_mapping_apply_short_message(
     midi_mapping *mapping,
     const unsigned char *data,
@@ -304,7 +331,7 @@ int midi_mapping_apply_short_message(
     int control;
     int midi_value;
 
-    if (mapping == 0 || data == 0 || s == 0 || length < 3) {
+    if (mapping == 0 || data == 0 || s == 0 || length < 3 || data[1] > 127 || data[2] > 127) {
         return 0;
     }
 

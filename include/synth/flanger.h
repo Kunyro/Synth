@@ -19,6 +19,16 @@
 #define SYNTH_FLANGER_MIN_INTENSITY_FEEDBACK 0.10f
 #define SYNTH_FLANGER_DEFAULT_FEEDBACK 0.7853f
 
+// effective controls, separate from persistent dsp history
+typedef struct synth_flanger_params {
+    float rate_hz;
+    float intensity;
+    float depth;
+    float feedback;
+    float mix;
+    float manual_delay_seconds;
+} synth_flanger_params;
+
 typedef struct synth_flanger_delay_line {
     float *left;
     float *right;
@@ -56,5 +66,18 @@ float synth_flanger_get_manual(const synth_flanger *flanger);
 synth_stereo_sample synth_flanger_process(
     synth_flanger *flanger,
     synth_stereo_sample input);
+
+// returns a copy of stored controls; processing overrides never change those bases
+synth_flanger_params synth_flanger_get_params(const synth_flanger *effect);
+// effective controls must be finite and within the module bounds
+// advances dsp history without storing controls or calling parameter setters
+synth_stereo_sample synth_flanger_process_with_params(
+    synth_flanger *effect,
+    synth_stereo_sample input,
+    const synth_flanger_params *params);
+
+// resolves intensity before direct depth/feedback modulation and final clamping
+// flanger intensity is a mix of depth and feedback
+void synth_flanger_resolve_intensity(synth_flanger_params *params, float intensity);
 
 #endif

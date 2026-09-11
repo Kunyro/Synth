@@ -62,12 +62,13 @@ static synth_voice *find_voice_by_frequency(synth *s, float frequency)
     return 0;
 }
 
+// finds the active voice for a note so tests can inspect its envelope and oscillator state
 static synth_voice *find_voice_by_note(synth *s, int midi_note)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice *voice = &s->voices[i];
 
-        if (voice->active && voice->midi_note == midi_note) {
+        if (voice->active && voice->note_number == midi_note) {
             return voice;
         }
     }
@@ -75,6 +76,7 @@ static synth_voice *find_voice_by_note(synth *s, int midi_note)
     return 0;
 }
 
+// counts matching voices in one envelope stage, including overlapping releases
 static int count_voices_by_note_and_stage(synth *s, int midi_note, synth_envelope_stage stage)
 {
     int count = 0;
@@ -82,7 +84,7 @@ static int count_voices_by_note_and_stage(synth *s, int midi_note, synth_envelop
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice *voice = &s->voices[i];
 
-        if (voice->active && voice->midi_note == midi_note && voice->envelope.stage == stage) {
+        if (voice->active && voice->note_number == midi_note && voice->envelope.stage == stage) {
             ++count;
         }
     }
@@ -90,6 +92,7 @@ static int count_voices_by_note_and_stage(synth *s, int midi_note, synth_envelop
     return count;
 }
 
+// counts instances still held down, excluding voices already in their release stage
 static int count_held_voices_by_note(synth *s, int midi_note)
 {
     int count = 0;
@@ -97,7 +100,7 @@ static int count_held_voices_by_note(synth *s, int midi_note)
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice *voice = &s->voices[i];
 
-        if (voice->active && voice->midi_note == midi_note && voice->envelope.stage != SYNTH_ENV_RELEASE) {
+        if (voice->active && voice->note_number == midi_note && voice->envelope.stage != SYNTH_ENV_RELEASE) {
             ++count;
         }
     }
@@ -145,6 +148,7 @@ static void test_stereo_spread(void)
     expect_near(wide.stereo_spread, 1.0f, 0.0001f, "stereo spread clamps high");
 }
 
+// checks free-running phase, zero startup depth, and generic routes affecting audio without changing bases
 static void test_global_lfo(void)
 {
     synth continuous;
@@ -162,26 +166,26 @@ static void test_global_lfo(void)
     synth_set_lfo_rate(&continuous, 2.0f);
     synth_set_lfo_shape_morph(&continuous, 2.0f);
     synth_set_lfo_depth(&continuous, 2.0f);
-    synth_set_lfo_first_oscillator_morph_amount(&continuous, -1.0f);
-    synth_set_lfo_second_oscillator_morph_amount(&continuous, 2.0f);
-    synth_set_lfo_first_oscillator_gain_amount(&continuous, 2.0f);
-    synth_set_lfo_second_oscillator_gain_amount(&continuous, -1.0f);
-    synth_set_lfo_filter_amount(&continuous, 2.0f);
+    synth_set_lfo_amount(&continuous, SYNTH_PARAM_OSCILLATOR_MORPH, -1.0f);
+    synth_set_lfo_amount(&continuous, SYNTH_PARAM_SECOND_OSCILLATOR_MORPH, 2.0f);
+    synth_set_lfo_amount(&continuous, SYNTH_PARAM_FIRST_OSCILLATOR_GAIN, 2.0f);
+    synth_set_lfo_amount(&continuous, SYNTH_PARAM_SECOND_OSCILLATOR_GAIN, -1.0f);
+    synth_set_lfo_amount(&continuous, SYNTH_PARAM_FILTER_CUTOFF, 2.0f);
     expect_near(continuous.lfo_depth, 1.0f, 0.0001f, "lfo depth clamps high");
     expect_near(continuous.lfo.morph, 1.0f, 0.0001f, "lfo shape morph clamps high");
     expect_near(
-        continuous.lfo_first_oscillator_morph_amount,
-        0.0f,
+        synth_get_lfo_amount(&continuous, SYNTH_PARAM_OSCILLATOR_MORPH),
+        -1.0f,
         0.0001f,
         "first oscillator morph lfo amount clamps low");
     expect_near(
-        continuous.lfo_second_oscillator_morph_amount,
+        synth_get_lfo_amount(&continuous, SYNTH_PARAM_SECOND_OSCILLATOR_MORPH),
         1.0f,
         0.0001f,
         "second oscillator morph lfo amount clamps high");
-    expect_near(continuous.lfo_first_oscillator_gain_amount, 1.0f, 0.0001f, "first oscillator lfo amount clamps high");
-    expect_near(continuous.lfo_second_oscillator_gain_amount, 0.0f, 0.0001f, "second oscillator lfo amount clamps low");
-    expect_near(continuous.lfo_filter_amount, 1.0f, 0.0001f, "filter lfo amount clamps high");
+    expect_near(synth_get_lfo_amount(&continuous, SYNTH_PARAM_FIRST_OSCILLATOR_GAIN), 1.0f, 0.0001f, "first oscillator lfo amount clamps high");
+    expect_near(synth_get_lfo_amount(&continuous, SYNTH_PARAM_SECOND_OSCILLATOR_GAIN), -1.0f, 0.0001f, "second oscillator lfo amount clamps low");
+    expect_near(synth_get_lfo_amount(&continuous, SYNTH_PARAM_FILTER_CUTOFF), 1.0f, 0.0001f, "filter lfo amount clamps high");
 
     synth_render_mono(&continuous, silence, 20);
     expect_near(continuous.lfo.phase, 0.4f, 0.0001f, "global lfo runs continuously without active voices");
@@ -199,11 +203,11 @@ static void test_global_lfo(void)
     synth_set_lfo_rate(&modulated, 5.0f);
     synth_set_lfo_shape_morph(&modulated, 0.5f);
     synth_set_lfo_depth(&modulated, 1.0f);
-    synth_set_lfo_first_oscillator_morph_amount(&modulated, 0.25f);
-    synth_set_lfo_second_oscillator_morph_amount(&modulated, 0.75f);
-    synth_set_lfo_first_oscillator_gain_amount(&modulated, 0.75f);
-    synth_set_lfo_second_oscillator_gain_amount(&modulated, 0.5f);
-    synth_set_lfo_filter_amount(&modulated, 0.25f);
+    synth_set_lfo_amount(&modulated, SYNTH_PARAM_OSCILLATOR_MORPH, 0.25f);
+    synth_set_lfo_amount(&modulated, SYNTH_PARAM_SECOND_OSCILLATOR_MORPH, 0.75f);
+    synth_set_lfo_amount(&modulated, SYNTH_PARAM_FIRST_OSCILLATOR_GAIN, 0.75f);
+    synth_set_lfo_amount(&modulated, SYNTH_PARAM_SECOND_OSCILLATOR_GAIN, 0.5f);
+    synth_set_lfo_amount(&modulated, SYNTH_PARAM_FILTER_CUTOFF, 0.25f);
 
     synth_render_mono(&dry, dry_buffer, 256);
     synth_render_mono(&modulated, modulated_buffer, 256);
@@ -389,6 +393,7 @@ static void test_saturation_controls(void)
         "synth saturation mix clamps low");
 }
 
+// runs voice/synth integration checks, including repeated notes, oscillator controls, effects, and lfo routes
 int main(void)
 {
     synth s;
@@ -470,23 +475,23 @@ int main(void)
         synth_set_pitch_bend(&bend_synth, 1.0f);
         expect_near(
             bent_voice->oscillator.frequency,
-            synth_midi_note_to_frequency(70),
+            synth_note_to_frequency(70),
             0.001f,
             "full pitch bend up retunes by one semitone");
         expect_near(
             bent_voice->second_oscillator.frequency,
-            synth_midi_note_to_frequency(70),
+            synth_note_to_frequency(70),
             0.001f,
             "full pitch bend up retunes second oscillator");
         synth_set_pitch_bend(&bend_synth, -1.0f);
         expect_near(
             bent_voice->oscillator.frequency,
-            synth_midi_note_to_frequency(68),
+            synth_note_to_frequency(68),
             0.001f,
             "full pitch bend down retunes by one semitone");
         expect_near(
             bent_voice->second_oscillator.frequency,
-            synth_midi_note_to_frequency(68),
+            synth_note_to_frequency(68),
             0.001f,
             "full pitch bend down retunes second oscillator");
         synth_set_pitch_bend(&bend_synth, 0.0f);
@@ -505,12 +510,12 @@ int main(void)
     if (held_bend_voice != 0) {
         expect_near(
             held_bend_voice->oscillator.frequency,
-            synth_midi_note_to_frequency(73),
+            synth_note_to_frequency(73),
             0.001f,
             "new voice receives held pitch bend");
         expect_near(
             held_bend_voice->second_oscillator.frequency,
-            synth_midi_note_to_frequency(73),
+            synth_note_to_frequency(73),
             0.001f,
             "new voice second oscillator receives held pitch bend");
     }

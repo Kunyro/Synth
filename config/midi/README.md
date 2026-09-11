@@ -126,11 +126,6 @@ cmake --build --preset dev --target midi_monitor
 - `lfo_rate`
 - `lfo_shape_morph`
 - `lfo_depth`
-- `lfo_first_oscillator_morph_amount`
-- `lfo_second_oscillator_morph_amount`
-- `lfo_first_oscillator_gain_amount`
-- `lfo_second_oscillator_gain_amount`
-- `lfo_filter_amount`
 - `saturation_drive`
 - `saturation_mix`
 - `distortion_drive`
@@ -169,6 +164,45 @@ cmake --build --preset dev --target midi_monitor
 - `compressor_attack_seconds`
 - `compressor_release_seconds`
 
+## LFO Amount Bindings
+
+Every parameter above except `lfo_rate`, `lfo_shape_morph`, and `lfo_depth` also
+has an amount control named `lfo_amount.<parameter>`. This provides 52 routes,
+including effect-internal rates and depths. Chord pads, effect selectors/macros,
+and route amounts themselves cannot be destinations. Route identity stays tied
+to the actual parameter when an effect selector changes pages.
+
+```text
+lfo_rate=cc:1:21:log:0.05:20
+lfo_depth=cc:1:22:linear:0:1
+lfo_amount.delay_mix=cc:1:41:linear:-1:1
+lfo_amount.chorus_rate=cc:1:42:linear:-1:1
+lfo_amount.filter_poles=cc:1:43:linear:-1:1
+```
+
+Loading a config binds knobs only. All amounts and global depth start at zero;
+raise both an amount and global depth to hear modulation. A destination does
+not need a base-value binding to have an amount binding.
+
+Signed amounts range from `-1` to `1`; negative amounts reverse direction.
+With `linear:-1:1`, CC 0 is -1, CC 63 and 64 are exactly zero, and CC 127 is +1.
+A positive-only `linear:0:1` binding is also supported. Soft takeover compares
+base knobs against stored base values and amount knobs against stored amounts,
+so the moving LFO does not interfere with pickup. Config ranges scale knobs;
+they do not redefine the engine's fixed modulation spans.
+
+ADSR routes capture values when a note starts. Manual ADSR edits keep the
+existing behavior for already-playing voices. Stepped targets quantize the
+LFO separately; delay-time modulation produces pitch bends. Full behavior and
+span tables are in [the modulation contract](../../docs/modulation.md).
+
+The old five `lfo_*_amount` names have been removed. Use the corresponding
+`lfo_amount.` names shown in the default mapping below. All five now use the
+same centered rules as other destinations. Existing default knobs retain their
+positive-only ranges. The loader accepts up to 256 direct parameter/amount
+bindings, including multiple controls for the same target; malformed or
+excluded targets produce line-specific errors.
+
 ## Supported Chord Pads
 
 - `chord_diminished`
@@ -202,13 +236,13 @@ The included config maps Akai MPK Mini MK2-style CC knobs on channel 1:
 | 14 | `second_oscillator_gain` |
 | 15 | `second_oscillator_morph` |
 | 16 | `master_gain` |
-| 17 | `lfo_first_oscillator_gain_amount` |
-| 18 | `lfo_second_oscillator_gain_amount` |
-| 19 | `lfo_first_oscillator_morph_amount` |
-| 20 | `lfo_second_oscillator_morph_amount` |
+| 17 | `lfo_amount.first_oscillator_gain` |
+| 18 | `lfo_amount.second_oscillator_gain` |
+| 19 | `lfo_amount.oscillator_morph` |
+| 20 | `lfo_amount.second_oscillator_morph` |
 | 21 | `lfo_rate` |
 | 22 | `lfo_depth` |
-| 23 | `lfo_filter_amount` |
+| 23 | `lfo_amount.filter_cutoff` |
 | 24 | `lfo_shape_morph` |
 | 25 | `effect_selector_1` |
 | 26 | `effect_1_macro_1` |

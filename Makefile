@@ -40,9 +40,12 @@ RING_MOD_TEST_TARGET := build/test_ring_mod$(EXEEXT)
 EQ_TEST_TARGET := build/test_eq$(EXEEXT)
 DELAY_TEST_TARGET := build/test_delay$(EXEEXT)
 PLATE_REVERB_TEST_TARGET := build/test_plate_reverb$(EXEEXT)
+MODULATION_TEST_TARGET := build/test_modulation$(EXEEXT)
+PITCH_TEST_TARGET := build/test_pitch$(EXEEXT)
 LFO_TEST_TARGET := build/test_lfo$(EXEEXT)
 VOICE_TEST_TARGET := build/test_voice$(EXEEXT)
 MIDI_TYPES_TEST_TARGET := build/test_midi_types$(EXEEXT)
+LFO_MAPPING_TEST_TARGET := build/test_lfo_mapping$(EXEEXT)
 MIDI_MAPPING_TEST_TARGET := build/test_midi_mapping$(EXEEXT)
 CHORD_MODE_TEST_TARGET := build/test_chord_mode$(EXEEXT)
 
@@ -53,6 +56,8 @@ DESKTOP_SYSTEM_SOURCES := $(shell sed -e '/^[[:space:]]*\#/d' -e '/^[[:space:]]*
 MIDI_MAPPING_SOURCES := \
 	platform/desktop/midi/chord_mode.c \
 	platform/desktop/midi/midi_mapping.c \
+	platform/desktop/midi/midi_mapping_io.c \
+	platform/desktop/midi/midi_mapping_validation.c \
 	platform/desktop/midi/midi_mapping_registry.c \
 	platform/desktop/midi/midi_mapping_runtime.c \
 	platform/desktop/midi/midi_text.c
@@ -71,7 +76,10 @@ run: $(TARGET)
 midi-monitor: $(MIDI_MONITOR_TARGET)
 	./$(MIDI_MONITOR_TARGET)
 
-test: $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(SATURATION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(COMPRESSOR_TEST_TARGET) $(FLANGER_TEST_TARGET) $(CHORUS_TEST_TARGET) $(RING_MOD_TEST_TARGET) $(EQ_TEST_TARGET) $(DELAY_TEST_TARGET) $(PLATE_REVERB_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET) $(CHORD_MODE_TEST_TARGET)
+test: $(LFO_MAPPING_TEST_TARGET) $(MODULATION_TEST_TARGET) $(PITCH_TEST_TARGET) $(OSCILLATOR_TEST_TARGET) $(ENVELOPE_TEST_TARGET) $(FILTER_TEST_TARGET) $(DISTORTION_TEST_TARGET) $(SATURATION_TEST_TARGET) $(BITCRUSHER_TEST_TARGET) $(COMPRESSOR_TEST_TARGET) $(FLANGER_TEST_TARGET) $(CHORUS_TEST_TARGET) $(RING_MOD_TEST_TARGET) $(EQ_TEST_TARGET) $(DELAY_TEST_TARGET) $(PLATE_REVERB_TEST_TARGET) $(LFO_TEST_TARGET) $(VOICE_TEST_TARGET) $(MIDI_TYPES_TEST_TARGET) $(MIDI_MAPPING_TEST_TARGET) $(CHORD_MODE_TEST_TARGET)
+	./$(LFO_MAPPING_TEST_TARGET)
+	./$(MODULATION_TEST_TARGET)
+	./$(PITCH_TEST_TARGET)
 	./$(OSCILLATOR_TEST_TARGET)
 	./$(ENVELOPE_TEST_TARGET)
 	./$(FILTER_TEST_TARGET)
@@ -142,7 +150,7 @@ $(LFO_TEST_TARGET): tests/test_lfo.c src/lfo.c src/wavetable.c | build
 $(VOICE_TEST_TARGET): tests/test_voice.c $(CORE_SOURCES) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
-$(MIDI_TYPES_TEST_TARGET): tests/test_midi_types.c src/midi_types.c | build
+$(MIDI_TYPES_TEST_TARGET): tests/test_midi_types.c platform/desktop/midi/midi_types.c src/pitch.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
 
 $(MIDI_MAPPING_TEST_TARGET): tests/test_midi_mapping.c $(MIDI_MAPPING_SOURCES) $(CORE_SOURCES) | build
@@ -156,3 +164,12 @@ build:
 
 clean:
 	rm -rf build
+
+$(MODULATION_TEST_TARGET): tests/test_modulation.c $(CORE_SOURCES) | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(PITCH_TEST_TARGET): tests/test_pitch.c src/pitch.c | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm
+
+$(LFO_MAPPING_TEST_TARGET): tests/test_lfo_mapping.c $(MIDI_MAPPING_SOURCES) $(CORE_SOURCES) | build
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ -lm

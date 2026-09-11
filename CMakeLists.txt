@@ -47,7 +47,9 @@ set(SYNTH_PUBLIC_HEADERS
     include/synth/filter.h
     include/synth/flanger.h
     include/synth/lfo.h
-    include/synth/midi_types.h
+    include/synth/parameter.h
+    include/synth/modulation.h
+    include/synth/pitch.h
     include/synth/oscillator.h
     include/synth/plate_reverb.h
     include/synth/ring_mod.h
@@ -58,7 +60,8 @@ set(SYNTH_PUBLIC_HEADERS
 
 set(SYNTH_PRIVATE_HEADERS
     src/internal/synth_internal.h
-    src/internal/wavetable.h)
+    src/internal/wavetable.h
+    src/internal/render_parameters.h)
 
 add_library(synth_core STATIC
     ${SYNTH_CORE_SOURCES}
@@ -102,6 +105,7 @@ if(SYNTH_BUILD_DESKTOP)
         platform/desktop/midi/chord_mode.h
         platform/desktop/midi/midi_mapping.h
         platform/desktop/midi/midi_mapping_internal.h
+        platform/desktop/midi/midi_types.h
         platform/desktop/midi/midi_device.h
         platform/desktop/midi/midi_text.h
         platform/desktop/midi/midi_portmidi.h)
@@ -174,6 +178,7 @@ if(SYNTH_BUILD_DESKTOP)
         platform/desktop/midi/chord_mode.h
         platform/desktop/midi/midi_mapping.h
         platform/desktop/midi/midi_mapping_internal.h
+        platform/desktop/midi/midi_types.h
         platform/desktop/midi/midi_device.h
         platform/desktop/midi/midi_text.h
         platform/desktop/midi/midi_portmidi.h
@@ -198,8 +203,9 @@ if(BUILD_TESTING)
         test_delay
         test_plate_reverb
         test_lfo
+        test_modulation
         test_voice
-        test_midi_types)
+        test_pitch)
 
     foreach(test_name IN LISTS SYNTH_CORE_TESTS)
         add_executable(${test_name} "tests/${test_name}.c")
@@ -211,6 +217,17 @@ if(BUILD_TESTING)
     endforeach()
 
     if(SYNTH_BUILD_DESKTOP)
+        add_executable(test_midi_types tests/test_midi_types.c)
+        synth_configure_c_target(test_midi_types)
+        target_link_libraries(test_midi_types PRIVATE Synth::DesktopMidi)
+        add_test(NAME test_midi_types COMMAND test_midi_types)
+
+        add_executable(test_lfo_mapping tests/test_lfo_mapping.c)
+        synth_configure_c_target(test_lfo_mapping)
+        target_link_libraries(test_lfo_mapping PRIVATE Synth::DesktopMidi)
+        add_test(NAME test_lfo_mapping COMMAND test_lfo_mapping
+            "${CMAKE_CURRENT_BINARY_DIR}/lfo_mapping_test.conf")
+
         add_executable(test_midi_mapping tests/test_midi_mapping.c)
         synth_configure_c_target(test_midi_mapping)
         target_link_libraries(test_midi_mapping PRIVATE Synth::DesktopMidi)

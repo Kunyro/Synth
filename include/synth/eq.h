@@ -13,6 +13,13 @@
 #define SYNTH_EQ_MID_Q 0.70710678f
 #define SYNTH_EQ_SHELF_SLOPE 1.0f
 
+// effective controls, separate from persistent dsp history
+typedef struct synth_eq_params {
+    float low_gain_db;
+    float mid_gain_db;
+    float high_gain_db;
+} synth_eq_params;
+
 typedef struct synth_eq_biquad {
     float b0;
     float b1;
@@ -30,6 +37,10 @@ typedef struct synth_eq {
     float low_gain_db;
     float mid_gain_db;
     float high_gain_db;
+    // last effective gains used for coefficients; the preceding gains are the bases
+    float render_low_gain_db;
+    float render_mid_gain_db;
+    float render_high_gain_db;
     synth_eq_biquad low;
     synth_eq_biquad mid;
     synth_eq_biquad high;
@@ -46,5 +57,14 @@ float synth_eq_get_high(const synth_eq *eq);
 synth_stereo_sample synth_eq_process(
     synth_eq *eq,
     synth_stereo_sample input);
+
+// returns a copy of stored controls; processing overrides never change those bases
+synth_eq_params synth_eq_get_params(const synth_eq *effect);
+// effective controls must be finite and within the module bounds
+// advances dsp history without storing controls or calling parameter setters
+synth_stereo_sample synth_eq_process_with_params(
+    synth_eq *effect,
+    synth_stereo_sample input,
+    const synth_eq_params *params);
 
 #endif
