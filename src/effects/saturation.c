@@ -11,7 +11,7 @@
 #define SYNTH_SATURATION_MAX_CURVE_DRIVE 5.0f
 #define SYNTH_SATURATION_MAX_MAKEUP_GAIN 1.12f
 
-// blends from clean signal to fully saturated signal.
+// blends from clean signal to fully saturated signal
 static float mix_sample(float dry, float wet, float mix)
 {
     return dry + ((wet - dry) * mix);
@@ -28,7 +28,7 @@ static float drive_amount(float drive)
     return synth_clampf(normalized_drive(drive), 0.0f, 1.0f);
 }
 
-// maps the large user-facing drive range into a warmer soft-clip range.
+// maps the large user-facing drive range into a warmer soft-clip range
 static float curve_drive_for_drive(float drive)
 {
     const float amount = powf(drive_amount(drive), 0.85f);
@@ -37,7 +37,7 @@ static float curve_drive_for_drive(float drive)
         ((SYNTH_SATURATION_MAX_CURVE_DRIVE - SYNTH_SATURATION_MIN_DRIVE) * amount);
 }
 
-// raises the curve bias as drive increases, which strengthens even harmonics.
+// raises the curve bias as drive increases, which strengthens even harmonics
 static float harmonic_bias_for_drive(float drive)
 {
     const float amount = drive_amount(drive);
@@ -46,7 +46,7 @@ static float harmonic_bias_for_drive(float drive)
         ((SYNTH_SATURATION_MAX_BIAS - SYNTH_SATURATION_MIN_BIAS) * amount);
 }
 
-// restores a little level after saturation and dc blocking reduce dynamic range.
+// restores a little level after saturation and dc blocking reduce dynamic range
 static float makeup_gain_for_drive(float drive)
 {
     const float amount = powf(drive_amount(drive), 0.7f);
@@ -54,7 +54,7 @@ static float makeup_gain_for_drive(float drive)
     return 1.0f + ((SYNTH_SATURATION_MAX_MAKEUP_GAIN - 1.0f) * amount);
 }
 
-// converts a cutoff into the feedback coefficient for a one-pole dc blocker.
+// converts a cutoff into the feedback coefficient for a one-pole dc blocker
 static float dc_block_coefficient_for_sample_rate(float sample_rate)
 {
     const float safe_sample_rate =
@@ -68,7 +68,7 @@ static float dc_block_coefficient_for_sample_rate(float sample_rate)
         safe_sample_rate);
 }
 
-// removes the small dc offset left by asymmetric saturation curves.
+// removes the small dc offset left by asymmetric saturation curves
 static float block_dc(
     synth_saturation_channel *channel,
     float input,
@@ -83,7 +83,7 @@ static float block_dc(
 }
 
 // tanh gives soft saturation; bias is added after drive so even-harmonic
-// asymmetry can grow without forcing the zero point into hard saturation.
+// asymmetry can grow without forcing the zero point into hard saturation
 static float saturate_sample(float input, float drive)
 {
     const float curve_drive = curve_drive_for_drive(drive);
@@ -154,31 +154,53 @@ float synth_saturation_get_mix(const synth_saturation *saturation)
     return saturation->mix;
 }
 
-synth_stereo_sample synth_saturation_process(
+// applies temporary drive/mix to the warm clipping path, retaining the dc blocker's history
+synth_stereo_sample synth_saturation_process_with_params(
     synth_saturation *saturation,
-    synth_stereo_sample input)
+    synth_stereo_sample input,
+    const synth_saturation_params *params)
 {
     synth_stereo_sample wet;
     synth_stereo_sample output;
 
-    if (saturation->mix == 0.0f) {
+    if (params->mix == 0.0f) {
+        // preserve the fully dry bypass, including its paused dc-blocker history
         return input;
     }
 
     wet.left = apply_makeup(
         block_dc(
             &saturation->left,
-            saturate_sample(input.left, saturation->drive),
+            saturate_sample(input.left, params->drive),
             saturation->dc_block_coefficient),
-        saturation->drive);
+        params->drive);
     wet.right = apply_makeup(
         block_dc(
             &saturation->right,
-            saturate_sample(input.right, saturation->drive),
+            saturate_sample(input.right, params->drive),
             saturation->dc_block_coefficient),
-        saturation->drive);
+        params->drive);
 
-    output.left = mix_sample(input.left, wet.left, saturation->mix);
-    output.right = mix_sample(input.right, wet.right, saturation->mix);
+    output.left = mix_sample(input.left, wet.left, params->mix);
+    output.right = mix_sample(input.right, wet.right, params->mix);
     return output;
+}
+
+// copies stored controls into a value struct; buffers, phases, and other history stay in the effect
+synth_saturation_params synth_saturation_get_params(const synth_saturation *effect)
+{
+    const synth_saturation_params params = {
+        effect->drive,
+        effect->mix
+    };
+    return params;
+}
+
+// processes a sample using the stored controls through the same path used for modulation
+synth_stereo_sample synth_saturation_process(
+    synth_saturation *effect,
+    synth_stereo_sample input)
+{
+    const synth_saturation_params params = synth_saturation_get_params(effect);
+    return synth_saturation_process_with_params(effect, input, &params);
 }

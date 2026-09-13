@@ -10,6 +10,9 @@ typedef struct event_log {
     size_t count;
 } event_log;
 
+#define TEST_PAD_CHANNEL 3
+#define TEST_FIRST_PAD_CC 53
+
 static void expect_true(int condition, const char *message)
 {
     if (!condition) {
@@ -42,21 +45,30 @@ static void clear_log(event_log *log)
 
 static void send_cc(midi_chord_mode *mode, int control, int value, event_log *log)
 {
-    const unsigned char data[] = {0xB2, (unsigned char)control, (unsigned char)value};
+    const unsigned char data[] = {0xB0 + (TEST_PAD_CHANNEL - 1), (unsigned char)control, (unsigned char)value};
 
     expect_true(
         midi_chord_mode_handle_short_message(mode, data, sizeof(data), emit_to_log, log),
         "chord pad cc is consumed");
 }
 
+static void bind_test_pads(midi_chord_mode *mode)
+{
+    int pad;
+
+    for (pad = 0; pad < MIDI_CHORD_MODE_PAD_COUNT; ++pad) {
+        midi_chord_mode_bind_pad(mode, (midi_chord_mode_pad)pad, TEST_PAD_CHANNEL, TEST_FIRST_PAD_CC + pad);
+    }
+}
+
 static void press_pad(midi_chord_mode *mode, midi_chord_mode_pad pad, event_log *log)
 {
-    send_cc(mode, MIDI_CHORD_MODE_FIRST_PAD_CC + pad, 127, log);
+    send_cc(mode, TEST_FIRST_PAD_CC + pad, 127, log);
 }
 
 static void release_pad(midi_chord_mode *mode, midi_chord_mode_pad pad, event_log *log)
 {
-    send_cc(mode, MIDI_CHORD_MODE_FIRST_PAD_CC + pad, 0, log);
+    send_cc(mode, TEST_FIRST_PAD_CC + pad, 0, log);
 }
 
 static void expect_note_set(
@@ -93,6 +105,7 @@ static void test_major_minor_seven_nine_builds_dominant_nine(void)
     const int expected[] = {60, 64, 67, 70, 74};
 
     midi_chord_mode_init(&mode);
+    bind_test_pads(&mode);
     clear_log(&log);
 
     press_pad(&mode, MIDI_CHORD_MODE_PAD_MAJOR, &log);
@@ -111,6 +124,7 @@ static void test_extensions_are_additive_without_chord_type(void)
     const int expected[] = {60, 69, 74};
 
     midi_chord_mode_init(&mode);
+    bind_test_pads(&mode);
     clear_log(&log);
 
     press_pad(&mode, MIDI_CHORD_MODE_PAD_SIXTH, &log);
@@ -129,6 +143,7 @@ static void test_last_pressed_chord_type_falls_back_to_held_type(void)
     const int major_expected[] = {60, 64, 67};
 
     midi_chord_mode_init(&mode);
+    bind_test_pads(&mode);
     clear_log(&log);
 
     press_pad(&mode, MIDI_CHORD_MODE_PAD_MAJOR, &log);
@@ -147,6 +162,7 @@ static void test_pad_changes_update_held_notes_immediately(void)
     event_log log;
 
     midi_chord_mode_init(&mode);
+    bind_test_pads(&mode);
     clear_log(&log);
 
     press_pad(&mode, MIDI_CHORD_MODE_PAD_MAJOR, &log);
@@ -176,6 +192,7 @@ static void test_shared_generated_notes_release_only_after_last_root(void)
     event_log log;
 
     midi_chord_mode_init(&mode);
+    bind_test_pads(&mode);
     clear_log(&log);
 
     press_pad(&mode, MIDI_CHORD_MODE_PAD_MAJOR, &log);
@@ -207,10 +224,12 @@ static void test_chord_mode_only_consumes_pad_ccs(void)
     midi_chord_mode mode;
     event_log log;
     const unsigned char note_on[] = {0x90, 60, 100};
-    const unsigned char other_cc[] = {0xB0, 32, 127};
-    const unsigned char pad_cc[] = {0xB0, 33, 1};
+    const unsigned char other_cc[] = {0xB0 + (TEST_PAD_CHANNEL - 1), 32, 127};
+    const unsigned char wrong_channel_pad_cc[] = {0xB0, TEST_FIRST_PAD_CC, 1};
+    const unsigned char pad_cc[] = {0xB0 + (TEST_PAD_CHANNEL - 1), TEST_FIRST_PAD_CC, 1};
 
     midi_chord_mode_init(&mode);
+    bind_test_pads(&mode);
     clear_log(&log);
 
     expect_true(
@@ -219,6 +238,9 @@ static void test_chord_mode_only_consumes_pad_ccs(void)
     expect_true(
         !midi_chord_mode_handle_short_message(&mode, other_cc, sizeof(other_cc), emit_to_log, &log),
         "non-pad ccs are not consumed");
+    expect_true(
+        !midi_chord_mode_handle_short_message(&mode, wrong_channel_pad_cc, sizeof(wrong_channel_pad_cc), emit_to_log, &log),
+        "pad ccs on other channels are not consumed");
     expect_true(
         midi_chord_mode_handle_short_message(&mode, pad_cc, sizeof(pad_cc), emit_to_log, &log),
         "pad ccs are consumed");

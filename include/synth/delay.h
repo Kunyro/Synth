@@ -5,6 +5,8 @@
 
 #include "synth/audio_types.h"
 
+// default max delay frames at the project's 48 khz default sample rate
+// initialized delays expose their actual per-sample-rate limit in max_delay_frames
 #define SYNTH_DELAY_MAX_FRAMES 96000
 #define SYNTH_DELAY_MIN_TIME_SECONDS 0.001f
 #define SYNTH_DELAY_MAX_TIME_SECONDS 2.0f
@@ -14,6 +16,13 @@
 #define SYNTH_DELAY_TIME_SETTLE_SECONDS 0.050f
 #define SYNTH_DELAY_VOICE_COUNT 4
 #define SYNTH_DELAY_TAIL_SILENCE_THRESHOLD 0.0001f
+
+// effective controls, separate from persistent dsp history
+typedef struct synth_delay_params {
+    float time_seconds;
+    float feedback;
+    float mix;
+} synth_delay_params;
 
 typedef enum synth_delay_voice_state {
     SYNTH_DELAY_VOICE_INACTIVE = 0,
@@ -25,6 +34,7 @@ typedef struct synth_delay_line {
     float *left;
     float *right;
     size_t write_index;
+    size_t capacity_frames;
     float delay_frames;
 } synth_delay_line;
 
@@ -48,6 +58,7 @@ typedef struct synth_delay {
     int has_pending_time_change;
     int has_processed;
     float sample_rate;
+    size_t max_delay_frames;
     float time_seconds;
     float feedback;
     float mix;
@@ -65,5 +76,14 @@ float synth_delay_get_mix(const synth_delay *delay);
 synth_stereo_sample synth_delay_process(
     synth_delay *delay,
     synth_stereo_sample input);
+
+// returns a copy of stored controls; processing overrides never change those bases
+synth_delay_params synth_delay_get_params(const synth_delay *effect);
+// effective controls must be finite and within the module bounds
+// advances dsp history without storing controls or calling parameter setters
+synth_stereo_sample synth_delay_process_with_params(
+    synth_delay *effect,
+    synth_stereo_sample input,
+    const synth_delay_params *params);
 
 #endif

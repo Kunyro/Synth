@@ -1,4 +1,5 @@
-#include "synth/midi_types.h"
+#include "synth/pitch.h"
+#include "midi/midi_types.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@ static void expect_near(float actual, float expected, float tolerance, const cha
     }
 }
 
+// checks packet decoding and normalized pitch bend in the adapter, plus the extracted pitch utility
 int main(void)
 {
     synth_midi_message message;
@@ -31,9 +33,9 @@ int main(void)
     const unsigned char pitch_bend_full_up[] = {0xE0, 0x7F, 0x7F};
     const unsigned char pitch_bend_full_down_channel_2[] = {0xE1, 0x00, 0x00};
 
-    expect_near(synth_midi_note_to_frequency(69), 440.0f, 0.001f, "MIDI note 69 is A440");
-    expect_near(synth_midi_note_to_frequency(57), 220.0f, 0.001f, "MIDI note 57 is A220");
-    expect_near(synth_midi_note_to_frequency(60), 261.6256f, 0.01f, "MIDI note 60 is middle C");
+    expect_near(synth_note_to_frequency(69), 440.0f, 0.001f, "MIDI note 69 is A440");
+    expect_near(synth_note_to_frequency(57), 220.0f, 0.001f, "MIDI note 57 is A220");
+    expect_near(synth_note_to_frequency(60), 261.6256f, 0.01f, "MIDI note 60 is middle C");
 
     expect_true(synth_midi_parse_short_message(note_on, sizeof(note_on), &message), "note on parses");
     expect_true(message.type == SYNTH_MIDI_MESSAGE_NOTE_ON, "note on type");

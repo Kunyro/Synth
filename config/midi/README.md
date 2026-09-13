@@ -24,12 +24,24 @@ Config lines use:
 
 ```text
 parameter=cc:channel:control:scale:min:max
+effect_selector_N=cc:channel:control
+effect_N_macro_M=cc:channel:control
+chord_pad=cc:channel:control
 ```
 
 Example:
 
 ```text
 filter_cutoff=cc:1:5:log:20.0:20000.0
+effect_selector_1=cc:1:10
+effect_1_macro_1=cc:1:11
+effect_1_macro_2=cc:1:12
+effect_1_macro_3=cc:1:13
+effect_selector_2=cc:1:14
+effect_2_macro_1=cc:1:15
+effect_2_macro_2=cc:1:16
+effect_2_macro_3=cc:1:17
+chord_major=cc:1:35
 ```
 
 Supported scales:
@@ -40,6 +52,47 @@ Supported scales:
 
 CC mappings use soft takeover: a knob must reach or cross the current synth
 value before it starts changing that parameter.
+
+Effect macro controls are an optional alternative to binding every effect
+parameter directly. Each selector row chooses one of five fixed pages:
+
+Bank 1:
+
+- values `0` through `25`: saturation
+- values `26` through `51`: distortion
+- values `52` through `76`: bitcrusher
+- values `77` through `102`: delay
+- values `103` through `127`: plate reverb
+
+Bank 2:
+
+- values `0` through `25`: flanger
+- values `26` through `51`: ring mod
+- values `52` through `76`: eq
+- values `77` through `102`: compressor
+- values `103` through `127`: chorus
+
+The three macro knobs then control the selected page:
+
+| Effect | Macro 1 | Macro 2 | Macro 3 |
+| --- | --- | --- | --- |
+| saturation | `saturation_drive` | unused | `saturation_mix` |
+| distortion | `distortion_drive` | unused | `distortion_mix` |
+| bitcrusher | `bitcrusher_sample_rate` | `bitcrusher_bits` | `bitcrusher_mix` |
+| delay | `delay_time` | `delay_feedback` | `delay_mix` |
+| plate reverb | `plate_reverb_decay` | `plate_reverb_damping` | `plate_reverb_mix` |
+| flanger | `flanger_rate` | `flanger_intensity` | `flanger_mix` |
+| ring mod | `ring_mod_frequency` | `ring_mod_rectify` | `ring_mod_mix` |
+| eq | `eq_low` | `eq_mid` | `eq_high` |
+| compressor | `compressor_threshold` | `compressor_ratio` | `compressor_makeup_gain` |
+| chorus | `chorus_rate` | `chorus_depth` | `chorus_mix` |
+
+Macro knobs use independent soft takeover for each selector row and effect page,
+so switching pages does not make a knob jump the newly selected effect
+parameter.
+
+Chord pad mappings are momentary controls: CC values `1` through `127` mean
+held, and CC value `0` means released.
 
 ## Creating A Mapping
 
@@ -73,11 +126,6 @@ cmake --build --preset dev --target midi_monitor
 - `lfo_rate`
 - `lfo_shape_morph`
 - `lfo_depth`
-- `lfo_first_oscillator_morph_amount`
-- `lfo_second_oscillator_morph_amount`
-- `lfo_first_oscillator_gain_amount`
-- `lfo_second_oscillator_gain_amount`
-- `lfo_filter_amount`
 - `saturation_drive`
 - `saturation_mix`
 - `distortion_drive`
@@ -85,9 +133,86 @@ cmake --build --preset dev --target midi_monitor
 - `bitcrusher_sample_rate`
 - `bitcrusher_bits`
 - `bitcrusher_mix`
+- `flanger_rate`
+- `flanger_intensity`
+- `flanger_depth`
+- `flanger_feedback`
+- `flanger_mix`
+- `flanger_manual`
+- `ring_mod_frequency`
+- `ring_mod_rectify`
+- `ring_mod_mix`
+- `chorus_rate`
+- `chorus_depth`
+- `chorus_mix`
+- `chorus_width`
+- `chorus_delay`
+- `chorus_feedback`
+- `eq_low`
+- `eq_mid`
+- `eq_high`
 - `delay_time`
 - `delay_feedback`
 - `delay_mix`
+- `plate_reverb_decay`
+- `plate_reverb_damping`
+- `plate_reverb_mix`
+- `plate_reverb_predelay`
+- `compressor_threshold`
+- `compressor_ratio`
+- `compressor_makeup_gain`
+- `compressor_attack_seconds`
+- `compressor_release_seconds`
+
+## LFO Amount Bindings
+
+Every parameter above except `lfo_rate`, `lfo_shape_morph`, and `lfo_depth` also
+has an amount control named `lfo_amount.<parameter>`. This provides 52 routes,
+including effect-internal rates and depths. Chord pads, effect selectors/macros,
+and route amounts themselves cannot be destinations. Route identity stays tied
+to the actual parameter when an effect selector changes pages.
+
+```text
+lfo_rate=cc:1:21:log:0.05:20
+lfo_depth=cc:1:22:linear:0:1
+lfo_amount.delay_mix=cc:1:41:linear:-1:1
+lfo_amount.chorus_rate=cc:1:42:linear:-1:1
+lfo_amount.filter_poles=cc:1:43:linear:-1:1
+```
+
+Loading a config binds knobs only. All amounts and global depth start at zero;
+raise both an amount and global depth to hear modulation. A destination does
+not need a base-value binding to have an amount binding.
+
+Signed amounts range from `-1` to `1`; negative amounts reverse direction.
+With `linear:-1:1`, CC 0 is -1, CC 63 and 64 are exactly zero, and CC 127 is +1.
+A positive-only `linear:0:1` binding is also supported. Soft takeover compares
+base knobs against stored base values and amount knobs against stored amounts,
+so the moving LFO does not interfere with pickup. Config ranges scale knobs;
+they do not redefine the engine's fixed modulation spans.
+
+ADSR routes capture values when a note starts. Manual ADSR edits keep the
+existing behavior for already-playing voices. Stepped targets quantize the
+LFO separately; delay-time modulation produces pitch bends. Full behavior and
+span tables are in [the modulation contract](../../docs/modulation.md).
+
+The old five `lfo_*_amount` names have been removed. Use the corresponding
+`lfo_amount.` names shown in the default mapping below. All five now use the
+same centered rules as other destinations. Existing default knobs retain their
+positive-only ranges. The loader accepts up to 256 direct parameter/amount
+bindings, including multiple controls for the same target; malformed or
+excluded targets produce line-specific errors.
+
+## Supported Chord Pads
+
+- `chord_diminished`
+- `chord_minor`
+- `chord_major`
+- `chord_suspended`
+- `chord_6`
+- `chord_minor_7`
+- `chord_major_7`
+- `chord_9`
 
 ## Default Akai MPK Mini Mk II Mapping
 
@@ -111,21 +236,29 @@ The included config maps Akai MPK Mini MK2-style CC knobs on channel 1:
 | 14 | `second_oscillator_gain` |
 | 15 | `second_oscillator_morph` |
 | 16 | `master_gain` |
-| 17 | `lfo_first_oscillator_gain_amount` |
-| 18 | `lfo_second_oscillator_gain_amount` |
-| 19 | `lfo_first_oscillator_morph_amount` |
-| 20 | `lfo_second_oscillator_morph_amount` |
+| 17 | `lfo_amount.first_oscillator_gain` |
+| 18 | `lfo_amount.second_oscillator_gain` |
+| 19 | `lfo_amount.oscillator_morph` |
+| 20 | `lfo_amount.second_oscillator_morph` |
 | 21 | `lfo_rate` |
 | 22 | `lfo_depth` |
-| 23 | `lfo_filter_amount` |
+| 23 | `lfo_amount.filter_cutoff` |
 | 24 | `lfo_shape_morph` |
-| 25 | `distortion_mix` |
-| 26 | `distortion_drive` |
-| 27 | `bitcrusher_mix` |
-| 28 | `bitcrusher_sample_rate` |
-| 29 | `bitcrusher_bits` |
-| 30 | `delay_mix` |
-| 31 | `delay_time` |
-| 32 | `delay_feedback` |
+| 25 | `effect_selector_1` |
+| 26 | `effect_1_macro_1` |
+| 27 | `effect_1_macro_2` |
+| 28 | `effect_1_macro_3` |
+| 29 | `effect_selector_2` |
+| 30 | `effect_2_macro_1` |
+| 31 | `effect_2_macro_2` |
+| 32 | `effect_2_macro_3` |
+| 33 | `chord_diminished` |
+| 34 | `chord_minor` |
+| 35 | `chord_major` |
+| 36 | `chord_suspended` |
+| 37 | `chord_6` |
+| 38 | `chord_minor_7` |
+| 39 | `chord_major_7` |
+| 40 | `chord_9` |
 
 See [tools/README.md](../../tools/README.md) for the full MIDI monitor workflow.

@@ -8,6 +8,12 @@ static int valid_midi_note(int midi_note)
     return midi_note >= 0 && midi_note < MIDI_CHORD_MODE_NOTE_COUNT;
 }
 
+// returns true when a chord pad value means held.
+static int pad_value_is_held(int value)
+{
+    return value > 0;
+}
+
 // emits one note event when a callback was supplied.
 static void emit_note(
     midi_chord_mode_emit_callback emit,
@@ -127,6 +133,22 @@ static int current_chord_type(const midi_chord_mode *mode)
     return selected;
 }
 
+// returns the configured pad for a cc message, or -1 when none match.
+static int pad_for_cc_message(const midi_chord_mode *mode, int channel, int control)
+{
+    int pad;
+
+    for (pad = 0; pad < MIDI_CHORD_MODE_PAD_COUNT; ++pad) {
+        const midi_chord_mode_pad_binding *binding = &mode->bindings[pad];
+
+        if (binding->enabled && binding->channel == channel && binding->control == control) {
+            return binding->pad;
+        }
+    }
+
+    return -1;
+}
+
 // adds the triad intervals for the active chord type.
 static void add_chord_type_notes(
     const midi_chord_mode *mode,
@@ -236,10 +258,31 @@ void midi_chord_mode_init(midi_chord_mode *mode)
     memset(mode, 0, sizeof(*mode));
 }
 
-// returns whether a cc number belongs to the chord-mode pad range.
-int midi_chord_mode_is_pad_cc(int control)
+// binds one midi cc to a chord-mode pad.
+void midi_chord_mode_bind_pad(
+    midi_chord_mode *mode,
+    midi_chord_mode_pad pad,
+    int channel,
+    int control)
 {
-    return control >= MIDI_CHORD_MODE_FIRST_PAD_CC && control <= MIDI_CHORD_MODE_LAST_PAD_CC;
+    if (mode == 0 || pad < 0 || pad >= MIDI_CHORD_MODE_PAD_COUNT) {
+        return;
+    }
+
+    mode->bindings[pad].enabled = 1;
+    mode->bindings[pad].channel = channel;
+    mode->bindings[pad].control = control;
+    mode->bindings[pad].pad = pad;
+}
+
+// removes all configured chord-mode pad bindings.
+void midi_chord_mode_clear_pad_bindings(midi_chord_mode *mode)
+{
+    if (mode == 0) {
+        return;
+    }
+
+    memset(mode->bindings, 0, sizeof(mode->bindings));
 }
 
 // returns the generated notes for the current pad state and one root.
@@ -265,9 +308,10 @@ int midi_chord_mode_handle_short_message(
     void *user_data)
 {
     unsigned char status;
+    int channel;
     int control;
     int value;
-    midi_chord_mode_pad pad;
+    int pad;
     int held;
 
     if (mode == 0 || data == 0 || length < 3) {
@@ -279,14 +323,15 @@ int midi_chord_mode_handle_short_message(
         return 0;
     }
 
+    channel = (data[0] & 0x0F) + 1;
     control = data[1];
-    if (!midi_chord_mode_is_pad_cc(control)) {
+    pad = pad_for_cc_message(mode, channel, control);
+    if (pad < 0) {
         return 0;
     }
 
     value = data[2];
-    pad = (midi_chord_mode_pad)(control - MIDI_CHORD_MODE_FIRST_PAD_CC);
-    held = value > 0;
+    held = pad_value_is_held(value);
 
     if (mode->pads[pad] == held) {
         return 1;

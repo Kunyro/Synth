@@ -23,32 +23,36 @@ function(synth_configure_c_target target)
     endif()
 endfunction()
 
-set(SYNTH_CORE_SOURCES
-    src/midi_types.c
-    src/wavetable.c
-    src/oscillator.c
-    src/envelope.c
-    src/voice.c
-    src/filter.c
-    src/effects/saturation.c
-    src/effects/distortion.c
-    src/effects/bitcrusher.c
-    src/effects/delay.c
-    src/effects/effect_chain.c
-    src/synth.c
-    src/lfo.c)
+function(synth_read_source_list out_var manifest_path)
+    file(STRINGS "${PROJECT_SOURCE_DIR}/${manifest_path}" source_list)
+    list(FILTER source_list EXCLUDE REGEX "^[ \t]*(#|$)")
+    set(${out_var} ${source_list} PARENT_SCOPE)
+endfunction()
+
+synth_read_source_list(SYNTH_CORE_SOURCES cmake/synth_core_sources.txt)
+synth_read_source_list(SYNTH_DESKTOP_AUDIO_SOURCES cmake/synth_desktop_audio_sources.txt)
+synth_read_source_list(SYNTH_DESKTOP_MIDI_SOURCES cmake/synth_desktop_midi_sources.txt)
+synth_read_source_list(SYNTH_DESKTOP_SYSTEM_SOURCES cmake/synth_desktop_system_sources.txt)
 
 set(SYNTH_PUBLIC_HEADERS
     include/synth/audio_types.h
     include/synth/bitcrusher.h
+    include/synth/chorus.h
+    include/synth/compressor.h
     include/synth/delay.h
     include/synth/distortion.h
+    include/synth/eq.h
     include/synth/effect_chain.h
     include/synth/envelope.h
     include/synth/filter.h
+    include/synth/flanger.h
     include/synth/lfo.h
-    include/synth/midi_types.h
+    include/synth/parameter.h
+    include/synth/modulation.h
+    include/synth/pitch.h
     include/synth/oscillator.h
+    include/synth/plate_reverb.h
+    include/synth/ring_mod.h
     include/synth/saturation.h
     include/synth/synth.h
     include/synth/synth_config.h
@@ -56,7 +60,8 @@ set(SYNTH_PUBLIC_HEADERS
 
 set(SYNTH_PRIVATE_HEADERS
     src/internal/synth_internal.h
-    src/internal/wavetable.h)
+    src/internal/wavetable.h
+    src/internal/render_parameters.h)
 
 add_library(synth_core STATIC
     ${SYNTH_CORE_SOURCES}
@@ -88,7 +93,7 @@ if(SYNTH_BUILD_DESKTOP)
         "${PROJECT_SOURCE_DIR}/third_party")
 
     add_library(synth_desktop_system STATIC
-        platform/desktop/system/desktop_system.c
+        ${SYNTH_DESKTOP_SYSTEM_SOURCES}
         platform/desktop/system/desktop_system.h)
     add_library(Synth::DesktopSystem ALIAS synth_desktop_system)
     synth_configure_c_target(synth_desktop_system)
@@ -96,12 +101,13 @@ if(SYNTH_BUILD_DESKTOP)
         "${PROJECT_SOURCE_DIR}/platform/desktop")
 
     add_library(synth_desktop_midi STATIC
-        platform/desktop/midi/chord_mode.c
+        ${SYNTH_DESKTOP_MIDI_SOURCES}
         platform/desktop/midi/chord_mode.h
-        platform/desktop/midi/midi_mapping.c
         platform/desktop/midi/midi_mapping.h
+        platform/desktop/midi/midi_mapping_internal.h
+        platform/desktop/midi/midi_types.h
         platform/desktop/midi/midi_device.h
-        platform/desktop/midi/midi_portmidi.c
+        platform/desktop/midi/midi_text.h
         platform/desktop/midi/midi_portmidi.h)
     add_library(Synth::DesktopMidi ALIAS synth_desktop_midi)
     synth_configure_c_target(synth_desktop_midi)
@@ -114,7 +120,7 @@ if(SYNTH_BUILD_DESKTOP)
             ${CMAKE_DL_LIBS})
 
     add_library(synth_desktop_audio STATIC
-        platform/desktop/audio/audio_miniaudio.c
+        ${SYNTH_DESKTOP_AUDIO_SOURCES}
         platform/desktop/audio/audio_miniaudio.h
         platform/desktop/audio/audio_device.h)
     add_library(Synth::DesktopAudio ALIAS synth_desktop_audio)
@@ -165,17 +171,18 @@ if(SYNTH_BUILD_DESKTOP)
 
     source_group(TREE "${PROJECT_SOURCE_DIR}" FILES
         platform/desktop/main.c
-        platform/desktop/audio/audio_miniaudio.c
+        ${SYNTH_DESKTOP_AUDIO_SOURCES}
         platform/desktop/audio/audio_miniaudio.h
         platform/desktop/audio/audio_device.h
-        platform/desktop/midi/chord_mode.c
+        ${SYNTH_DESKTOP_MIDI_SOURCES}
         platform/desktop/midi/chord_mode.h
-        platform/desktop/midi/midi_mapping.c
         platform/desktop/midi/midi_mapping.h
+        platform/desktop/midi/midi_mapping_internal.h
+        platform/desktop/midi/midi_types.h
         platform/desktop/midi/midi_device.h
-        platform/desktop/midi/midi_portmidi.c
+        platform/desktop/midi/midi_text.h
         platform/desktop/midi/midi_portmidi.h
-        platform/desktop/system/desktop_system.c
+        ${SYNTH_DESKTOP_SYSTEM_SOURCES}
         platform/desktop/system/desktop_system.h
         tools/midi_monitor.c)
 endif()
@@ -188,10 +195,17 @@ if(BUILD_TESTING)
         test_distortion
         test_saturation
         test_bitcrusher
+        test_compressor
+        test_flanger
+        test_chorus
+        test_ring_mod
+        test_eq
         test_delay
+        test_plate_reverb
         test_lfo
+        test_modulation
         test_voice
-        test_midi_types)
+        test_pitch)
 
     foreach(test_name IN LISTS SYNTH_CORE_TESTS)
         add_executable(${test_name} "tests/${test_name}.c")
@@ -203,6 +217,17 @@ if(BUILD_TESTING)
     endforeach()
 
     if(SYNTH_BUILD_DESKTOP)
+        add_executable(test_midi_types tests/test_midi_types.c)
+        synth_configure_c_target(test_midi_types)
+        target_link_libraries(test_midi_types PRIVATE Synth::DesktopMidi)
+        add_test(NAME test_midi_types COMMAND test_midi_types)
+
+        add_executable(test_lfo_mapping tests/test_lfo_mapping.c)
+        synth_configure_c_target(test_lfo_mapping)
+        target_link_libraries(test_lfo_mapping PRIVATE Synth::DesktopMidi)
+        add_test(NAME test_lfo_mapping COMMAND test_lfo_mapping
+            "${CMAKE_CURRENT_BINARY_DIR}/lfo_mapping_test.conf")
+
         add_executable(test_midi_mapping tests/test_midi_mapping.c)
         synth_configure_c_target(test_midi_mapping)
         target_link_libraries(test_midi_mapping PRIVATE Synth::DesktopMidi)

@@ -1,0 +1,9 @@
+platform/desktop/midi/chord_mode.c
+platform/desktop/midi/midi_mapping.c
+platform/desktop/midi/midi_mapping_registry.c
+platform/desktop/midi/midi_mapping_runtime.c
+platform/desktop/midi/midi_text.c
+platform/desktop/midi/midi_portmidi.c
+platform/desktop/midi/midi_types.c
+platform/desktop/midi/midi_mapping_io.c
+platform/desktop/midi/midi_mapping_validation.c

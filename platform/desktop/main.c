@@ -1,3 +1,5 @@
+#include "midi/midi_types.h"
+#include "synth/pitch.h"
 #include "audio/audio_miniaudio.h"
 #include "midi/chord_mode.h"
 #include "midi/midi_mapping.h"
@@ -10,14 +12,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-// the desktop app asks for stereo output.
+// the desktop app asks for stereo output
 #define DESKTOP_CHANNEL_COUNT 2
-// the most synth frames rendered at once in the audio callback.
+// the most synth frames rendered at once in the audio callback
 #define DESKTOP_RENDER_CHUNK_FRAMES 1024
-// the controller mapping loaded unless another config is requested.
+// the controller mapping loaded unless another config is requested
 #define DESKTOP_DEFAULT_MIDI_CONFIG "config/midi/akai_mpk_mini_mk2.conf"
 
-// the desktop app state shared by audio and midi callbacks.
+// the desktop app state shared by audio and midi callbacks
 typedef struct desktop_synth_app {
     synth synth;
     audio_miniaudio_device audio;
@@ -28,7 +30,7 @@ typedef struct desktop_synth_app {
     float right_buffer[DESKTOP_RENDER_CHUNK_FRAMES];
 } desktop_synth_app;
 
-// turns a text waveform name into a synth waveform.
+// turns a text waveform name into a synth waveform
 static synth_waveform parse_waveform(const char *value)
 {
     if (strcmp(value, "saw") == 0) {
@@ -42,7 +44,7 @@ static synth_waveform parse_waveform(const char *value)
     return SYNTH_WAVEFORM_SINE;
 }
 
-// renders audio chunks from the synth into the device buffer.
+// renders audio chunks from the synth into the device buffer
 static void render_audio(void *user_data, float *output, unsigned int frame_count, unsigned int channel_count)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -57,7 +59,7 @@ static void render_audio(void *user_data, float *output, unsigned int frame_coun
         synth_buffer.right = app->right_buffer;
         synth_buffer.frame_count = chunk_size;
 
-        // the audio thread and midi callbacks both touch synth state.
+        // the audio thread and midi callbacks both touch synth state
         audio_miniaudio_lock(&app->audio);
         synth_render_stereo(&app->synth, &synth_buffer);
         audio_miniaudio_unlock(&app->audio);
@@ -83,7 +85,7 @@ static void render_audio(void *user_data, float *output, unsigned int frame_coun
     }
 }
 
-// sends one chord-mode event into the synth while the audio lock is held.
+// sends one chord-mode event into the synth while the audio lock is held
 static void emit_chord_note_event(void *user_data, const midi_chord_mode_note_event *event)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -95,7 +97,7 @@ static void emit_chord_note_event(void *user_data, const midi_chord_mode_note_ev
     }
 }
 
-// handles incoming midi note on messages.
+// handles incoming midi note on messages
 static void on_midi_note_on(void *user_data, int midi_note, float velocity)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -105,7 +107,7 @@ static void on_midi_note_on(void *user_data, int midi_note, float velocity)
     audio_miniaudio_unlock(&app->audio);
 }
 
-// handles incoming midi note off messages.
+// handles incoming midi note off messages
 static void on_midi_note_off(void *user_data, int midi_note)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -115,7 +117,7 @@ static void on_midi_note_off(void *user_data, int midi_note)
     audio_miniaudio_unlock(&app->audio);
 }
 
-// handles incoming midi pitch bend messages.
+// handles incoming midi pitch bend messages
 static void on_midi_pitch_bend(void *user_data, float pitch_bend)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -125,7 +127,7 @@ static void on_midi_pitch_bend(void *user_data, float pitch_bend)
     audio_miniaudio_unlock(&app->audio);
 }
 
-// applies parsed midi messages to the synth.
+// applies parsed midi messages to the synth
 static void apply_midi_message(void *user_data, const synth_midi_message *message)
 {
     switch (message->type) {
@@ -147,7 +149,7 @@ static void apply_midi_message(void *user_data, const synth_midi_message *messag
     }
 }
 
-// handles raw midi messages by parsing notes/bends and applying mapped controls.
+// handles raw midi messages by parsing notes/bends and applying mapped controls
 static void on_midi_short_message(void *user_data, const unsigned char *data, unsigned short length)
 {
     desktop_synth_app *app = (desktop_synth_app *)user_data;
@@ -175,18 +177,38 @@ static void on_midi_short_message(void *user_data, const unsigned char *data, un
     audio_miniaudio_unlock(&app->audio);
 
     if (applied) {
-        printf(
-            "Mapped MIDI: %s=%.3f from channel=%d cc=%d value=%d\n",
-            midi_mapping_parameter_name(result.parameter),
-            result.synth_value,
-            result.channel,
-            result.control,
-            result.midi_value);
+        if (result.kind == MIDI_MAPPING_APPLY_EFFECT_SELECT) {
+            if (result.has_effect) {
+                printf(
+                    "Mapped MIDI: effect_selector_%zu=%s from channel=%d cc=%d value=%d\n",
+                    result.effect_bank_index + 1,
+                    midi_mapping_effect_name(result.effect),
+                    result.channel,
+                    result.control,
+                    result.midi_value);
+            } else {
+                printf(
+                    "Mapped MIDI: effect_selector_%zu=blank from channel=%d cc=%d value=%d\n",
+                    result.effect_bank_index + 1,
+                    result.channel,
+                    result.control,
+                    result.midi_value);
+            }
+        } else {
+            printf(
+                "Mapped MIDI: %s%s=%.3f from channel=%d cc=%d value=%d\n",
+                result.target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                midi_mapping_parameter_name(result.parameter),
+                result.synth_value,
+                result.channel,
+                result.control,
+                result.midi_value);
+        }
         fflush(stdout);
     }
 }
 
-// polls midi while waiting for a fixed number of seconds.
+// polls midi while waiting for a fixed number of seconds
 static void run_for_seconds(midi_portmidi_input *midi, double seconds)
 {
     unsigned int remaining_ms = (unsigned int)(seconds * 1000.0);
@@ -200,7 +222,7 @@ static void run_for_seconds(midi_portmidi_input *midi, double seconds)
     }
 }
 
-// polls midi until the user presses enter.
+// polls midi until the user presses enter
 static void run_until_enter(midi_portmidi_input *midi)
 {
     while (!desktop_stdin_line_ready()) {
@@ -214,7 +236,7 @@ static void run_until_enter(midi_portmidi_input *midi)
     }
 }
 
-// starts the desktop synth app.
+// starts the desktop synth app
 int main(int argc, char **argv)
 {
     desktop_synth_app app;
@@ -271,6 +293,7 @@ int main(int argc, char **argv)
     if (should_load_midi_config) {
         if (midi_mapping_load(&app.midi_mapping, midi_config_path, midi_mapping_error, sizeof(midi_mapping_error))) {
             app.midi_mapping_enabled = 1;
+            midi_mapping_configure_chord_mode(&app.midi_mapping, &app.chord_mode);
         } else {
             fprintf(stderr, "Could not load MIDI config '%s': %s\n", midi_config_path, midi_mapping_error);
         }
@@ -292,7 +315,7 @@ int main(int argc, char **argv)
             midi_note = atoi(argv[arg_index]);
         }
     } else if (midi_stream_count <= 0 && midi.source_count == 0) {
-        // no controller is present, so a bare run plays a test note.
+        // no controller is present, so a bare run plays a test note
         should_play_note = 1;
     }
 
@@ -341,7 +364,7 @@ int main(int argc, char **argv)
     if (should_play_note && use_frequency) {
         printf("Playing %.2f Hz as a wave. ", frequency);
     } else if (should_play_note) {
-        printf("Playing MIDI note %d (%.2f Hz) as a wave. ", midi_note, synth_midi_note_to_frequency(midi_note));
+        printf("Playing MIDI note %d (%.2f Hz) as a wave. ", midi_note, synth_note_to_frequency(midi_note));
     } else {
         printf("Playing silence. ");
     }
@@ -364,7 +387,7 @@ int main(int argc, char **argv)
     if (seconds > 0.0) {
         printf("Stopping after %.2f seconds.\n", seconds);
         if (should_play_note && seconds > 0.25) {
-            // release before the end so the envelope tail can be heard.
+            // release before the end so the envelope tail can be heard
             run_for_seconds(&midi, seconds * 0.8);
             audio_miniaudio_lock(&app.audio);
             if (use_frequency) {

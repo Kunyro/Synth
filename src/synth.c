@@ -4,20 +4,21 @@
 #include <string.h>
 
 #include "internal/synth_internal.h"
+#include "internal/render_parameters.h"
 
-// converts a semitone offset into a frequency multiplier.
+// converts a semitone offset into a frequency multiplier
 static float pitch_bend_ratio(float semitones)
 {
     return powf(2.0f, semitones / 12.0f);
 }
 
-// applies the current synth bend to a base frequency.
+// applies the current synth bend to a base frequency
 static float bend_frequency(const synth *s, float base_frequency)
 {
     return base_frequency * pitch_bend_ratio(s->pitch_bend_semitones);
 }
 
-// totals the second oscillator pitch offset in semitones.
+// totals the second oscillator pitch offset in semitones
 static float second_oscillator_semitones(const synth *s)
 {
     return (float)(s->second_oscillator_octave * 12) +
@@ -25,72 +26,27 @@ static float second_oscillator_semitones(const synth *s)
            (s->second_oscillator_fine_tune_cents / 100.0f);
 }
 
-// applies the current second oscillator tuning to a primary frequency.
+// applies the current second oscillator tuning to a primary frequency
 static float second_oscillator_frequency(const synth *s, float primary_frequency)
 {
     return primary_frequency * pitch_bend_ratio(second_oscillator_semitones(s));
 }
 
-// combines a route amount with the global lfo depth.
-static float lfo_route_depth(const synth *s, float amount)
-{
-    return s->lfo_depth * amount;
-}
-
-// turns a bipolar lfo into tremolo that moves from the base gain downwards.
-static float modulated_gain(float base_gain, float lfo_value, float depth)
-{
-    const float unipolar_lfo = (lfo_value + 1.0f) * 0.5f;
-
-    return base_gain * (1.0f - (unipolar_lfo * depth));
-}
-
-// packages base settings and the current lfo value for voice rendering.
-static synth_voice_mix synth_voice_mix_from_state(const synth *s, float lfo_value)
-{
-    synth_voice_mix mix;
-    const float first_gain_depth =
-        lfo_route_depth(s, s->lfo_first_oscillator_gain_amount);
-    const float second_gain_depth =
-        lfo_route_depth(s, s->lfo_second_oscillator_gain_amount);
-    const float first_morph_depth =
-        lfo_route_depth(s, s->lfo_first_oscillator_morph_amount);
-    const float second_morph_depth =
-        lfo_route_depth(s, s->lfo_second_oscillator_morph_amount);
-
-    mix.first_oscillator_gain =
-        modulated_gain(s->first_oscillator_gain, lfo_value, first_gain_depth);
-    mix.second_oscillator_gain =
-        modulated_gain(s->second_oscillator_gain, lfo_value, second_gain_depth);
-    mix.stereo_spread = s->stereo_spread;
-    mix.first_oscillator_morph_offset = lfo_value * first_morph_depth * 0.5f;
-    mix.second_oscillator_morph_offset = lfo_value * second_morph_depth * 0.5f;
-    return mix;
-}
-
-// moves the base filter cutoff exponentially so both directions cover octaves.
-static float modulated_filter_cutoff(const synth *s, float lfo_value)
-{
-    const float depth_octaves =
-        lfo_route_depth(s, s->lfo_filter_amount) * SYNTH_LFO_FILTER_MAX_OCTAVES;
-
-    return s->filter.cutoff_hz * powf(2.0f, lfo_value * depth_octaves);
-}
-
-static int voice_is_releasable_for_note(const synth_voice *voice, int midi_note)
+// matches a held voice for this note; a voice already fading out is not released again
+static int voice_is_releasable_for_note(const synth_voice *voice, int note_number)
 {
     return voice->active &&
-        voice->midi_note == midi_note &&
+        voice->note_number == note_number &&
         voice->envelope.stage != SYNTH_ENV_RELEASE;
 }
 
-// finds the held voice that should respond to a midi note-off.
-static synth_voice *find_releasable_voice_for_note(synth *s, int midi_note)
+// finds the held voice that should respond to a numbered note-off
+static synth_voice *find_releasable_voice_for_note(synth *s, int note_number)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice *voice = &s->voices[i];
 
-        if (voice_is_releasable_for_note(voice, midi_note)) {
+        if (voice_is_releasable_for_note(voice, note_number)) {
             return voice;
         }
     }
@@ -98,7 +54,7 @@ static synth_voice *find_releasable_voice_for_note(synth *s, int midi_note)
     return 0;
 }
 
-// finds a free voice or steals the quietest one.
+// finds a free voice or steals the quietest one
 static synth_voice *find_available_voice(synth *s)
 {
     synth_voice *quietest = &s->voices[0];
@@ -118,7 +74,7 @@ static synth_voice *find_available_voice(synth *s)
     return quietest;
 }
 
-// retunes one voice without changing its original note or phase.
+// retunes one voice without changing its original note or phase
 static void retune_voice(synth *s, synth_voice *voice)
 {
     const float primary_frequency = bend_frequency(s, voice->base_frequency);
@@ -127,7 +83,7 @@ static void retune_voice(synth *s, synth_voice *voice)
     synth_voice_set_frequencies(voice, primary_frequency, secondary_frequency);
 }
 
-// retunes active voices without changing their original note or phase.
+// retunes active voices without changing their original note or phase
 static void retune_active_voices(synth *s)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
@@ -139,27 +95,27 @@ static void retune_active_voices(synth *s)
     }
 }
 
-// starts a voice and reapplies the synth's current tuning and morph settings.
+// starts a voice and reapplies the synth's current tuning and morph settings
 static void start_voice(
     synth *s,
     synth_voice *voice,
-    int midi_note,
+    int note_number,
     float base_frequency,
     float velocity)
 {
     synth_voice_note_on(
         voice,
-        midi_note,
+        note_number,
         base_frequency,
         velocity,
         s->waveform,
-        s->envelope);
+        synth_capture_modulated_adsr(s));
     retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
     synth_voice_set_second_oscillator_morph(voice, s->second_oscillator_morph);
 }
 
-// sets up the synth with defaults.
+// sets up the synth with defaults
 void synth_init(synth *s, float sample_rate)
 {
     const synth_adsr default_envelope = {0.01f, 0.08f, 0.75f, 0.16f};
@@ -180,11 +136,6 @@ void synth_init(synth *s, float sample_rate)
     s->second_oscillator_fine_tune_cents = 0.0f;
     synth_lfo_init(&s->lfo, SYNTH_DEFAULT_LFO_RATE_HZ);
     s->lfo_depth = 0.0f;
-    s->lfo_first_oscillator_morph_amount = 0.0f;
-    s->lfo_second_oscillator_morph_amount = 0.0f;
-    s->lfo_first_oscillator_gain_amount = 0.0f;
-    s->lfo_second_oscillator_gain_amount = 0.0f;
-    s->lfo_filter_amount = 0.0f;
     s->envelope = synth_sanitize_adsr(default_envelope);
     synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
     synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
@@ -204,12 +155,13 @@ void synth_uninit(synth *s)
     synth_effect_chain_uninit(&s->effects);
 }
 
-void synth_note_on(synth *s, int midi_note, float velocity)
+// converts a musical note number to pitch and starts the next available voice
+void synth_note_on(synth *s, int note_number, float velocity)
 {
     synth_voice *voice = find_available_voice(s);
-    const float base_frequency = synth_midi_note_to_frequency(midi_note);
+    const float base_frequency = synth_note_to_frequency(note_number);
 
-    start_voice(s, voice, midi_note, base_frequency, velocity);
+    start_voice(s, voice, note_number, base_frequency, velocity);
 }
 
 void synth_note_on_frequency(synth *s, float frequency, float velocity)
@@ -219,9 +171,10 @@ void synth_note_on_frequency(synth *s, float frequency, float velocity)
     start_voice(s, voice, -1, frequency, velocity);
 }
 
-void synth_note_off(synth *s, int midi_note)
+// releases one held instance of a note, allowing repeated note-ons to be released separately
+void synth_note_off(synth *s, int note_number)
 {
-    synth_voice *voice = find_releasable_voice_for_note(s, midi_note);
+    synth_voice *voice = find_releasable_voice_for_note(s, note_number);
 
     if (voice != 0) {
         synth_voice_note_off(voice);
@@ -351,31 +304,6 @@ void synth_set_lfo_depth(synth *s, float depth)
     s->lfo_depth = synth_clampf(depth, 0.0f, 1.0f);
 }
 
-void synth_set_lfo_first_oscillator_morph_amount(synth *s, float amount)
-{
-    s->lfo_first_oscillator_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_second_oscillator_morph_amount(synth *s, float amount)
-{
-    s->lfo_second_oscillator_morph_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_first_oscillator_gain_amount(synth *s, float amount)
-{
-    s->lfo_first_oscillator_gain_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_second_oscillator_gain_amount(synth *s, float amount)
-{
-    s->lfo_second_oscillator_gain_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
-void synth_set_lfo_filter_amount(synth *s, float amount)
-{
-    s->lfo_filter_amount = synth_clampf(amount, 0.0f, 1.0f);
-}
-
 void synth_set_saturation_drive(synth *s, float drive)
 {
     synth_saturation_set_drive(&s->effects.saturation, drive);
@@ -411,6 +339,96 @@ void synth_set_bitcrusher_mix(synth *s, float mix)
     synth_bitcrusher_set_mix(&s->effects.bitcrusher, mix);
 }
 
+void synth_set_flanger_rate(synth *s, float hz)
+{
+    synth_flanger_set_rate(&s->effects.flanger, hz);
+}
+
+void synth_set_flanger_intensity(synth *s, float intensity)
+{
+    synth_flanger_set_intensity(&s->effects.flanger, intensity);
+}
+
+void synth_set_flanger_depth(synth *s, float depth)
+{
+    synth_flanger_set_depth(&s->effects.flanger, depth);
+}
+
+void synth_set_flanger_feedback(synth *s, float feedback)
+{
+    synth_flanger_set_feedback(&s->effects.flanger, feedback);
+}
+
+void synth_set_flanger_mix(synth *s, float mix)
+{
+    synth_flanger_set_mix(&s->effects.flanger, mix);
+}
+
+void synth_set_flanger_manual(synth *s, float seconds)
+{
+    synth_flanger_set_manual(&s->effects.flanger, seconds);
+}
+
+void synth_set_ring_mod_frequency(synth *s, float hz)
+{
+    synth_ring_mod_set_frequency(&s->effects.ring_mod, hz);
+}
+
+void synth_set_ring_mod_rectify(synth *s, float rectify)
+{
+    synth_ring_mod_set_rectify(&s->effects.ring_mod, rectify);
+}
+
+void synth_set_ring_mod_mix(synth *s, float mix)
+{
+    synth_ring_mod_set_mix(&s->effects.ring_mod, mix);
+}
+
+void synth_set_chorus_rate(synth *s, float hz)
+{
+    synth_chorus_set_rate(&s->effects.chorus, hz);
+}
+
+void synth_set_chorus_depth(synth *s, float depth)
+{
+    synth_chorus_set_depth(&s->effects.chorus, depth);
+}
+
+void synth_set_chorus_mix(synth *s, float mix)
+{
+    synth_chorus_set_mix(&s->effects.chorus, mix);
+}
+
+void synth_set_chorus_width(synth *s, float width)
+{
+    synth_chorus_set_width(&s->effects.chorus, width);
+}
+
+void synth_set_chorus_delay(synth *s, float seconds)
+{
+    synth_chorus_set_delay(&s->effects.chorus, seconds);
+}
+
+void synth_set_chorus_feedback(synth *s, float feedback)
+{
+    synth_chorus_set_feedback(&s->effects.chorus, feedback);
+}
+
+void synth_set_eq_low(synth *s, float gain_db)
+{
+    synth_eq_set_low(&s->effects.eq, gain_db);
+}
+
+void synth_set_eq_mid(synth *s, float gain_db)
+{
+    synth_eq_set_mid(&s->effects.eq, gain_db);
+}
+
+void synth_set_eq_high(synth *s, float gain_db)
+{
+    synth_eq_set_high(&s->effects.eq, gain_db);
+}
+
 void synth_set_delay_time(synth *s, float seconds)
 {
     synth_delay_set_time(&s->effects.delay, seconds);
@@ -424,6 +442,51 @@ void synth_set_delay_feedback(synth *s, float feedback)
 void synth_set_delay_mix(synth *s, float mix)
 {
     synth_delay_set_mix(&s->effects.delay, mix);
+}
+
+void synth_set_plate_reverb_decay(synth *s, float seconds)
+{
+    synth_plate_reverb_set_decay(&s->effects.plate_reverb, seconds);
+}
+
+void synth_set_plate_reverb_damping(synth *s, float damping)
+{
+    synth_plate_reverb_set_damping(&s->effects.plate_reverb, damping);
+}
+
+void synth_set_plate_reverb_mix(synth *s, float mix)
+{
+    synth_plate_reverb_set_mix(&s->effects.plate_reverb, mix);
+}
+
+void synth_set_plate_reverb_predelay(synth *s, float seconds)
+{
+    synth_plate_reverb_set_predelay(&s->effects.plate_reverb, seconds);
+}
+
+void synth_set_compressor_threshold(synth *s, float threshold_db)
+{
+    synth_compressor_set_threshold(&s->effects.compressor, threshold_db);
+}
+
+void synth_set_compressor_ratio(synth *s, float ratio)
+{
+    synth_compressor_set_ratio(&s->effects.compressor, ratio);
+}
+
+void synth_set_compressor_makeup_gain(synth *s, float makeup_gain_db)
+{
+    synth_compressor_set_makeup_gain(&s->effects.compressor, makeup_gain_db);
+}
+
+void synth_set_compressor_attack_seconds(synth *s, float seconds)
+{
+    synth_compressor_set_attack(&s->effects.compressor, seconds);
+}
+
+void synth_set_compressor_release_seconds(synth *s, float seconds)
+{
+    synth_compressor_set_release(&s->effects.compressor, seconds);
 }
 
 float synth_get_master_gain(const synth *s)
@@ -496,31 +559,6 @@ float synth_get_lfo_depth(const synth *s)
     return s->lfo_depth;
 }
 
-float synth_get_lfo_first_oscillator_morph_amount(const synth *s)
-{
-    return s->lfo_first_oscillator_morph_amount;
-}
-
-float synth_get_lfo_second_oscillator_morph_amount(const synth *s)
-{
-    return s->lfo_second_oscillator_morph_amount;
-}
-
-float synth_get_lfo_first_oscillator_gain_amount(const synth *s)
-{
-    return s->lfo_first_oscillator_gain_amount;
-}
-
-float synth_get_lfo_second_oscillator_gain_amount(const synth *s)
-{
-    return s->lfo_second_oscillator_gain_amount;
-}
-
-float synth_get_lfo_filter_amount(const synth *s)
-{
-    return s->lfo_filter_amount;
-}
-
 float synth_get_saturation_drive(const synth *s)
 {
     return synth_saturation_get_drive(&s->effects.saturation);
@@ -556,6 +594,96 @@ float synth_get_bitcrusher_mix(const synth *s)
     return synth_bitcrusher_get_mix(&s->effects.bitcrusher);
 }
 
+float synth_get_flanger_rate(const synth *s)
+{
+    return synth_flanger_get_rate(&s->effects.flanger);
+}
+
+float synth_get_flanger_intensity(const synth *s)
+{
+    return synth_flanger_get_intensity(&s->effects.flanger);
+}
+
+float synth_get_flanger_depth(const synth *s)
+{
+    return synth_flanger_get_depth(&s->effects.flanger);
+}
+
+float synth_get_flanger_feedback(const synth *s)
+{
+    return synth_flanger_get_feedback(&s->effects.flanger);
+}
+
+float synth_get_flanger_mix(const synth *s)
+{
+    return synth_flanger_get_mix(&s->effects.flanger);
+}
+
+float synth_get_flanger_manual(const synth *s)
+{
+    return synth_flanger_get_manual(&s->effects.flanger);
+}
+
+float synth_get_ring_mod_frequency(const synth *s)
+{
+    return synth_ring_mod_get_frequency(&s->effects.ring_mod);
+}
+
+float synth_get_ring_mod_rectify(const synth *s)
+{
+    return synth_ring_mod_get_rectify(&s->effects.ring_mod);
+}
+
+float synth_get_ring_mod_mix(const synth *s)
+{
+    return synth_ring_mod_get_mix(&s->effects.ring_mod);
+}
+
+float synth_get_chorus_rate(const synth *s)
+{
+    return synth_chorus_get_rate(&s->effects.chorus);
+}
+
+float synth_get_chorus_depth(const synth *s)
+{
+    return synth_chorus_get_depth(&s->effects.chorus);
+}
+
+float synth_get_chorus_mix(const synth *s)
+{
+    return synth_chorus_get_mix(&s->effects.chorus);
+}
+
+float synth_get_chorus_width(const synth *s)
+{
+    return synth_chorus_get_width(&s->effects.chorus);
+}
+
+float synth_get_chorus_delay(const synth *s)
+{
+    return synth_chorus_get_delay(&s->effects.chorus);
+}
+
+float synth_get_chorus_feedback(const synth *s)
+{
+    return synth_chorus_get_feedback(&s->effects.chorus);
+}
+
+float synth_get_eq_low(const synth *s)
+{
+    return synth_eq_get_low(&s->effects.eq);
+}
+
+float synth_get_eq_mid(const synth *s)
+{
+    return synth_eq_get_mid(&s->effects.eq);
+}
+
+float synth_get_eq_high(const synth *s)
+{
+    return synth_eq_get_high(&s->effects.eq);
+}
+
 float synth_get_delay_time(const synth *s)
 {
     return synth_delay_get_time(&s->effects.delay);
@@ -571,58 +699,47 @@ float synth_get_delay_mix(const synth *s)
     return synth_delay_get_mix(&s->effects.delay);
 }
 
-static synth_stereo_sample apply_master_gain(synth_stereo_sample sample, float master_gain)
+float synth_get_plate_reverb_decay(const synth *s)
 {
-    const float output_gain = master_gain * SYNTH_MASTER_GAIN_FULL_SCALE;
-
-    sample.left *= output_gain;
-    sample.right *= output_gain;
-    return sample;
+    return synth_plate_reverb_get_decay(&s->effects.plate_reverb);
 }
 
-// renders one mixed stereo sample through independent channel filter state.
-static synth_stereo_sample synth_render_stereo_sample(synth *s)
+float synth_get_plate_reverb_damping(const synth *s)
 {
-    const float lfo_value = synth_lfo_advance(&s->lfo, s->sample_rate);
-    const synth_voice_mix mix = synth_voice_mix_from_state(s, lfo_value);
-    const float filter_cutoff = modulated_filter_cutoff(s, lfo_value);
-    synth_stereo_sample sample = {0.0f, 0.0f};
-
-    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        const synth_stereo_sample voice_sample =
-            synth_voice_render_stereo_mix(&s->voices[i], s->sample_rate, mix);
-
-        sample.left += voice_sample.left;
-        sample.right += voice_sample.right;
-    }
-
-    sample.left = synth_filter_process_with_cutoff(
-        &s->filter,
-        sample.left,
-        filter_cutoff);
-    sample.right = synth_filter_process_with_cutoff(
-        &s->right_filter,
-        sample.right,
-        filter_cutoff);
-    sample = synth_effect_chain_process(&s->effects, sample);
-    return apply_master_gain(sample, s->master_gain);
+    return synth_plate_reverb_get_damping(&s->effects.plate_reverb);
 }
 
-void synth_render_stereo(synth *s, synth_audio_buffer *output)
+float synth_get_plate_reverb_mix(const synth *s)
 {
-    for (size_t frame = 0; frame < output->frame_count; ++frame) {
-        const synth_stereo_sample sample = synth_render_stereo_sample(s);
-
-        output->left[frame] = sample.left;
-        output->right[frame] = sample.right;
-    }
+    return synth_plate_reverb_get_mix(&s->effects.plate_reverb);
 }
 
-void synth_render_mono(synth *s, float *output, size_t frame_count)
+float synth_get_plate_reverb_predelay(const synth *s)
 {
-    for (size_t frame = 0; frame < frame_count; ++frame) {
-        const synth_stereo_sample sample = synth_render_stereo_sample(s);
+    return synth_plate_reverb_get_predelay(&s->effects.plate_reverb);
+}
 
-        output[frame] = (sample.left + sample.right) * 0.5f;
-    }
+float synth_get_compressor_threshold(const synth *s)
+{
+    return synth_compressor_get_threshold(&s->effects.compressor);
+}
+
+float synth_get_compressor_ratio(const synth *s)
+{
+    return synth_compressor_get_ratio(&s->effects.compressor);
+}
+
+float synth_get_compressor_makeup_gain(const synth *s)
+{
+    return synth_compressor_get_makeup_gain(&s->effects.compressor);
+}
+
+float synth_get_compressor_attack_seconds(const synth *s)
+{
+    return synth_compressor_get_attack(&s->effects.compressor);
+}
+
+float synth_get_compressor_release_seconds(const synth *s)
+{
+    return synth_compressor_get_release(&s->effects.compressor);
 }

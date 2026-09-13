@@ -10,14 +10,14 @@ easy to play, test, and experiment from a regular computer.
 ## Highlights
 
 - Portable C99 synth engine
-- 8-voice polyphony
-- ADSR envelope, pitch bend, master gain, and MIDI note handling
+- 12-voice polyphony
+- ADSR envelope, pitch bend, master gain, and musical note operations
 - Spectral bandlimited wavetable oscillator
 - Sine, saw, square, and continuous waveform morphing
 - Two oscillator controls with level, morph, pitch, fine-tune, octave, and stereo spread
 - Low-pass filter with variable intensity
-- Global morphable LFO
-- Saturation, distortion, bitcrusher, and delay
+- Global morphable LFO with 52 signed parameter routes
+- Saturation, distortion, bitcrusher, flanger, ring mod, chorus, EQ, delay, plate reverb, and compressor
 - Desktop audio playback through miniaudio
 - Optional MIDI input and controller mapping through runtime-loaded PortMidi
 
@@ -130,6 +130,7 @@ cmake --preset release                     # configure an optimized build
 ## Documentation
 
 - [Engine notes](src/README.md)
+- [LFO API and destination contract](docs/modulation.md)
 - [Desktop app usage](platform/desktop/README.md)
 - [MIDI controller mapping](config/midi/README.md)
 - [Tools](tools/README.md)
