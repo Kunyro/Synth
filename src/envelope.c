@@ -18,6 +18,21 @@ void synth_envelope_init(synth_envelope *envelope, synth_adsr adsr)
     envelope->adsr = synth_sanitize_adsr(adsr);
     envelope->stage = SYNTH_ENV_OFF;
     envelope->level = 0.0f;
+    envelope->full_duration_release = 0;
+    envelope->release_start_level = 0.0f;
+    envelope->release_elapsed = 0.0;
+}
+
+// a changed release time starts a new full-duration ramp from the current level
+void synth_envelope_set_adsr(synth_envelope *envelope, synth_adsr adsr)
+{
+    adsr = synth_sanitize_adsr(adsr);
+    if (envelope->full_duration_release && envelope->stage == SYNTH_ENV_RELEASE &&
+        adsr.release_seconds != envelope->adsr.release_seconds) {
+        envelope->release_start_level = envelope->level;
+        envelope->release_elapsed = 0.0;
+    }
+    envelope->adsr = adsr;
 }
 
 // starts the envelope attack stage.
@@ -30,8 +45,10 @@ void synth_envelope_note_on(synth_envelope *envelope)
 // starts the envelope release stage.
 void synth_envelope_note_off(synth_envelope *envelope)
 {
-    if (envelope->stage != SYNTH_ENV_OFF) {
+    if (envelope->stage != SYNTH_ENV_OFF && envelope->stage != SYNTH_ENV_RELEASE) {
         envelope->stage = SYNTH_ENV_RELEASE;
+        envelope->release_start_level = envelope->level;
+        envelope->release_elapsed = 0.0;
     }
 }
 
@@ -65,7 +82,16 @@ float synth_envelope_advance(synth_envelope *envelope, float sample_rate)
             break;
 
         case SYNTH_ENV_RELEASE:
-            envelope->level -= release_step;
+            if (envelope->full_duration_release) {
+                envelope->release_elapsed += 1.0;
+                const double duration = round((double)envelope->adsr.release_seconds * sample_rate);
+                const double remaining = duration > 0.0
+                    ? 1.0 - envelope->release_elapsed / duration : 0.0;
+                envelope->level = remaining > 0.0
+                    ? envelope->release_start_level * (float)remaining : 0.0f;
+            } else {
+                envelope->level -= release_step;
+            }
             if (envelope->level <= 0.0f) {
                 envelope->level = 0.0f;
                 envelope->stage = SYNTH_ENV_OFF;

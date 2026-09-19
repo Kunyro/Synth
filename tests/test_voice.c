@@ -146,6 +146,8 @@ static void test_stereo_spread(void)
     expect_near(wide.stereo_spread, 0.0f, 0.0001f, "stereo spread clamps low");
     synth_set_stereo_spread(&wide, 2.0f);
     expect_near(wide.stereo_spread, 1.0f, 0.0001f, "stereo spread clamps high");
+    synth_uninit(&centered);
+    synth_uninit(&wide);
 }
 
 // checks free-running phase, zero startup depth, and generic routes affecting audio without changing bases
@@ -225,6 +227,9 @@ static void test_global_lfo(void)
         1.0f,
         0.0001f,
         "lfo preserves the second voice oscillator base morph");
+    synth_uninit(&continuous);
+    synth_uninit(&dry);
+    synth_uninit(&modulated);
 }
 
 static void test_fast_same_note_retrigger_keeps_release_tail(void)
@@ -258,6 +263,7 @@ static void test_fast_same_note_retrigger_keeps_release_tail(void)
     expect_true(
         count_voices_by_note_and_stage(&s, 69, SYNTH_ENV_RELEASE) == 2,
         "same-note note-off leaves both notes releasing");
+    synth_uninit(&s);
 }
 
 static void test_master_gain_scales_after_effects(void)
@@ -294,6 +300,8 @@ static void test_master_gain_scales_after_effects(void)
         expect_near(half_left[i], full_left[i] * 0.5f, 0.0001f, "master gain scales left after effects");
         expect_near(half_right[i], full_right[i] * 0.5f, 0.0001f, "master gain scales right after effects");
     }
+    synth_uninit(&full_gain);
+    synth_uninit(&half_gain);
 }
 
 static void test_full_master_gain_leaves_headroom(void)
@@ -340,6 +348,7 @@ static void test_full_master_gain_leaves_headroom(void)
         expect_near(left[i], expected_left, 0.0001f, "full master applies -3 dB headroom left");
         expect_near(right[i], expected_right, 0.0001f, "full master applies -3 dB headroom right");
     }
+    synth_uninit(&s);
 }
 
 static void test_delay_controls(void)
@@ -361,6 +370,7 @@ static void test_delay_controls(void)
     expect_near(synth_get_delay_time(&delay_synth), SYNTH_DELAY_MAX_TIME_SECONDS, 0.0001f, "synth delay time clamps high");
     expect_near(synth_get_delay_feedback(&delay_synth), SYNTH_DELAY_MAX_FEEDBACK, 0.0001f, "synth delay feedback clamps high");
     expect_near(synth_get_delay_mix(&delay_synth), 0.0f, 0.0001f, "synth delay mix clamps low");
+    synth_uninit(&delay_synth);
 }
 
 static void test_saturation_controls(void)
@@ -391,6 +401,7 @@ static void test_saturation_controls(void)
         0.0f,
         0.0001f,
         "synth saturation mix clamps low");
+    synth_uninit(&saturation_synth);
 }
 
 // runs voice/synth integration checks, including repeated notes, oscillator controls, effects, and lfo routes
@@ -594,6 +605,10 @@ int main(void)
     test_full_master_gain_leaves_headroom();
     test_saturation_controls();
     test_delay_controls();
+
+    synth_uninit(&s);
+    synth_uninit(&bend_synth);
+    synth_uninit(&second_tune_synth);
 
     if (failures != 0) {
         fprintf(stderr, "%d voice test(s) failed\n", failures);

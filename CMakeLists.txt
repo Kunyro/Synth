@@ -61,7 +61,9 @@ set(SYNTH_PUBLIC_HEADERS
 set(SYNTH_PRIVATE_HEADERS
     src/internal/synth_internal.h
     src/internal/wavetable.h
-    src/internal/render_parameters.h)
+    src/internal/render_parameters.h
+    src/internal/modulation_internal.h
+    src/internal/dsp_history.h)
 
 add_library(synth_core STATIC
     ${SYNTH_CORE_SOURCES}
@@ -204,6 +206,7 @@ if(BUILD_TESTING)
         test_plate_reverb
         test_lfo
         test_modulation
+        test_mod_envelope
         test_voice
         test_pitch)
 
@@ -215,6 +218,16 @@ if(BUILD_TESTING)
             COMMAND "$<TARGET_FILE:${test_name}>"
             WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
     endforeach()
+
+    # compile a separate core copy so allocator failure injection never enters production
+    add_executable(test_allocations tests/test_allocations.c ${SYNTH_CORE_SOURCES})
+    synth_configure_c_target(test_allocations)
+    target_include_directories(test_allocations PRIVATE "${PROJECT_SOURCE_DIR}/include")
+    target_compile_definitions(test_allocations PRIVATE calloc=synth_test_calloc free=synth_test_free)
+    if(NOT MSVC)
+        target_link_libraries(test_allocations PRIVATE m)
+    endif()
+    add_test(NAME test_allocations COMMAND test_allocations)
 
     if(SYNTH_BUILD_DESKTOP)
         add_executable(test_midi_types tests/test_midi_types.c)

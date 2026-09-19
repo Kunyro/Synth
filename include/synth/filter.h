@@ -27,6 +27,9 @@ typedef struct synth_filter {
 
 // sets up the filter with a sample rate, cutoff, and cleared state
 void synth_filter_init(synth_filter *filter, float sample_rate, float cutoff_hz);
+// clears history and temporary topology while preserving manual controls
+void synth_filter_reset(synth_filter *filter);
+int synth_filter_has_tail(const synth_filter *filter);
 // changes the filter sample rate and updates its cached coefficient
 void synth_filter_set_sample_rate(synth_filter *filter, float sample_rate);
 // changes the filter cutoff in hz

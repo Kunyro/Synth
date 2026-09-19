@@ -139,3 +139,8 @@ synth_stereo_sample synth_ring_mod_process(
     const synth_ring_mod_params params = synth_ring_mod_get_params(effect);
     return synth_ring_mod_process_with_params(effect, input, &params);
 }
+
+void synth_ring_mod_reset(synth_ring_mod *ring_mod)
+{
+    ring_mod->phase = 0;
+}

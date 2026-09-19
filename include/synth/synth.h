@@ -31,14 +31,23 @@ typedef struct synth {
     float lfo_depth;
     synth_modulation modulation;
     synth_adsr envelope;
-    synth_filter filter;
-    synth_filter right_filter;
-    synth_effect_chain effects;
+    synth_adsr mod_envelope;
+    float mod_envelope_depth;
+    int ready;
+    synth_filter_params filter;
+    synth_effect_chain_params effects;
     synth_voice voices[SYNTH_MAX_VOICES];
 } synth;
 
-// sets up the synth with defaults
+// allocates voice resources with defaults; check readiness and uninit before reuse
 void synth_init(synth *s, float sample_rate);
+// reports initialization success; failed instances render silence and remain destructible
+int synth_is_ready(const synth *s);
+// independent modulation source controls; nonfinite edits are ignored
+void synth_set_mod_envelope_adsr(synth *s, synth_adsr adsr);
+synth_adsr synth_get_mod_envelope_adsr(const synth *s);
+void synth_set_mod_envelope_depth(synth *s, float depth);
+float synth_get_mod_envelope_depth(const synth *s);
 // releases resources owned by the synth
 void synth_uninit(synth *s);
 // starts a note by frequency instead of numbered note

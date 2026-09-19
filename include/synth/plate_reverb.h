@@ -89,4 +89,10 @@ synth_stereo_sample synth_plate_reverb_process_with_params(
     synth_stereo_sample input,
     const synth_plate_reverb_params *params);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_plate_reverb_reset(synth_plate_reverb *effect);
+int synth_plate_reverb_has_tail(const synth_plate_reverb *effect);
+
+int synth_plate_reverb_is_ready(const synth_plate_reverb *effect);
+
 #endif

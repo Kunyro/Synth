@@ -17,6 +17,8 @@ easy to play, test, and experiment from a regular computer.
 - Two oscillator controls with level, morph, pitch, fine-tune, octave, and stereo spread
 - Low-pass filter with variable intensity
 - Global morphable LFO with 52 signed parameter routes
+- Independent per-voice modulation ADSR with 48 routes and MIDI mapping
+- Per-voice filters/effects with preserved tails and faded voice replacement
 - Saturation, distortion, bitcrusher, flanger, ring mod, chorus, EQ, delay, plate reverb, and compressor
 - Desktop audio playback through miniaudio
 - Optional MIDI input and controller mapping through runtime-loaded PortMidi
@@ -130,7 +132,7 @@ cmake --preset release                     # configure an optimized build
 ## Documentation
 
 - [Engine notes](src/README.md)
-- [LFO API and destination contract](docs/modulation.md)
+- [Modulation API and destination contract](docs/modulation.md)
 - [Desktop app usage](platform/desktop/README.md)
 - [MIDI controller mapping](config/midi/README.md)
 - [Tools](tools/README.md)

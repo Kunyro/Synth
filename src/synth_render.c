@@ -9,7 +9,7 @@
 // packs the effective levels/spread and morph changes needed by every voice
 static synth_voice_mix voice_mix(const synth *s, const synth_render_parameters *params)
 {
-    // voices already store their base morph, so pass only the lfo's change to it
+    // voices already store their base morph, so pass only the modulation offset
     const synth_voice_mix mix = {
         params->first_oscillator_gain,
         params->second_oscillator_gain,
@@ -20,7 +20,7 @@ static synth_voice_mix voice_mix(const synth *s, const synth_render_parameters *
     return mix;
 }
 
-// converts the lfo's secondary tuning changes into one frequency multiplier
+// converts secondary tuning modulation into one frequency multiplier
 static float secondary_tuning_ratio(const synth *s, const synth_render_parameters *params)
 {
     // there are 12 semitones per octave and 100 cents per semitone subtract the
@@ -43,40 +43,52 @@ static synth_stereo_sample apply_master_gain(synth_stereo_sample sample, float m
     return sample;
 }
 
-// renders one mixed stereo sample through independent channel filter state
+// retained filter or effect memory keeps a tail alive even between delayed echoes
+static int voice_has_tail(const synth_voice *voice)
+{
+    return synth_filter_has_tail(&voice->filter) ||
+        synth_filter_has_tail(&voice->right_filter) ||
+        synth_effect_chain_has_tail(&voice->effects);
+}
+
+static synth_stereo_sample render_voice(synth *s, synth_voice *voice, float lfo_value)
+{
+    synth_render_parameters params;
+    synth_stereo_sample sample = {0, 0};
+    if (!voice->active && !voice->tail_active && voice->steal_remaining == 0) return sample;
+    synth_voice_advance_envelopes(voice, s->sample_rate);
+    synth_resolve_render_parameters(s, lfo_value, voice->mod_envelope.level, &params);
+    sample = synth_voice_render_current(voice, s->sample_rate, voice_mix(s, &params),
+                                        secondary_tuning_ratio(s, &params));
+    sample.left = synth_filter_process_with_params(&voice->filter, sample.left, &params.filter);
+    sample.right = synth_filter_process_with_params(&voice->right_filter, sample.right, &params.filter);
+    sample = synth_effect_chain_process_with_params(&voice->effects, sample, &params.effects);
+    sample = apply_master_gain(sample, params.master_gain);
+    voice->output_level = fmaxf(fmaxf(fabsf(sample.left), fabsf(sample.right)), voice->output_level * 0.99f);
+    if (voice->steal_remaining > 0) {
+        const float gain = (float)(voice->steal_remaining - 1) / (float)voice->steal_frames;
+        sample.left *= gain;
+        sample.right *= gain;
+        if (--voice->steal_remaining == 0) synth_start_pending_voice(s, voice);
+    } else if (!voice->active && ++voice->tail_check_frames >= SYNTH_TAIL_CHECK_FRAMES) {
+        voice->tail_check_frames = 0;
+        voice->tail_active = voice_has_tail(voice);
+    }
+    return sample;
+}
+
+// one global source sample, followed by complete independent voice processing
 static synth_stereo_sample synth_render_stereo_sample(synth *s)
 {
-    // one source sample is shared by all voices, destinations, and both channels
-    // advance even during silence so new notes do not restart the modulation
+    synth_stereo_sample sample = {0, 0};
+    if (!s->ready) return sample;
     const float lfo_value = synth_lfo_advance(&s->lfo, s->sample_rate);
-    synth_render_parameters params;
-    synth_voice_mix mix;
-    float tuning_ratio;
-    synth_stereo_sample sample = {0.0f, 0.0f};
-
-    // rebuild from current bases each frame so offsets never accumulate or drift
-    synth_resolve_render_parameters(s, lfo_value, &params);
-    mix = voice_mix(s, &params);
-    tuning_ratio = secondary_tuning_ratio(s, &params);
-
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        const synth_stereo_sample voice_sample =
-            synth_voice_render_with_params(&s->voices[i], s->sample_rate, mix, tuning_ratio);
-
-        sample.left += voice_sample.left;
-        sample.right += voice_sample.right;
+        const synth_stereo_sample v = render_voice(s, &s->voices[i], lfo_value);
+        sample.left += v.left;
+        sample.right += v.right;
     }
-
-    sample.left = synth_filter_process_with_params(
-        &s->filter,
-        sample.left,
-        &params.filter);
-    sample.right = synth_filter_process_with_params(
-        &s->right_filter,
-        sample.right,
-        &params.filter);
-    sample = synth_effect_chain_process_with_params(&s->effects, sample, &params.effects);
-    return apply_master_gain(sample, params.master_gain);
+    return sample;
 }
 
 // fills separate left/right buffers using the same per-frame processing path

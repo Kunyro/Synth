@@ -132,7 +132,7 @@ static void test_parameter_metadata(void)
     const midi_mapping_parameter_info *saturation_drive_info = &saturation_drive_info_storage;
     midi_mapping_scale scale;
 
-    expect_true(midi_mapping_parameter_count() == 107, "metadata lists every mappable parameter");
+    expect_true(midi_mapping_parameter_count() == 160, "metadata lists every mappable parameter");
 
     expect_true(midi_mapping_parameter_info_by_name("filter_cutoff", &cutoff_info_storage), "metadata lookup succeeds");
     expect_true(cutoff_info != 0, "filter cutoff metadata is findable");
@@ -203,6 +203,7 @@ static void test_applies_adsr_cc_values(void)
     expect_true(
         !midi_mapping_apply_short_message(&mapping, wrong_channel, sizeof(wrong_channel), &s, 0),
         "wrong channel does not apply");
+    synth_uninit(&s);
 }
 
 // checks that a mapped knob updates stored master gain through the engine catalog
@@ -224,6 +225,7 @@ static void test_applies_master_gain_cc_value(void)
         "master gain cc applies");
     expect_true(result.parameter == SYNTH_PARAM_MASTER_GAIN, "master gain cc reports master gain parameter");
     expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "master gain cc scales to normalized gain");
+    synth_uninit(&s);
 }
 
 // checks cutoff and discrete pole-count edits through ordinary base bindings
@@ -250,7 +252,7 @@ static void test_applies_filter_cc_values(void)
         "filter cutoff cc applies");
     expect_true(result.parameter == SYNTH_PARAM_FILTER_CUTOFF, "filter cutoff cc reports filter cutoff parameter");
     expect_near(synth_get_filter_cutoff(&s), 20000.0f, 0.01f, "filter cutoff cc scales to max cutoff");
-    expect_near(s.right_filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff keeps stereo filters in sync");
+    expect_near(s.voices[0].right_filter.cutoff_hz, 20000.0f, 0.01f, "filter cutoff keeps stereo filters in sync");
 
     pickup_cc(&mapping, &s, 6, 0, 127);
     expect_true(
@@ -258,7 +260,7 @@ static void test_applies_filter_cc_values(void)
         "filter poles cc applies");
     expect_true(result.parameter == SYNTH_PARAM_FILTER_POLES, "filter poles cc reports filter poles parameter");
     expect_true(synth_get_filter_poles(&s) == 5, "filter poles cc steps to five poles");
-    expect_true(s.right_filter.pole_count == 5, "filter poles keep stereo filters in sync");
+    expect_true(s.voices[0].right_filter.pole_count == 5, "filter poles keep stereo filters in sync");
     expect_near(result.synth_value, 5.0f, 0.0001f, "filter poles result reports stepped value");
 
     expect_true(
@@ -270,6 +272,7 @@ static void test_applies_filter_cc_values(void)
         apply_cc_value(&mapping, &s, 6, 127, 0),
         "filter poles max applies");
     expect_true(synth_get_filter_poles(&s) == 8, "filter poles max steps to eight poles");
+    synth_uninit(&s);
 }
 
 // checks that a base morph knob still reaches the oscillator control
@@ -294,6 +297,7 @@ static void test_applies_oscillator_morph_cc_value(void)
         "oscillator morph cc reports oscillator morph parameter");
     expect_near(result.synth_value, 76.0f / 127.0f, 0.0001f, "oscillator morph result reports normalized value");
     expect_near(synth_get_oscillator_morph(&s), 76.0f / 127.0f, 0.0001f, "oscillator morph cc scales to normalized morph");
+    synth_uninit(&s);
 }
 
 // checks base octave, semitone, and fine-tune knobs retain their scaling behavior
@@ -346,6 +350,7 @@ static void test_applies_second_oscillator_cc_values(void)
         synth_get_second_oscillator_fine_tune(&s),
         0.0001f,
         "second oscillator fine tune result reports cents");
+    synth_uninit(&s);
 }
 
 // checks that each oscillator level knob addresses the correct base control
@@ -396,6 +401,7 @@ static void test_applies_oscillator_mix_cc_values(void)
         result.parameter == SYNTH_PARAM_MASTER_GAIN,
         "second master gain cc reports master gain parameter");
     expect_near(synth_get_master_gain(&s), 29.0f / 127.0f, 0.0001f, "second master gain cc scales to normalized gain");
+    synth_uninit(&s);
 }
 
 // checks the stereo-spread base binding independently of modulation
@@ -419,6 +425,7 @@ static void test_applies_stereo_spread_cc_value(void)
         result.parameter == SYNTH_PARAM_STEREO_SPREAD,
         "stereo spread cc reports stereo spread parameter");
     expect_near(synth_get_stereo_spread(&s), 41.0f / 127.0f, 0.0001f, "stereo spread cc scales to normalized width");
+    synth_uninit(&s);
 }
 
 // checks global lfo controls and migrated amount bindings, including their target identities
@@ -495,6 +502,7 @@ static void test_applies_lfo_cc_values(void)
         result.parameter == SYNTH_PARAM_FILTER_CUTOFF,
         "filter lfo cc reports its route");
     expect_near(synth_get_lfo_amount(&s, SYNTH_PARAM_FILTER_CUTOFF), 75.0f / 127.0f, 0.0001f, "filter lfo amount scales normally");
+    synth_uninit(&s);
 }
 
 // checks that a distant knob position cannot change a setting before reaching pickup
@@ -521,6 +529,7 @@ static void test_waits_for_pickup_before_first_knob_change(void)
 
     expect_true(apply_cc_value(&mapping, &s, 8, 64, &result), "picked-up gain cc keeps applying");
     expect_near(synth_get_master_gain(&s), 64.0f / 127.0f, 0.0001f, "picked-up gain cc updates normally");
+    synth_uninit(&s);
 }
 
 // checks canonical distortion control names and metadata after moving parameter identity into the engine
@@ -708,6 +717,7 @@ static void test_applies_distortion_mix_cc_value(void)
         0.0001f,
         "distortion mix cc scales to normalized dry wet");
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "distortion mix result reports normalized value");
+    synth_uninit(&s);
 }
 
 // checks the distortion drive base binding after the registry migration
@@ -737,6 +747,7 @@ static void test_applies_distortion_drive_cc_value(void)
         0.0001f,
         "distortion drive cc scales to the drive range");
     expect_near(result.synth_value, expected_drive, 0.0001f, "distortion drive result reports scaled value");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected saturation base controls
@@ -790,6 +801,7 @@ static void test_applies_saturation_cc_values(void)
         0.0001f,
         "saturation drive cc scales to the drive range");
     expect_near(result.synth_value, expected_drive, 0.0001f, "saturation drive result reports scaled value");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected bitcrusher base controls
@@ -838,6 +850,7 @@ static void test_applies_bitcrusher_cc_values(void)
         "bitcrusher bits cc reports bitcrusher bits parameter");
     expect_true(synth_get_bitcrusher_bits(&s) == 11, "bitcrusher bits cc steps to eleven bits");
     expect_near(result.synth_value, 11.0f, 0.0001f, "bitcrusher bits result reports stepped value");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected flanger base controls
@@ -937,6 +950,7 @@ static void test_applies_flanger_cc_values(void)
         expected_manual,
         0.0001f,
         "flanger manual delay scales to seconds");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected ring mod base controls
@@ -993,6 +1007,7 @@ static void test_applies_ring_mod_cc_values(void)
         "ring mod mix cc reports ring mod mix parameter");
     expect_near(synth_get_ring_mod_mix(&s), 44.0f / 127.0f, 0.0001f, "ring mod mix scales");
     expect_near(result.synth_value, 44.0f / 127.0f, 0.0001f, "ring mod mix result reports normalized value");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected chorus base controls
@@ -1070,6 +1085,7 @@ static void test_applies_chorus_cc_values(void)
         expected_feedback,
         0.0001f,
         "chorus feedback scales across negative and positive feedback");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected eq base controls
@@ -1111,6 +1127,7 @@ static void test_applies_eq_cc_values(void)
     expect_true(result.parameter == SYNTH_PARAM_EQ_HIGH, "eq high cc reports eq high parameter");
     expect_near(synth_get_eq_high(&s), expected_high, 0.0001f, "eq high cc scales to decibels");
     expect_near(result.synth_value, expected_high, 0.0001f, "eq high result reports decibels");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected compressor base controls
@@ -1256,6 +1273,7 @@ static void test_applies_delay_cc_values(void)
         "delay feedback cc reports delay feedback parameter");
     expect_near(synth_get_delay_feedback(&s), expected_feedback, 0.0001f, "delay feedback cc scales to bounded feedback");
     expect_near(result.synth_value, expected_feedback, 0.0001f, "delay feedback result reports scaled value");
+    synth_uninit(&s);
 }
 
 // checks that mapped ccs still update the expected plate reverb base controls
@@ -1322,6 +1340,7 @@ static void test_applies_plate_reverb_cc_values(void)
         expected_predelay,
         0.0001f,
         "plate reverb predelay cc scales to seconds");
+    synth_uninit(&s);
 }
 
 // checks that selector/macro assignments still load alongside direct parameter bindings
@@ -1695,6 +1714,7 @@ static void test_effect_selectors_use_bank_pages(void)
     expect_true(
         mapping.effect_banks[1].selected_effect == MIDI_MAPPING_EFFECT_CHORUS,
         "bank two value one twenty-seven chooses chorus");
+    synth_uninit(&s);
 }
 
 // checks that a macro writes the base parameter belonging to the selected effect page
@@ -1922,6 +1942,7 @@ static void test_effect_macros_apply_selected_effect_parameters(void)
     expect_true(apply_cc_value(&mapping, &s, 17, 44, &result), "chorus macro three applies");
     expect_true(result.parameter == SYNTH_PARAM_CHORUS_MIX, "chorus macro three reports mix");
     expect_near(synth_get_chorus_mix(&s), 44.0f / 127.0f, 0.0001f, "chorus macro three scales dry wet");
+    synth_uninit(&s);
 }
 
 // checks that reaching pickup on one effect does not pick up the same knob on another page
@@ -1952,6 +1973,7 @@ static void test_effect_macro_pickup_is_independent_per_effect(void)
         initial_bitcrusher_rate,
         0.0001f,
         "waiting bitcrusher macro leaves sample rate unchanged");
+    synth_uninit(&s);
 }
 
 // checks that returning to an effect page requires pickup again rather than jumping its controls
@@ -2003,6 +2025,7 @@ static void test_effect_macro_pickup_rearms_when_returning_to_effect(void)
     expect_true(apply_cc_value(&mapping, &s, 13, 127, &result), "saturation mix applies again at pickup point");
     expect_true(result.parameter == SYNTH_PARAM_SATURATION_MIX, "rearmed macro reports saturation mix");
     expect_near(synth_get_saturation_mix(&s), 1.0f, 0.0001f, "saturation mix remains at pickup value");
+    synth_uninit(&s);
 }
 
 // checks that an unused page slot does nothing while direct bindings continue to work
@@ -2030,6 +2053,7 @@ static void test_effect_macros_leave_unused_macro_empty_and_direct_bindings_work
     expect_true(apply_cc_value(&mapping, &s, 1, 127, &result), "direct attack binding still applies");
     expect_true(result.parameter == SYNTH_PARAM_ATTACK, "direct binding reports attack");
     expect_near(synth_get_adsr(&s).attack_seconds, 2.0f, 0.0001f, "direct binding updates attack");
+    synth_uninit(&s);
 }
 
 int main(void)

@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 #define SYNTH_EQ_TWO_PI 6.28318530717958647692f
 #define SYNTH_EQ_NEUTRAL_GAIN_THRESHOLD 0.1f
@@ -406,4 +407,23 @@ synth_stereo_sample synth_eq_process(
 {
     const synth_eq_params params = synth_eq_get_params(effect);
     return synth_eq_process_with_params(effect, input, &params);
+}
+
+// clears history without reallocating storage or changing controls
+void synth_eq_reset(synth_eq *effect)
+{
+    reset_biquad_state(&effect->low);
+    reset_biquad_state(&effect->mid);
+    reset_biquad_state(&effect->high);
+}
+
+int synth_eq_has_tail(const synth_eq *effect)
+{
+    const synth_eq_biquad *bands[] = {&effect->low, &effect->mid, &effect->high};
+    for (size_t i = 0; i < 3; ++i) {
+        const synth_eq_biquad *b = bands[i];
+        if (fabsf(b->left_z1) > 1e-7f || fabsf(b->left_z2) > 1e-7f ||
+            fabsf(b->right_z1) > 1e-7f || fabsf(b->right_z2) > 1e-7f) return 1;
+    }
+    return 0;
 }

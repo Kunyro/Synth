@@ -1,8 +1,9 @@
 # Per-voice modulation envelope implementation plan
 
-Status: implementation plan complete. Product behavior is settled. This document
-records the agreed contract, code review, implementation sequence, and validation
-criteria; the feature itself has not been implemented.
+Status: implemented and validated. This document retains the agreed contract,
+pre-implementation review, and implementation sequence. Completed validation and
+desktop measurements are recorded below. See [the API contract](modulation.md)
+for current behavior and usage.
 
 ## Confirmed requirements
 
@@ -48,7 +49,7 @@ criteria; the feature itself has not been implemented.
 
 ## Source settings and defaults
 
-The planned source conventions are linear ADSR stages, reset from zero on each
+The source conventions are linear ADSR stages, reset from zero on each
 note, 0–1 output without velocity scaling, and a MIDI-mappable overall depth
 control. Shape defaults are 10 ms attack, 80 ms decay, 75% sustain, and 160 ms
 release; depth and route amounts start at zero. Route polarity is signed -1–1;
@@ -322,9 +323,47 @@ config names and the rule that binding files do not initialize synth values.
   contract, engine notes, MIDI documentation, and test documentation.
 - Review new and modified code comments for lowercase style.
 
-## Validation baseline
+## Completed validation
 
-The development build and all 21 existing tests passed during the initial code
-review. This work changes documentation only; feature behavior has not been
-implemented or tested. The implementation is complete only after the engine,
-MIDI tools, lifecycle handling, documentation, and validation above are complete.
+The initial baseline had 21 passing tests. After implementation:
+
+- CMake desktop: all 23 tests pass; app and MIDI monitor build successfully.
+- Core-only release build: all 19 tests pass.
+- Makefile: all 23 tests pass.
+- AddressSanitizer and UndefinedBehaviorSanitizer: all 23 desktop tests pass.
+- Allocation injection: all 300 effect-buffer allocation sites fail cleanly,
+  including partial late-voice initialization. Rendering, note events, steals,
+  and parameter edits perform no buffer allocations.
+- Both source inventories have audible-destination coverage. Additional tests
+  verify endpoint math, full-duration release and edits, independent voices,
+  nonlinear per-voice reference audio, default-off identity, retained delay
+  tails, exact steal fading, cancellation, and MIDI capacity/round trips.
+
+The tail checks exposed a pre-existing bitcrusher behavior that quantized zero
+to a nonzero DC value. Silence now stays zero, with a regression test across
+all bit depths. Other nonzero quantization behavior is unchanged outside the
+1e-7 silence threshold.
+
+### Desktop measurements
+
+An offline arm64 macOS run with AppleClang 21, `-O3`, and 64-frame stereo blocks
+measured 12 voices, both source depths at 0.6, all eligible routes at +0.3,
+all effect mixes at 0.5, distortion/saturation drive 8, low EQ +3 dB, and
+compressor ratio 4. Each sample rate rendered one second, followed by a burst
+replacing all 12 notes. Times are wall time around render calls; initialization
+and note-request handling are excluded. Buffer bytes were counted at allocation,
+excluding allocator overhead and shared static wavetables.
+
+| Sample rate | Effect buffer bytes | One-second render | Largest normal block | Largest replacement block |
+| --- | ---: | ---: | ---: | ---: |
+| 44.1 kHz | 36,121,296 | 0.604 s | 1.076 ms | 1.949 ms |
+| 48 kHz | 39,315,696 | 0.655 s | 1.002 ms | 1.288 ms |
+| 96 kHz | 78,630,816 | 1.309 s | 1.057 ms | 1.807 ms |
+
+The synth struct occupies another 19,464 bytes on this build. This is an offline
+stress measurement, not a real-time guarantee: 96 kHz full modulation exceeded
+real time, and simultaneous history resets can exceed a 64-frame block budget.
+Resetting buffers allocates nothing but still has a measurable memory-clear
+cost. No CPU or memory optimization was substituted for the agreed per-voice
+architecture. Teensy profiling/placement, Windows/Linux execution, and live MIDI
+and audio-hardware audition remain unverified.

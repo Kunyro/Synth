@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 #define SYNTH_FLANGER_STEREO_PHASE_OFFSET 0.25f
 #define SYNTH_FLANGER_OUTPUT_COMPENSATION 0.50f
@@ -340,4 +341,24 @@ void synth_flanger_resolve_intensity(synth_flanger_params *params, float intensi
     // components are clamped after their direct modulation is added for example,
     // depth 0.9 + intensity change 0.5 - direct change 0.5 should remain 0.9;
     // clamping the intermediate 1.4 would incorrectly produce 0.5
+}
+
+// clears history without reallocating storage or changing controls
+void synth_flanger_reset(synth_flanger *effect)
+{
+    synth_history_clear(effect->delay.left, effect->delay.capacity_frames);
+    synth_history_clear(effect->delay.right, effect->delay.capacity_frames);
+    effect->delay.write_index = 0;
+    effect->phase = 0;
+}
+
+int synth_flanger_has_tail(const synth_flanger *effect)
+{
+    return synth_history_active(effect->delay.left, effect->delay.capacity_frames) ||
+        synth_history_active(effect->delay.right, effect->delay.capacity_frames);
+}
+
+int synth_flanger_is_ready(const synth_flanger *effect)
+{
+    return delay_line_has_storage(&effect->delay);
 }

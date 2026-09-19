@@ -45,4 +45,8 @@ synth_stereo_sample synth_bitcrusher_process_with_params(
     synth_stereo_sample input,
     const synth_bitcrusher_params *params);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_bitcrusher_reset(synth_bitcrusher *effect);
+int synth_bitcrusher_has_tail(const synth_bitcrusher *effect);
+
 #endif

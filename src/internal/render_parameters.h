@@ -18,9 +18,11 @@ typedef struct synth_render_parameters {
     synth_effect_chain_params effects;
 } synth_render_parameters;
 
-// fills a fresh frame from stored settings and one shared lfo sample
-void synth_resolve_render_parameters(const synth *s, float lfo_value,
+// fills a fresh frame from stored settings and a shared lfo sample and this voice's envelope
+void synth_resolve_render_parameters(const synth *s, float lfo_value, float envelope_value,
                                      synth_render_parameters *params);
+// finishes a faded replacement without allocating resources
+void synth_start_pending_voice(synth *s, synth_voice *voice);
 // captures a new voice's envelope at the current phase without moving the source
 synth_adsr synth_capture_modulated_adsr(const synth *s);
 

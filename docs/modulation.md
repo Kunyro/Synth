@@ -1,11 +1,15 @@
-# LFO modulation contract
+# Modulation contract
 
-The engine supports one global LFO with 52 independent signed destination
-amounts: 15 synth parameters and 37 controls across all ten effects. Every
-amount and global depth initialize to zero. The LFO is free-running and advances
-once per stereo frame, including silence and effect tails. Notes do not reset
-its phase. Global LFO rate, shape, and depth cannot be destinations; neither can
-chord mode, effect selectors, controller macros, or route amounts themselves.
+The engine has one global free-running LFO and an independent held ADSR
+modulation envelope per voice. The LFO has 52 signed destinations; the envelope
+has the same destinations except the four volume ADSR controls, giving 48.
+Neither source can target LFO controls, modulation-envelope controls, chord
+mode, effect selectors/macros, or route amounts. Both depths and all amounts
+initialize to zero.
+
+The LFO advances once per stereo frame, including silence and effect tails.
+Each modulation envelope advances once per active voice per frame. Notes reset
+only their own envelope. Envelope output is 0–1, independent of velocity.
 
 ## Engine API and ownership
 
@@ -14,10 +18,14 @@ chord mode, effect selectors, controller macros, or route amounts themselves.
 
 synth instrument;
 synth_init(&instrument, 48000.0f);
+if (!synth_is_ready(&instrument)) return 1;
 synth_set_parameter(&instrument, SYNTH_PARAM_DELAY_MIX, 0.5f);
 synth_set_lfo_rate(&instrument, 2.0f);
 synth_set_lfo_amount(&instrument, SYNTH_PARAM_DELAY_MIX, -0.5f);
 synth_set_lfo_depth(&instrument, 0.8f);
+synth_set_mod_envelope_adsr(&instrument, (synth_adsr){0.02f, 0.1f, 0.4f, 0.3f});
+synth_set_mod_envelope_depth(&instrument, 1.0f);
+synth_set_envelope_amount(&instrument, SYNTH_PARAM_FILTER_CUTOFF, 1.0f);
 synth_note_on(&instrument, 60, 0.8f);
 
 float left[256], right[256];
@@ -35,14 +43,16 @@ exclusively in the desktop adapter. Enumeration runs from zero to
 `SYNTH_PARAM_COUNT - 1`; metadata pointers have static lifetime.
 
 `modulation.c` stores only route amounts and implements the shared evaluation
-law. `synth_set_lfo_amount()` and `synth_set_parameter()` reject nonfinite values,
+law. Both amount setters and `synth_set_parameter()` reject nonfinite values,
 invalid identities, and null instances. Route setters additionally reject
 excluded targets and clamp finite amounts to `[-1, 1]`. Getters report base
 values or route amounts, never effective render values. Invalid getters return
-zero. `synth_reset_lfo_amounts()` removes all routes without changing the LFO.
+zero. `synth_reset_lfo_amounts()` and `synth_reset_envelope_amounts()` clear only
+their own bank. `synth_modulation_supports(source, id)` centralizes eligibility
+for engine clients and adapters.
 
 A stack-local typed render frame is resolved from current base getters every
-sample. Its private descriptor offsets address only control fields in that
+sample for each processing voice. Its private descriptor offsets address only control fields in that
 frame. Each module consumes its own `synth_*_params` subset through
 `process_with_params()`. These calls advance DSP history and do not call base
 setters, allocate memory, or store a second patch. Unchanged EQ/compressor
@@ -57,26 +67,42 @@ or general modulation graph is needed.
 
 ## Evaluation
 
-Let `u = lfo_value * global_depth * signed_amount`.
+Contributions are computed against the same stored base, added in the
+destination's domain, and clamped/rounded once:
 
-- Linear destination: `effective = base + u * span`.
-- Logarithmic destination: `effective = base * exp2(u * span)`; its span is in
-  octaves (doublings), including positive timing parameters.
+```text
+d(x) = x for linear controls, log2(x) for logarithmic controls
+endpoint = legal maximum for positive envelope amount, minimum for negative
+lfo_offset = lfo_value * lfo_depth * lfo_amount * lfo_span
+envelope_offset = envelope_value * envelope_depth * abs(envelope_amount)
+                * (d(endpoint) - d(base))
+effective = inverse_d(d(base) + lfo_offset + envelope_offset)
+```
 
-Clamp to the destination's legal bounds, then round integer destinations to
-the nearest integer, with half steps away from zero. Each stepped destination
-quantizes independently. Zero amount or zero depth returns the base exactly,
-without logarithmic round-trip error. For example, mix base `0.5`, amount `-0.5`,
-depth `0.8`, and LFO `+1` produce mix `0.3`. A cutoff amount `0.2` with depth `1`
-has a one-octave excursion, so a 1 kHz base moves between 500 Hz and 2 kHz.
+The LFO retains its fixed spans from the table below. For example, cutoff amount
+0.2 at depth 1 moves a 1 kHz base between 500 Hz and 2 kHz. The envelope instead
+moves toward a legal endpoint: at level/depth/amount 1, cutoff reaches Nyquist
+(24 kHz at a 48 kHz sample rate), regardless of its base. Amount -1 reaches
+10 Hz. For mix base 0.3, amount +0.5 at peak produces 0.65; amount -0.5 produces
+0.15. Fractional frequency excursions interpolate logarithmically.
 
-All five former destinations use this same rule. Gain modulation is centered,
-and cutoff's fixed span is now five octaves. Clamping can flatten a waveform
-near a legal boundary. There is no global smoothing that would erase the chosen
-saw/square LFO shape. Continuous destinations are evaluated per sample, not per
-host buffer. ADSR is the note-on exception below.
+Endpoint guarantees apply to an isolated route. An opposing LFO contribution
+can pull the final value away from the endpoint. Flanger intensity also adds
+depth/feedback deltas; direct component routes use the stored component bases,
+then all deltas are summed before the final clamp.
+
+Zero contribution preserves the base exactly without logarithmic round-trip
+drift. Integer destinations round the combined value to the nearest integer,
+with half steps away from zero. Continuous destinations update per sample.
+There is no global smoothing that would erase an LFO's saw or square shape.
+`synth_parameter_bounds()` supplies sample-rate-dependent engine limits;
+MIDI knob ranges never redefine these limits.
 
 ## Destination inventory
+
+All 52 rows are LFO destinations. The modulation envelope supports all rows
+except `attack`, `decay`, `sustain`, and `release`. The excursion column describes
+the LFO only; envelope excursion follows the endpoint rule above.
 
 An unmarked span is in the parameter's native unit. “Octaves” in the span column
 indicates logarithmic evaluation. Times permitting zero use linear evaluation.
@@ -84,7 +110,7 @@ ADSR times retain their existing unbounded nonnegative float range. Cutoff is
 limited to Nyquist and bitcrusher rate to the host rate (with the module's 1 Hz
 minimum); metadata's static maximum for these two controls is `FLT_MAX`.
 
-| Canonical parameter | Unit | Legal range | Full excursion | Type |
+| Canonical parameter | Unit | Legal range | LFO full excursion | Type |
 | --- | --- | --- | --- | --- |
 | `attack` | seconds | 0–FLT_MAX | 1 | continuous |
 | `decay` | seconds | 0–FLT_MAX | 1 | continuous |
@@ -141,7 +167,7 @@ minimum); metadata's static maximum for these two controls is `FLT_MAX`.
 
 ## Module behavior
 
-- **Envelope:** Capture attack, decay, sustain, and release into the voice at
+- **Volume envelope:** Capture attack, decay, sustain, and release into the voice at
   note-on using the current LFO phase without advancing it. Changes to routes or
   global LFO controls affect future notes. Manual `synth_set_adsr()` still
   replaces all four settings for all voices, preserving envelope stage and
@@ -159,7 +185,8 @@ minimum); metadata's static maximum for these two controls is `FLT_MAX`.
 - **Bitcrusher:** Effective reduced sample rate advances the existing sampling
   clock without resetting it. Bit-depth quantization changes at the next clock
   tick, preserving the held sample between ticks. The discrete target is never
-  interpolated into a fractional bit depth.
+  interpolated into a fractional bit depth. Silent input (absolute value at
+  most 1e-7) quantizes to zero, preventing a DC residue from sustaining a tail.
 - **Flanger:** Apply the intensity-induced depth delta and feedback-curve delta
   to the manually stored component bases; add direct depth/feedback offsets
   afterward and clamp last. Setting route amounts in a different order has no
@@ -169,7 +196,7 @@ minimum); metadata's static maximum for these two controls is `FLT_MAX`.
   fractional read heads, including retained tails. This continuously moves
   taps and produces pitch bends. It never starts the manual settling timer or
   clears a delay voice. Manual edits retain their existing settle/fade/tail
-  lifecycle; the LFO offset follows those base taps. Removing modulation
+  lifecycle; the combined modulation offset follows those base taps. Removing modulation
   returns to the current manual taps. Modulated tails use a conservative silence
   interval before retirement, allowing moved taps to revisit history.
 - **EQ and compressor:** Recompute coefficients from effective controls only
@@ -187,6 +214,52 @@ minimum); metadata's static maximum for these two controls is `FLT_MAX`.
 The effect order remains saturation, distortion, bitcrusher, flanger, ring
 modulator, chorus, EQ, delay, plate reverb, compressor, then master gain.
 
+## Voice lifecycle and resource ownership
+
+Each voice owns its oscillators, volume/modulation envelopes, stereo filters,
+and complete effect chain. Processing order is oscillators → volume envelope
+and velocity → stereo filters → effects → effective master gain. Finished voice
+outputs are summed. Nonlinear effects such as distortion and compression now
+process notes independently, which changes polyphonic patches that previously
+used the shared effect chain.
+
+Envelope shape defaults are 10 ms attack, 80 ms decay, 75% sustain, and 160 ms
+release. Depth and route amounts default to zero. Note-off starts a full-duration
+release from the modulation envelope's current level. Repeated note-off does
+not restart it. The volume envelope retains its existing fixed-slope release.
+Manual modulation ADSR edits update existing voices while preserving stage and
+level. Changing release time during release starts the new duration from the
+current level; unrelated edits leave release progress intact.
+
+The modulation envelope ends when the volume envelope reaches OFF, including
+when its own release is longer. Held zero-sustain notes retain ownership.
+Tail-only voices continue processing zero oscillator input with the global LFO
+and no envelope contribution. Retirement checks retained filter/effect history
+every 256 frames using a 1e-7 silence threshold, so gaps between echoes do not
+cut tails off. History frozen by an effect's dry setting remains owned until it
+resumes or the slot is reused.
+
+Allocation prefers free slots, then the quietest tail-only slot, then the
+quietest volume envelope. A stolen slot fades its old output over 2 ms, clears
+its history without reallocating, and starts its pending note. Volume ADSR is
+captured at the incoming note-on event, before that fade. Pending storage is
+bounded to one note per slot; if every slot already has a replacement, a new
+request replaces a pending request without restarting the fade. Note-off and
+all-notes-off cancel matching pending notes.
+
+`synth_init()` allocates all voice effect storage. Check `synth_is_ready()`;
+failed initialization releases partial resources and renders silence.
+`synth_uninit()` releases ownership and is safe to repeat. Uninitialize before
+initializing an existing synth again. Resource-owning synth/voice/effect structs
+must not be copied by value. Patch controls (`synth_effect_chain_params`, etc.)
+are value types and can be copied.
+
+Standalone `synth_voice_init()` remains heap-free. `synth_voice_prepare()` adds
+filter/effect resources; check its result and call `synth_voice_uninit()` even
+if preparation fails. Note-on resets a prepared voice without allocating.
+The standalone voice render API renders oscillators/envelopes; full filter and
+effect orchestration belongs to `synth_render.c`.
+
 ## Desktop configuration and migration
 
 ```text
@@ -194,6 +267,12 @@ lfo_rate=cc:1:21:log:0.05:20
 lfo_depth=cc:1:22:linear:0:1
 lfo_amount.delay_mix=cc:1:41:linear:-1:1
 lfo_amount.flanger_rate=cc:1:42:linear:-1:1
+mod_envelope_attack=cc:2:1:linear:0:2
+mod_envelope_decay=cc:2:2:linear:0:2
+mod_envelope_sustain=cc:2:3:linear:0:1
+mod_envelope_release=cc:2:4:linear:0:3
+mod_envelope_depth=cc:2:5:linear:0:1
+envelope_amount.filter_cutoff=cc:2:6:linear:-1:1
 ```
 
 These lines bind knobs to controls. They do not initialize parameter values,
@@ -202,11 +281,11 @@ binding. Changing an effect selector never redirects a parameter route.
 
 Full bipolar linear bindings map CC 0 to -1, CC 63 and 64 to exact zero, and CC
 127 to +1. Positive-only `linear:0:1` is supported. Pickup uses the same center
-conversion and compares stored base/amount values, independent of the LFO.
+conversion and compares stored base/amount values, independent of either source.
 Config knob ranges do not change the engine modulation spans.
 
-The desktop catalog exposes 55 base controls and 52 amount controls, with room
-for 256 direct bindings. Names, eligibility, and engine identities come from the
+The desktop catalog exposes 60 base controls, 52 LFO amounts, and 48 envelope
+amounts (160 identities), with room for 256 direct bindings. Names, eligibility, and engine identities come from the
 core catalog; controller scales, ranges, pickup, and syntax are adapter-owned.
 Learn, list, bind, unbind, map-all, show, validate, and save share those identities.
 Serialization writes bindings only, with float precision preserved, and reload
@@ -231,19 +310,15 @@ and positive-only ranges. MIDI protocol clients now include the adapter-local
 
 ## Validation
 
-The CMake desktop suite and Makefile suite run 21 programs; the core-only suite
-runs 17. Added coverage includes an independent 52-target inventory, an audio
-consequence for every target, unchanged base getters, signed/domain math,
-ADSR capture/manual interaction, mono/stereo and buffer-partition invariance,
-stateful effect behavior, all routes with full polyphony, 107-binding round trips,
-malformed/excluded config declarations, and pickup under modulation.
+The desktop and Makefile suites run 23 programs; core-only runs 19. Coverage
+includes all 52 LFO and 48 envelope destinations, endpoint/domain arithmetic,
+combined modulation, volume ADSR capture, independent envelope timing,
+release edits, nonlinear per-voice reference audio, zero-contribution identity,
+mono/stereo and buffer partitioning, delayed tails, the exact steal fade,
+pending-note cancellation, 160-control MIDI round trips, source controls,
+bipolar/positive-only pickup, and the 256-binding limit.
 
-On macOS with AppleClang, the added modulation/config tests pass AddressSanitizer
-and UndefinedBehaviorSanitizer. A standalone core client with 12 voices and all
-effects produced byte-identical unmodulated output to the original revision,
-including manual filter, delay, EQ, bit-depth, and pitch-bend changes. With all
-routes enabled at 44.1/48/96 kHz, a release-build one-second render took about
-0.05/0.05/0.10 seconds of CPU time. The largest measured 64-frame block was
-0.14 ms, below the respective 1.45/1.33/0.67 ms budgets on this machine.
-These measurements are a local offline check; live hardware audition and
-Windows/Linux execution are not covered by this run.
+`test_allocations` fails every effect-buffer allocation site in turn and checks
+cleanup. It also verifies note events, steals, parameter edits, and rendering
+perform no buffer allocations. Desktop timing and memory measurements are
+recorded in [the implementation plan](modulation-envelope-plan.md).

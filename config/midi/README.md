@@ -164,10 +164,16 @@ cmake --build --preset dev --target midi_monitor
 - `compressor_attack_seconds`
 - `compressor_release_seconds`
 
+- `mod_envelope_attack`
+- `mod_envelope_decay`
+- `mod_envelope_sustain`
+- `mod_envelope_release`
+- `mod_envelope_depth`
+
 ## LFO Amount Bindings
 
-Every parameter above except `lfo_rate`, `lfo_shape_morph`, and `lfo_depth` also
-has an amount control named `lfo_amount.<parameter>`. This provides 52 routes,
+Every parameter above except the three LFO controls and five modulation-envelope
+controls also has an amount control named `lfo_amount.<parameter>`. This provides 52 routes,
 including effect-internal rates and depths. Chord pads, effect selectors/macros,
 and route amounts themselves cannot be destinations. Route identity stays tied
 to the actual parameter when an effect selector changes pages.
@@ -192,8 +198,8 @@ so the moving LFO does not interfere with pickup. Config ranges scale knobs;
 they do not redefine the engine's fixed modulation spans.
 
 ADSR routes capture values when a note starts. Manual ADSR edits keep the
-existing behavior for already-playing voices. Stepped targets quantize the
-LFO separately; delay-time modulation produces pitch bends. Full behavior and
+existing behavior for already-playing voices. Stepped targets quantize combined
+modulation; delay-time modulation produces pitch bends. Full behavior and
 span tables are in [the modulation contract](../../docs/modulation.md).
 
 The old five `lfo_*_amount` names have been removed. Use the corresponding
@@ -202,6 +208,29 @@ same centered rules as other destinations. Existing default knobs retain their
 positive-only ranges. The loader accepts up to 256 direct parameter/amount
 bindings, including multiple controls for the same target; malformed or
 excluded targets produce line-specific errors.
+
+## Modulation Envelope Bindings
+
+The 48 `envelope_amount.<parameter>` controls use the same binding, pickup,
+learn, and save/load workflow as LFO amounts. They support the LFO destinations
+except `attack`, `decay`, `sustain`, and `release`. Both sources' own controls
+are excluded as destinations. There are 160 direct control identities in total.
+
+```text
+mod_envelope_attack=cc:2:1:linear:0:2
+mod_envelope_decay=cc:2:2:linear:0:2
+mod_envelope_sustain=cc:2:3:linear:0:1
+mod_envelope_release=cc:2:4:linear:0:3
+mod_envelope_depth=cc:2:5:linear:0:1
+envelope_amount.filter_cutoff=cc:2:6:linear:-1:1
+envelope_amount.delay_mix=cc:2:7:linear:0:1
+```
+
+Depth and route amounts start at zero; loading these bindings does not enable
+the envelope. Raise depth and an amount to hear it. At full depth and +1 amount,
+the envelope peak reaches the destination's engine maximum (Nyquist for cutoff).
+A -1 amount reaches its minimum. Other modulation contributions are added before
+clamping. Binding ranges only set knob travel.
 
 ## Supported Chord Pads
 

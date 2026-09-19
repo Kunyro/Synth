@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 #define SYNTH_SATURATION_TWO_PI 6.28318530717958647692f
 #define SYNTH_SATURATION_MIN_BIAS 0.08f
@@ -203,4 +204,16 @@ synth_stereo_sample synth_saturation_process(
 {
     const synth_saturation_params params = synth_saturation_get_params(effect);
     return synth_saturation_process_with_params(effect, input, &params);
+}
+
+// clears history without reallocating storage or changing controls
+void synth_saturation_reset(synth_saturation *effect)
+{
+    reset_channels(effect);
+}
+
+int synth_saturation_has_tail(const synth_saturation *effect)
+{
+    return fabsf(effect->left.previous_input) > 1e-7f || fabsf(effect->left.previous_output) > 1e-7f ||
+           fabsf(effect->right.previous_input) > 1e-7f || fabsf(effect->right.previous_output) > 1e-7f;
 }

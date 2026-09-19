@@ -26,6 +26,8 @@ typedef struct synth_ring_mod {
 } synth_ring_mod;
 
 void synth_ring_mod_init(synth_ring_mod *ring_mod, float sample_rate);
+// resets the carrier phase without changing controls
+void synth_ring_mod_reset(synth_ring_mod *ring_mod);
 void synth_ring_mod_set_sample_rate(synth_ring_mod *ring_mod, float sample_rate);
 void synth_ring_mod_set_frequency(synth_ring_mod *ring_mod, float hz);
 void synth_ring_mod_set_rectify(synth_ring_mod *ring_mod, float rectify);

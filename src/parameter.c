@@ -6,6 +6,7 @@
 
 #include "internal/render_parameters.h"
 #include "internal/synth_internal.h"
+#include "internal/modulation_internal.h"
 
 // reads the stored attack time for the generic float-valued parameter api
 static float get_attack(const synth *s)
@@ -113,6 +114,50 @@ static float get_bitcrusher_bits(const synth *s)
 static void set_bitcrusher_bits(synth *s, float value)
 {
     synth_set_bitcrusher_bits(s, (int)roundf(value));
+}
+
+static float get_mod_envelope_attack(const synth *s)
+{
+    return synth_get_mod_envelope_adsr(s).attack_seconds;
+}
+static void set_mod_envelope_attack(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_mod_envelope_adsr(s);
+    adsr.attack_seconds = value;
+    synth_set_mod_envelope_adsr(s, adsr);
+}
+
+static float get_mod_envelope_decay(const synth *s)
+{
+    return synth_get_mod_envelope_adsr(s).decay_seconds;
+}
+static void set_mod_envelope_decay(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_mod_envelope_adsr(s);
+    adsr.decay_seconds = value;
+    synth_set_mod_envelope_adsr(s, adsr);
+}
+
+static float get_mod_envelope_sustain(const synth *s)
+{
+    return synth_get_mod_envelope_adsr(s).sustain_level;
+}
+static void set_mod_envelope_sustain(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_mod_envelope_adsr(s);
+    adsr.sustain_level = value;
+    synth_set_mod_envelope_adsr(s, adsr);
+}
+
+static float get_mod_envelope_release(const synth *s)
+{
+    return synth_get_mod_envelope_adsr(s).release_seconds;
+}
+static void set_mod_envelope_release(synth *s, float value)
+{
+    synth_adsr adsr = synth_get_mod_envelope_adsr(s);
+    adsr.release_seconds = value;
+    synth_set_mod_envelope_adsr(s, adsr);
 }
 
 typedef struct parameter_entry {
@@ -412,6 +457,32 @@ static const parameter_entry parameters[SYNTH_PARAM_COUNT] = {
          SYNTH_DOMAIN_LOG2, SYNTH_COMPRESSOR_MIN_RELEASE_SECONDS, SYNTH_COMPRESSOR_MAX_RELEASE_SECONDS, 3.9f, 1},
         synth_get_compressor_release_seconds, synth_set_compressor_release_seconds, offsetof(synth_render_parameters, effects.compressor.release_seconds)
     },
+    [SYNTH_PARAM_MOD_ENVELOPE_ATTACK] = {
+        {SYNTH_PARAM_MOD_ENVELOPE_ATTACK, "mod_envelope_attack", "seconds",
+         SYNTH_PARAMETER_CONTINUOUS, SYNTH_DOMAIN_LINEAR, 0.0f, FLT_MAX, 0.0f, 0},
+        get_mod_envelope_attack, set_mod_envelope_attack, NO_RENDER_VALUE
+    },
+    [SYNTH_PARAM_MOD_ENVELOPE_DECAY] = {
+        {SYNTH_PARAM_MOD_ENVELOPE_DECAY, "mod_envelope_decay", "seconds",
+         SYNTH_PARAMETER_CONTINUOUS, SYNTH_DOMAIN_LINEAR, 0.0f, FLT_MAX, 0.0f, 0},
+        get_mod_envelope_decay, set_mod_envelope_decay, NO_RENDER_VALUE
+    },
+    [SYNTH_PARAM_MOD_ENVELOPE_SUSTAIN] = {
+        {SYNTH_PARAM_MOD_ENVELOPE_SUSTAIN, "mod_envelope_sustain", "normalized",
+         SYNTH_PARAMETER_CONTINUOUS, SYNTH_DOMAIN_LINEAR, 0.0f, 1.0f, 0.0f, 0},
+        get_mod_envelope_sustain, set_mod_envelope_sustain, NO_RENDER_VALUE
+    },
+    [SYNTH_PARAM_MOD_ENVELOPE_RELEASE] = {
+        {SYNTH_PARAM_MOD_ENVELOPE_RELEASE, "mod_envelope_release", "seconds",
+         SYNTH_PARAMETER_CONTINUOUS, SYNTH_DOMAIN_LINEAR, 0.0f, FLT_MAX, 0.0f, 0},
+        get_mod_envelope_release, set_mod_envelope_release, NO_RENDER_VALUE
+    },
+    [SYNTH_PARAM_MOD_ENVELOPE_DEPTH] = {
+        {SYNTH_PARAM_MOD_ENVELOPE_DEPTH, "mod_envelope_depth", "normalized",
+         SYNTH_PARAMETER_CONTINUOUS, SYNTH_DOMAIN_LINEAR, 0.0f, 1.0f, 0.0f, 0},
+        synth_get_mod_envelope_depth, synth_set_mod_envelope_depth, NO_RENDER_VALUE
+    },
+
 };
 
 // looks up immutable metadata by id; checks bounds before indexing the table
@@ -433,28 +504,30 @@ const synth_parameter_info *synth_parameter_info_by_name(const char *name)
     return NULL;
 }
 
-// limits a value to what its dsp module supports, then rounds stepped controls
-float synth_parameter_clamp(synth_parameter_id id, float value, float sample_rate)
+int synth_parameter_bounds(synth_parameter_id id, float sample_rate,
+                           float *minimum, float *maximum)
 {
     const synth_parameter_info *info = synth_parameter_info_at(id);
-    float low, high;
-    if (info == NULL || !isfinite(value)) {
-        return 0.0f;
-    }
-    low = info->min_value;
-    high = info->max_value;
+    if (info == NULL || minimum == NULL || maximum == NULL || !isfinite(sample_rate)) return 0;
+    float low = info->min_value, high = info->max_value;
     if (id == SYNTH_PARAM_FILTER_CUTOFF) {
-        // nyquist is half the sample rate also lower the minimum if an unusually
-        // low sample rate would otherwise leave us with an inverted range
         high = fmaxf(0.0f, sample_rate * 0.5f);
         low = fminf(low, high);
     } else if (id == SYNTH_PARAM_BITCRUSHER_SAMPLE_RATE) {
-        // the reduced clock cannot sample faster than the host, or below its 1 hz floor
         high = fmaxf(low, sample_rate);
     }
+    *minimum = low;
+    *maximum = high;
+    return 1;
+}
+
+// bounds and stepping are shared by manual controls and both modulation sources
+float synth_parameter_clamp(synth_parameter_id id, float value, float sample_rate)
+{
+    float low, high;
+    if (isnan(value) || !synth_parameter_bounds(id, sample_rate, &low, &high)) return 0.0f;
     value = synth_clampf(value, low, high);
-    // roundf keeps negative tuning symmetric: +1.5 becomes +2 and -1.5 becomes -2
-    return info->type == SYNTH_PARAMETER_INTEGER ? roundf(value) : value;
+    return synth_parameter_info_at(id)->type == SYNTH_PARAMETER_INTEGER ? roundf(value) : value;
 }
 
 // reads the owning module's base setting without keeping a second parameter store
@@ -489,32 +562,29 @@ static void write_render_value(synth_render_parameters *frame,
 }
 
 // builds all continuously evaluated controls for one audio frame from the current bases
-void synth_resolve_render_parameters(const synth *s, float lfo_value,
+void synth_resolve_render_parameters(const synth *s, float lfo_value, float envelope_value,
                                      synth_render_parameters *frame)
 {
-    // resolve the compound control first; component routes use its resulting base
-    synth_flanger_params flanger = synth_flanger_get_params(&s->effects.flanger);
-    const float intensity = synth_modulate_value(s, SYNTH_PARAM_FLANGER_INTENSITY,
-                                                 flanger.intensity, lfo_value);
+    // resolve intensity first; its component deltas join direct routes before clamping
+    synth_flanger_params flanger = s->effects.flanger;
+    const float intensity = synth_modulate_sources(s, SYNTH_PARAM_FLANGER_INTENSITY,
+                                                 flanger.intensity, lfo_value, envelope_value);
     synth_flanger_resolve_intensity(&flanger, intensity);
 
     for (int i = 0; i < SYNTH_PARAM_COUNT; ++i) {
         const parameter_entry *entry = &parameters[i];
         float base, value;
         if (entry->render_offset == NO_RENDER_VALUE) {
-            // adsr is captured at note-on; lfo controls drive the source itself
+            // volume adsr is captured at note-on; source controls have no destination
             continue;
         }
         // always start from the stored setting, never last frame's modulated value
         base = entry->get(s);
-        if (i == SYNTH_PARAM_FLANGER_DEPTH) base = flanger.depth;
-        if (i == SYNTH_PARAM_FLANGER_FEEDBACK) base = flanger.feedback;
-        value = synth_modulate_value(s, (synth_parameter_id)i, base, lfo_value);
-        if (i == SYNTH_PARAM_FLANGER_DEPTH || i == SYNTH_PARAM_FLANGER_FEEDBACK) {
-            // intensity may have moved these beyond their limits even when their
-            // own amount is zero clamp after both contributions have been added
+        value = synth_modulate_unclamped(s, (synth_parameter_id)i, base, lfo_value, envelope_value);
+        if (i == SYNTH_PARAM_FLANGER_DEPTH) value += flanger.depth - base;
+        if (i == SYNTH_PARAM_FLANGER_FEEDBACK) value += flanger.feedback - base;
+        if (value != base || i == SYNTH_PARAM_FLANGER_DEPTH || i == SYNTH_PARAM_FLANGER_FEEDBACK)
             value = synth_parameter_clamp((synth_parameter_id)i, value, s->sample_rate);
-        }
         write_render_value(frame, entry, value);
     }
 }

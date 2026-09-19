@@ -48,4 +48,8 @@ synth_stereo_sample synth_saturation_process_with_params(
     synth_stereo_sample input,
     const synth_saturation_params *params);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_saturation_reset(synth_saturation *effect);
+int synth_saturation_has_tail(const synth_saturation *effect);
+
 #endif

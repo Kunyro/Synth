@@ -1,5 +1,7 @@
 #include "synth/voice.h"
 
+#include <string.h>
+
 #include "internal/synth_internal.h"
 
 static const float voice_oscillator_mix_gain = 0.5f;
@@ -51,12 +53,15 @@ static synth_stereo_sample render_oscillators_stereo(
 // sets up a quiet voice with the given envelope shape
 void synth_voice_init(synth_voice *voice, synth_adsr adsr)
 {
+    memset(voice, 0, sizeof(*voice));
     voice->active = 0;
     voice->note_number = -1;
     voice->base_frequency = 0.0f;
     voice->velocity = 0.0f;
     init_oscillators(voice, SYNTH_WAVEFORM_SINE, 0.0f);
     synth_envelope_init(&voice->envelope, adsr);
+    synth_envelope_init(&voice->mod_envelope, adsr);
+    voice->mod_envelope.full_duration_release = 1;
 }
 
 // starts a voice on a note, pitch, velocity, waveform, and envelope
@@ -68,13 +73,22 @@ void synth_voice_note_on(
     synth_waveform waveform,
     synth_adsr adsr)
 {
+    synth_voice_reset_processing(voice);
+    voice->pending.active = 0;
+    voice->steal_remaining = 0;
     voice->active = 1;
+    voice->gate = 1;
+    voice->tail_active = 1;
     voice->note_number = note_number;
     voice->base_frequency = frequency;
     voice->velocity = synth_clampf(velocity, 0.0f, 1.0f);
     init_oscillators(voice, waveform, frequency);
     synth_envelope_init(&voice->envelope, adsr);
     synth_envelope_note_on(&voice->envelope);
+    const synth_adsr mod_adsr = voice->mod_envelope.adsr;
+    synth_envelope_init(&voice->mod_envelope, mod_adsr);
+    voice->mod_envelope.full_duration_release = 1;
+    synth_envelope_note_on(&voice->mod_envelope);
 }
 
 // retunes both oscillators in the voice
@@ -105,7 +119,9 @@ void synth_voice_set_second_oscillator_morph(synth_voice *voice, float morph)
 // releases a voice so it can fade out
 void synth_voice_note_off(synth_voice *voice)
 {
+    voice->gate = 0;
     synth_envelope_note_off(&voice->envelope);
+    synth_envelope_note_off(&voice->mod_envelope);
 }
 
 // renders one sample from the voice
@@ -131,26 +147,64 @@ synth_stereo_sample synth_voice_render_stereo_mix(
     return synth_voice_render_with_params(voice, sample_rate, mix, 1.0f);
 }
 
-// renders one voice with temporary oscillator controls and its existing envelope;
-// the secondary ratio adds lfo tuning on top of the voice's already-bent frequency
+// advances both envelopes once, independently of destination count and channel count
+void synth_voice_advance_envelopes(synth_voice *voice, float sample_rate)
+{
+    if (!voice->active) return;
+    synth_envelope_advance(&voice->envelope, sample_rate);
+    synth_envelope_advance(&voice->mod_envelope, sample_rate);
+    if (!synth_envelope_is_active(&voice->envelope)) {
+        voice->active = 0;
+        voice->gate = 0;
+        voice->mod_envelope.stage = SYNTH_ENV_OFF;
+        voice->mod_envelope.level = 0;
+    }
+}
+
+// consumes this frame's levels without advancing either envelope a second time
+synth_stereo_sample synth_voice_render_current(synth_voice *voice, float sample_rate,
+                                              synth_voice_mix mix, float secondary_ratio)
+{
+    synth_stereo_sample sample = {0, 0};
+    if (!voice->active) return sample;
+    sample = render_oscillators_stereo(voice, sample_rate, mix, secondary_ratio);
+    sample.left *= voice->envelope.level * voice->velocity;
+    sample.right *= voice->envelope.level * voice->velocity;
+    return sample;
+}
+
 synth_stereo_sample synth_voice_render_with_params(synth_voice *voice,
     float sample_rate, synth_voice_mix mix, float secondary_ratio)
 {
-    float envelope_level;
-    synth_stereo_sample sample = {0.0f, 0.0f};
+    synth_voice_advance_envelopes(voice, sample_rate);
+    return synth_voice_render_current(voice, sample_rate, mix, secondary_ratio);
+}
 
-    if (!voice->active) {
-        return sample;
+int synth_voice_prepare(synth_voice *voice, float sample_rate)
+{
+    if (voice->prepared) synth_voice_uninit(voice);
+    synth_filter_init(&voice->filter, sample_rate, sample_rate * 0.5f);
+    synth_filter_init(&voice->right_filter, sample_rate, sample_rate * 0.5f);
+    synth_effect_chain_init(&voice->effects, sample_rate);
+    voice->prepared = 1;
+    return synth_effect_chain_is_ready(&voice->effects);
+}
+
+void synth_voice_uninit(synth_voice *voice)
+{
+    if (voice != NULL && voice->prepared) {
+        synth_effect_chain_uninit(&voice->effects);
+        voice->prepared = 0;
     }
+}
 
-    envelope_level = synth_envelope_advance(&voice->envelope, sample_rate);
-    if (!synth_envelope_is_active(&voice->envelope)) {
-        voice->active = 0;
-        return sample;
-    }
-
-    sample = render_oscillators_stereo(voice, sample_rate, mix, secondary_ratio);
-    sample.left *= envelope_level * voice->velocity;
-    sample.right *= envelope_level * voice->velocity;
-    return sample;
+void synth_voice_reset_processing(synth_voice *voice)
+{
+    if (!voice->prepared) return;
+    synth_filter_reset(&voice->filter);
+    synth_filter_reset(&voice->right_filter);
+    synth_effect_chain_reset(&voice->effects);
+    voice->tail_active = 0;
+    voice->tail_check_frames = 0;
+    voice->output_level = 0;
 }

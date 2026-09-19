@@ -6,7 +6,7 @@
 #include "midi/chord_mode.h"
 #include "synth/synth.h"
 
-// capacity for the 107 base/amount controls plus repeated assignments from other
+// capacity for the 160 base/amount controls plus repeated assignments from other
 // knobs or channels selectors and chord pads have separate storage below
 #define MIDI_MAPPING_MAX_BINDINGS 256
 // the longest controller name stored from a mapping file
@@ -28,8 +28,15 @@ typedef synth_parameter_id midi_mapping_parameter;
 typedef enum midi_mapping_target_kind {
     // a base edit changes the stored knob value; an amount edit changes its lfo route
     MIDI_MAPPING_TARGET_BASE = 0,
-    MIDI_MAPPING_TARGET_LFO_AMOUNT
+    MIDI_MAPPING_TARGET_LFO_AMOUNT,
+    MIDI_MAPPING_TARGET_ENVELOPE_AMOUNT,
+    MIDI_MAPPING_TARGET_COUNT
 } midi_mapping_target_kind;
+
+// route identity is centralized for parsing, rendering names, pickup, and dispatch
+const char *midi_mapping_target_prefix(midi_mapping_target_kind kind);
+int midi_mapping_target_is_amount(midi_mapping_target_kind kind);
+synth_modulation_source midi_mapping_target_source(midi_mapping_target_kind kind);
 
 // the kind of midi source a binding listens for
 typedef enum midi_mapping_source_type {

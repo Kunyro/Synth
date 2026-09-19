@@ -193,78 +193,94 @@ static const controller_defaults defaults[SYNTH_PARAM_COUNT] = {
     [SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN] = {MIDI_MAPPING_SCALE_LINEAR, SYNTH_COMPRESSOR_MIN_MAKEUP_GAIN_DB, SYNTH_COMPRESSOR_MAX_MAKEUP_GAIN_DB},
     [SYNTH_PARAM_COMPRESSOR_ATTACK_SECONDS] = {MIDI_MAPPING_SCALE_LOG, SYNTH_COMPRESSOR_MIN_ATTACK_SECONDS, SYNTH_COMPRESSOR_MAX_ATTACK_SECONDS},
     [SYNTH_PARAM_COMPRESSOR_RELEASE_SECONDS] = {MIDI_MAPPING_SCALE_LOG, SYNTH_COMPRESSOR_MIN_RELEASE_SECONDS, SYNTH_COMPRESSOR_MAX_RELEASE_SECONDS},
+    [SYNTH_PARAM_MOD_ENVELOPE_ATTACK] = {MIDI_MAPPING_SCALE_LINEAR, 0.0f, 2.0f},
+    [SYNTH_PARAM_MOD_ENVELOPE_DECAY] = {MIDI_MAPPING_SCALE_LINEAR, 0.0f, 2.0f},
+    [SYNTH_PARAM_MOD_ENVELOPE_SUSTAIN] = {MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+    [SYNTH_PARAM_MOD_ENVELOPE_RELEASE] = {MIDI_MAPPING_SCALE_LINEAR, 0.0f, 3.0f},
+    [SYNTH_PARAM_MOD_ENVELOPE_DEPTH] = {MIDI_MAPPING_SCALE_LINEAR, 0.0f, 1.0f},
+
 };
 
-// combines engine identity with desktop knob defaults in caller-owned storage
-// the target kind distinguishes a base knob from an amount knob for that same parameter
+// base parameters and source amounts share canonical formatting and eligibility
+static const struct {
+    const char *prefix;
+    synth_modulation_source source;
+} targets[MIDI_MAPPING_TARGET_COUNT] = {
+    {"", SYNTH_MOD_SOURCE_COUNT},
+    {"lfo_amount.", SYNTH_MOD_SOURCE_LFO},
+    {"envelope_amount.", SYNTH_MOD_SOURCE_ENVELOPE}
+};
+
+const char *midi_mapping_target_prefix(midi_mapping_target_kind kind)
+{
+    return kind >= 0 && kind < MIDI_MAPPING_TARGET_COUNT ? targets[kind].prefix : "unknown.";
+}
+
+int midi_mapping_target_is_amount(midi_mapping_target_kind kind)
+{
+    return kind > MIDI_MAPPING_TARGET_BASE && kind < MIDI_MAPPING_TARGET_COUNT;
+}
+
+synth_modulation_source midi_mapping_target_source(midi_mapping_target_kind kind)
+{
+    return kind >= 0 && kind < MIDI_MAPPING_TARGET_COUNT ? targets[kind].source : SYNTH_MOD_SOURCE_COUNT;
+}
+
 int midi_mapping_parameter_info_for(midi_mapping_parameter parameter,
     midi_mapping_target_kind kind, midi_mapping_parameter_info *info)
 {
     const synth_parameter_info *core = synth_parameter_info_at(parameter);
-    if (core == NULL || info == NULL ||
-        (kind != MIDI_MAPPING_TARGET_BASE && kind != MIDI_MAPPING_TARGET_LFO_AMOUNT) ||
-        (kind == MIDI_MAPPING_TARGET_LFO_AMOUNT && !core->modulatable)) {
-        return 0;
-    }
+    const int amount = midi_mapping_target_is_amount(kind);
+    if (core == NULL || info == NULL || kind < 0 || kind >= MIDI_MAPPING_TARGET_COUNT ||
+        (amount && !synth_modulation_supports(targets[kind].source, parameter))) return 0;
     info->parameter = parameter;
     info->target_kind = kind;
-    snprintf(info->name, sizeof(info->name), "%s%s",
-             kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "", core->name);
-    // every amount knob gets the same signed defaults, regardless of its target's
-    // native units this binds a control; it does not initialize the engine amount
-    info->default_scale = kind == MIDI_MAPPING_TARGET_LFO_AMOUNT
-        ? MIDI_MAPPING_SCALE_LINEAR : defaults[parameter].scale;
-    info->default_min_value = kind == MIDI_MAPPING_TARGET_LFO_AMOUNT
-        ? -1.0f : defaults[parameter].min_value;
-    info->default_max_value = kind == MIDI_MAPPING_TARGET_LFO_AMOUNT
-        ? 1.0f : defaults[parameter].max_value;
+    snprintf(info->name, sizeof(info->name), "%s%s", targets[kind].prefix, core->name);
+    info->default_scale = amount ? MIDI_MAPPING_SCALE_LINEAR : defaults[parameter].scale;
+    info->default_min_value = amount ? -1.0f : defaults[parameter].min_value;
+    info->default_max_value = amount ? 1.0f : defaults[parameter].max_value;
     return 1;
 }
 
-// counts base controls plus one amount control for every eligible lfo destination
 size_t midi_mapping_parameter_count(void)
 {
-    size_t count = SYNTH_PARAM_COUNT;
-    for (int i = 0; i < SYNTH_PARAM_COUNT; ++i) {
-        count += synth_parameter_info_at((synth_parameter_id)i)->modulatable != 0;
-    }
+    size_t count = 0;
+    midi_mapping_parameter_info info;
+    for (int kind = 0; kind < MIDI_MAPPING_TARGET_COUNT; ++kind)
+        for (int id = 0; id < SYNTH_PARAM_COUNT; ++id)
+            count += midi_mapping_parameter_info_for((synth_parameter_id)id,
+                (midi_mapping_target_kind)kind, &info);
     return count;
 }
 
-// enumerates base controls first, followed by amounts for eligible parameters only
 int midi_mapping_parameter_info_at(size_t index, midi_mapping_parameter_info *info)
 {
-    if (index < SYNTH_PARAM_COUNT) {
-        return midi_mapping_parameter_info_for((synth_parameter_id)index, MIDI_MAPPING_TARGET_BASE, info);
-    }
-    // now count only eligible destinations; excluded global lfo controls must
-    // not leave holes or create recursive amount controls in the displayed list
-    index -= SYNTH_PARAM_COUNT;
-    for (int i = 0; i < SYNTH_PARAM_COUNT; ++i) {
-        if (synth_parameter_info_at((synth_parameter_id)i)->modulatable) {
-            if (index == 0) {
-                return midi_mapping_parameter_info_for((synth_parameter_id)i, MIDI_MAPPING_TARGET_LFO_AMOUNT, info);
+    midi_mapping_parameter_info candidate;
+    if (info == NULL) return 0;
+    for (int kind = 0; kind < MIDI_MAPPING_TARGET_COUNT; ++kind) {
+        for (int id = 0; id < SYNTH_PARAM_COUNT; ++id) {
+            if (midi_mapping_parameter_info_for((synth_parameter_id)id,
+                    (midi_mapping_target_kind)kind, &candidate)) {
+                if (index-- == 0) { *info = candidate; return 1; }
             }
-            --index;
         }
     }
     return 0;
 }
 
-// splits the optional route-amount prefix from the engine parameter name and validates both
 int midi_mapping_parameter_info_by_name(const char *name, midi_mapping_parameter_info *info)
 {
     midi_mapping_target_kind kind = MIDI_MAPPING_TARGET_BASE;
-    const synth_parameter_info *core;
     if (name == NULL) return 0;
-    // the 11 characters in "lfo_amount." belong to config syntax, not the engine name
-    if (strncmp(name, "lfo_amount.", 11) == 0) {
-        kind = MIDI_MAPPING_TARGET_LFO_AMOUNT;
-        name += 11;
+    for (int k = 1; k < MIDI_MAPPING_TARGET_COUNT; ++k) {
+        const size_t length = strlen(targets[k].prefix);
+        if (strncmp(name, targets[k].prefix, length) == 0) {
+            kind = (midi_mapping_target_kind)k;
+            name += length;
+            break;
+        }
     }
-    core = synth_parameter_info_by_name(name);
-    // the engine lookup also rejects unknown names and a second nested prefix;
-    // info_for then rejects a known parameter that is excluded as a destination
+    const synth_parameter_info *core = synth_parameter_info_by_name(name);
     return core != NULL && midi_mapping_parameter_info_for(core->id, kind, info);
 }
 

@@ -6,6 +6,9 @@
 #include "synth/envelope.h"
 #include "synth/oscillator.h"
 
+#define SYNTH_VOICE_STEAL_SECONDS 0.002f
+#define SYNTH_TAIL_CHECK_FRAMES 256
+
 static inline float synth_clampf(float value, float min_value, float max_value)
 {
     if (value < min_value) {

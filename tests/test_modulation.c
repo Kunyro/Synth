@@ -174,6 +174,7 @@ static void setup_audible_patch(synth *s, const char *target_name)
     synth_set_flanger_intensity(s, 0.5f);
     synth_set_ring_mod_frequency(s, 100);
     synth_set_chorus_depth(s, 0.6f);
+    synth_set_chorus_width(s, 0.4f);
     synth_set_chorus_feedback(s, 0.15f);
     synth_set_delay_time(s, 0.04f);
     synth_set_delay_feedback(s, 0.5f);
@@ -199,18 +200,25 @@ static void setup_audible_patch(synth *s, const char *target_name)
 
 // compares two identical synths with one route enabled in only one copy; every target
 // must change the output while all stored base parameters remain unchanged
-static void test_every_destination_changes_audio_and_preserves_bases(void)
+static void test_every_destination_changes_audio_and_preserves_bases(int envelope_routes)
 {
     for (size_t target = 0; target < sizeof(targets) / sizeof(targets[0]); ++target) {
         synth dry, wet;
         float bases[SYNTH_PARAM_COUNT];
         const synth_parameter_id id = targets[target];
+        if (envelope_routes && id <= SYNTH_PARAM_RELEASE) continue;
         const synth_parameter_info *info = synth_parameter_info_at(id);
         double difference = 0;
         setup_audible_patch(&dry, info->name);
         setup_audible_patch(&wet, info->name);
-        synth_set_lfo_depth(&wet, 1);
-        synth_set_lfo_amount(&wet, id, 0.8f);
+        if (envelope_routes) {
+            synth_set_mod_envelope_adsr(&wet, (synth_adsr){0.03f, 0.05f, 0.65f, 0.12f});
+            synth_set_mod_envelope_depth(&wet, 1);
+            synth_set_envelope_amount(&wet, id, 0.8f);
+        } else {
+            synth_set_lfo_depth(&wet, 1);
+            synth_set_lfo_amount(&wet, id, 0.8f);
+        }
         for (int i = 0; i < SYNTH_PARAM_COUNT; ++i) bases[i] = synth_get_parameter(&wet, (synth_parameter_id)i);
         synth_note_on(&dry, 57, 0.9f);
         synth_note_on(&wet, 57, 0.9f);
@@ -408,11 +416,13 @@ static void test_full_polyphony_at_sample_rates(void)
         synth_set_filter_cutoff(&s, 3000);
         synth_set_lfo_rate(&s, 20);
         synth_set_lfo_depth(&s, 1);
+        synth_set_mod_envelope_depth(&s, 1);
         // midpoint mixes sweep through dry and wet; predelay crosses zero
         for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); ++i) {
             const synth_parameter_info *info = synth_parameter_info_at(targets[i]);
             if (strstr(info->name, "_mix") != NULL) synth_set_parameter(&s, info->id, 0.5f);
             synth_set_lfo_amount(&s, info->id, i % 2 ? -1 : 1);
+            synth_set_envelope_amount(&s, info->id, i % 2 ? 1 : -1);
         }
         for (int i = 0; i < SYNTH_MAX_VOICES; ++i) synth_note_on(&s, 48 + i, 0.8f);
         for (size_t frame = 0; frame < (size_t)rates[rate] / 4; frame += 64) {
@@ -433,7 +443,8 @@ int main(void)
 {
     test_catalog_and_evaluation();
     test_adsr_capture_and_manual_updates();
-    test_every_destination_changes_audio_and_preserves_bases();
+    test_every_destination_changes_audio_and_preserves_bases(0);
+    test_every_destination_changes_audio_and_preserves_bases(1);
     test_partition_and_mono_equivalence();
     test_stateful_overrides();
     test_flanger_composition();

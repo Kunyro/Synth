@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 // blends from clean signal to fully crushed signal
 static float mix_sample(float dry, float wet, float mix)
@@ -13,6 +14,8 @@ static float mix_sample(float dry, float wet, float mix)
 // snaps amplitude to the nearest level available at the current bit depth
 static float quantize_sample(float input, int bits)
 {
+    // silence must not create a dc source that keeps every voice tail alive
+    if (fabsf(input) <= 1e-7f) return 0.0f;
     // n bits provide 2^n amplitude levels spread them across the full -1..+1 span;
     // shifting by +1 lets rounding work with a level index starting at zero
     const int level_count = 1 << bits;
@@ -133,4 +136,18 @@ synth_stereo_sample synth_bitcrusher_process(
 {
     const synth_bitcrusher_params params = synth_bitcrusher_get_params(effect);
     return synth_bitcrusher_process_with_params(effect, input, &params);
+}
+
+// clears history without reallocating storage or changing controls
+void synth_bitcrusher_reset(synth_bitcrusher *effect)
+{
+    effect->phase = 1.0f;
+    effect->has_held_sample = 0;
+    effect->held_sample = (synth_stereo_sample){0, 0};
+}
+
+int synth_bitcrusher_has_tail(const synth_bitcrusher *effect)
+{
+    return effect->has_held_sample &&
+        (fabsf(effect->held_sample.left) > 1e-7f || fabsf(effect->held_sample.right) > 1e-7f);
 }

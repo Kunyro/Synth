@@ -23,10 +23,15 @@ typedef struct synth_envelope {
     synth_adsr adsr;
     synth_envelope_stage stage;
     float level;
+    int full_duration_release;
+    float release_start_level;
+    double release_elapsed;
 } synth_envelope;
 
 // sets up an envelope with adsr settings.
 void synth_envelope_init(synth_envelope *envelope, synth_adsr adsr);
+// changes settings without restarting the stage or moving the current level
+void synth_envelope_set_adsr(synth_envelope *envelope, synth_adsr adsr);
 // starts the envelope attack stage.
 void synth_envelope_note_on(synth_envelope *envelope);
 // starts the envelope release stage.

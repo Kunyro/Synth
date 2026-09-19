@@ -75,4 +75,10 @@ synth_stereo_sample synth_chorus_process_with_params(
     synth_stereo_sample input,
     const synth_chorus_params *params);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_chorus_reset(synth_chorus *effect);
+int synth_chorus_has_tail(const synth_chorus *effect);
+
+int synth_chorus_is_ready(const synth_chorus *effect);
+
 #endif

@@ -161,8 +161,22 @@ static void test_effect_chain_runs_bitcrusher_stage(void)
     expect_sample_near(second, first, 0.0001f, "effect chain applies bitcrusher sample holding");
 }
 
+// zero and denormal inputs must not generate a persistent quantizer dc offset
+static void test_silence(void)
+{
+    synth_bitcrusher effect;
+    synth_bitcrusher_init(&effect, 48000);
+    synth_bitcrusher_set_mix(&effect, 1);
+    for (int bits = 1; bits <= 16; ++bits) {
+        synth_bitcrusher_set_bits(&effect, bits);
+        synth_stereo_sample output = synth_bitcrusher_process(&effect, (synth_stereo_sample){0, 1e-30f});
+        expect_sample_near(output, (synth_stereo_sample){0, 0}, 0, "silence remains silent at every bit depth");
+    }
+}
+
 int main(void)
 {
+    test_silence();
     test_bitcrusher_defaults_to_bypass();
     test_bitcrusher_parameters_are_bounded();
     test_bitcrusher_quantizes_at_full_sample_rate();

@@ -28,9 +28,9 @@ int midi_mapping_validate_binding(const midi_mapping_binding *binding,
     } else if (binding->scale == MIDI_MAPPING_SCALE_LOG && binding->min_value <= 0) {
         // logarithmic knob scaling takes log(min), which requires a positive minimum
         message = "log scale bounds must be positive";
-    } else if (binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT &&
+    } else if (midi_mapping_target_is_amount(binding->target_kind) &&
                (binding->min_value < -1 || binding->max_value > 1)) {
-        message = "LFO amount bounds must be within -1 through 1";
+        message = "route amount bounds must be within -1 through 1";
     }
     if (message != NULL && error != NULL && error_size > 0) {
         snprintf(error, error_size, "%s", message);

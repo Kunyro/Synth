@@ -32,46 +32,23 @@ static float second_oscillator_frequency(const synth *s, float primary_frequency
     return primary_frequency * pitch_bend_ratio(second_oscillator_semitones(s));
 }
 
-// matches a held voice for this note; a voice already fading out is not released again
-static int voice_is_releasable_for_note(const synth_voice *voice, int note_number)
-{
-    return voice->active &&
-        voice->note_number == note_number &&
-        voice->envelope.stage != SYNTH_ENV_RELEASE;
-}
-
-// finds the held voice that should respond to a numbered note-off
-static synth_voice *find_releasable_voice_for_note(synth *s, int note_number)
-{
-    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        synth_voice *voice = &s->voices[i];
-
-        if (voice_is_releasable_for_note(voice, note_number)) {
-            return voice;
-        }
-    }
-
-    return 0;
-}
-
-// finds a free voice or steals the quietest one
+// free slots precede tails, then quiet musical voices; pending replacements stay bounded
 static synth_voice *find_available_voice(synth *s)
 {
-    synth_voice *quietest = &s->voices[0];
-
+    synth_voice *best = NULL;
+    float best_level = 0;
+    int best_rank = 4;
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        synth_voice *voice = &s->voices[i];
-
-        if (!voice->active) {
-            return voice;
-        }
-
-        if (voice->envelope.level < quietest->envelope.level) {
-            quietest = voice;
+        synth_voice *v = &s->voices[i];
+        const int rank = v->pending.active ? 3 : (!v->active && !v->tail_active ? 0 : (!v->active ? 1 : 2));
+        const float level = v->active ? v->envelope.level : v->output_level;
+        if (best == NULL || rank < best_rank || (rank == best_rank && level < best_level)) {
+            best = v;
+            best_rank = rank;
+            best_level = level;
         }
     }
-
-    return quietest;
+    return best;
 }
 
 // retunes one voice without changing its original note or phase
@@ -95,24 +72,44 @@ static void retune_active_voices(synth *s)
     }
 }
 
-// starts a voice and reapplies the synth's current tuning and morph settings
-static void start_voice(
-    synth *s,
-    synth_voice *voice,
-    int note_number,
-    float base_frequency,
-    float velocity)
+// starts a captured replacement only after the old output has faded to zero
+void synth_start_pending_voice(synth *s, synth_voice *voice)
 {
-    synth_voice_note_on(
-        voice,
-        note_number,
-        base_frequency,
-        velocity,
-        s->waveform,
-        synth_capture_modulated_adsr(s));
+    const synth_pending_note note = voice->pending;
+    voice->pending.active = 0;
+    voice->active = 0;
+    voice->gate = 0;
+    voice->envelope.stage = SYNTH_ENV_OFF;
+    voice->envelope.level = 0;
+    voice->mod_envelope.stage = SYNTH_ENV_OFF;
+    voice->mod_envelope.level = 0;
+    voice->steal_remaining = 0;
+    if (!note.active) {
+        synth_voice_reset_processing(voice);
+        return;
+    }
+    synth_envelope_set_adsr(&voice->mod_envelope, s->mod_envelope);
+    synth_voice_note_on(voice, note.note_number, note.frequency, note.velocity,
+                        s->waveform, note.adsr);
     retune_voice(s, voice);
     synth_voice_set_oscillator_morph(voice, s->oscillator_morph);
     synth_voice_set_second_oscillator_morph(voice, s->second_oscillator_morph);
+}
+
+static void request_note(synth *s, int note_number, float frequency, float velocity)
+{
+    if (!s->ready || !isfinite(frequency) || frequency <= 0 || !isfinite(velocity)) return;
+    synth_voice *voice = find_available_voice(s);
+    voice->pending = (synth_pending_note){1, note_number, frequency, velocity, synth_capture_modulated_adsr(s)};
+    if (!voice->active && !voice->tail_active) {
+        synth_start_pending_voice(s, voice);
+    } else if (voice->steal_remaining == 0) {
+        // a two millisecond fade bounds the onset delay without allocating a tail pool
+        voice->steal_frames = (size_t)fmaxf(1.0f, s->sample_rate * SYNTH_VOICE_STEAL_SECONDS);
+        voice->steal_remaining = voice->steal_frames;
+        // the output ramp owns this retirement; a zero release must not cut it short
+        voice->gate = 0;
+    }
 }
 
 // sets up the synth with defaults
@@ -121,7 +118,8 @@ void synth_init(synth *s, float sample_rate)
     const synth_adsr default_envelope = {0.01f, 0.08f, 0.75f, 0.16f};
 
     memset(s, 0, sizeof(*s));
-    s->sample_rate = sample_rate;
+    s->sample_rate = isfinite(sample_rate) && sample_rate > 0 ? sample_rate : SYNTH_DEFAULT_SAMPLE_RATE;
+    sample_rate = s->sample_rate;
     s->master_gain = SYNTH_DEFAULT_MASTER_GAIN;
     s->pitch_bend = 0.0f;
     s->pitch_bend_semitones = 0.0f;
@@ -137,12 +135,16 @@ void synth_init(synth *s, float sample_rate)
     synth_lfo_init(&s->lfo, SYNTH_DEFAULT_LFO_RATE_HZ);
     s->lfo_depth = 0.0f;
     s->envelope = synth_sanitize_adsr(default_envelope);
-    synth_filter_init(&s->filter, sample_rate, sample_rate * 0.5f);
-    synth_filter_init(&s->right_filter, sample_rate, sample_rate * 0.5f);
-    synth_effect_chain_init(&s->effects, sample_rate);
-
+    s->mod_envelope = default_envelope;
+    s->filter = (synth_filter_params){sample_rate * 0.5f, SYNTH_FILTER_DEFAULT_POLES};
+    s->ready = 1;
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
         synth_voice_init(&s->voices[i], s->envelope);
+        if (!synth_voice_prepare(&s->voices[i], sample_rate)) s->ready = 0;
+    }
+    s->effects = synth_effect_chain_get_params(&s->voices[0].effects);
+    if (!s->ready) {
+        for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) synth_voice_uninit(&s->voices[i]);
     }
 }
 
@@ -152,42 +154,70 @@ void synth_uninit(synth *s)
         return;
     }
 
-    synth_effect_chain_uninit(&s->effects);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) synth_voice_uninit(&s->voices[i]);
+    s->ready = 0;
 }
 
-// converts a musical note number to pitch and starts the next available voice
+int synth_is_ready(const synth *s)
+{
+    return s != NULL && s->ready;
+}
+
 void synth_note_on(synth *s, int note_number, float velocity)
 {
-    synth_voice *voice = find_available_voice(s);
-    const float base_frequency = synth_note_to_frequency(note_number);
-
-    start_voice(s, voice, note_number, base_frequency, velocity);
+    request_note(s, note_number, synth_note_to_frequency(note_number), velocity);
 }
 
 void synth_note_on_frequency(synth *s, float frequency, float velocity)
 {
-    synth_voice *voice = find_available_voice(s);
-
-    start_voice(s, voice, -1, frequency, velocity);
+    request_note(s, -1, frequency, velocity);
 }
 
-// releases one held instance of a note, allowing repeated note-ons to be released separately
 void synth_note_off(synth *s, int note_number)
 {
-    synth_voice *voice = find_releasable_voice_for_note(s, note_number);
-
-    if (voice != 0) {
-        synth_voice_note_off(voice);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_voice *v = &s->voices[i];
+        if (v->gate && v->note_number == note_number) {
+            synth_voice_note_off(v);
+            return;
+        }
+        if (v->pending.active && v->pending.note_number == note_number) {
+            v->pending.active = 0;
+            return;
+        }
     }
 }
 
 void synth_all_notes_off(synth *s)
 {
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        if (s->voices[i].active) {
-            synth_voice_note_off(&s->voices[i]);
-        }
+        s->voices[i].pending.active = 0;
+        synth_voice_note_off(&s->voices[i]);
     }
+}
+
+void synth_set_mod_envelope_adsr(synth *s, synth_adsr adsr)
+{
+    if (s == NULL || !isfinite(adsr.attack_seconds) || !isfinite(adsr.decay_seconds) ||
+        !isfinite(adsr.sustain_level) || !isfinite(adsr.release_seconds)) return;
+    s->mod_envelope = synth_sanitize_adsr(adsr);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_envelope_set_adsr(&s->voices[i].mod_envelope, s->mod_envelope);
+}
+
+synth_adsr synth_get_mod_envelope_adsr(const synth *s)
+{
+    return s != NULL ? s->mod_envelope : (synth_adsr){0, 0, 0, 0};
+}
+
+void synth_set_mod_envelope_depth(synth *s, float depth)
+{
+    if (s != NULL && isfinite(depth)) s->mod_envelope_depth = synth_clampf(depth, 0, 1);
+}
+
+float synth_get_mod_envelope_depth(const synth *s)
+{
+    return s != NULL ? s->mod_envelope_depth : 0;
 }
 
 void synth_set_pitch_bend(synth *s, float pitch_bend)
@@ -207,7 +237,8 @@ void synth_set_adsr(synth *s, synth_adsr envelope)
     s->envelope = synth_sanitize_adsr(envelope);
 
     for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
-        s->voices[i].envelope.adsr = s->envelope;
+        synth_envelope_set_adsr(&s->voices[i].envelope, s->envelope);
+        if (s->voices[i].pending.active) s->voices[i].pending.adsr = s->envelope;
     }
 }
 
@@ -279,14 +310,21 @@ void synth_set_second_oscillator_fine_tune(synth *s, float cents)
 
 void synth_set_filter_cutoff(synth *s, float cutoff_hz)
 {
-    synth_filter_set_cutoff(&s->filter, cutoff_hz);
-    synth_filter_set_cutoff(&s->right_filter, cutoff_hz);
+    if (!isfinite(cutoff_hz)) return;
+    s->filter.cutoff_hz = synth_parameter_clamp(SYNTH_PARAM_FILTER_CUTOFF, cutoff_hz, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_filter_set_cutoff(&s->voices[i].filter, s->filter.cutoff_hz);
+        synth_filter_set_cutoff(&s->voices[i].right_filter, s->filter.cutoff_hz);
+    }
 }
 
 void synth_set_filter_poles(synth *s, int pole_count)
 {
-    synth_filter_set_poles(&s->filter, pole_count);
-    synth_filter_set_poles(&s->right_filter, pole_count);
+    s->filter.pole_count = synth_clampi(pole_count, 1, SYNTH_FILTER_MAX_POLES);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i) {
+        synth_filter_set_poles(&s->voices[i].filter, s->filter.pole_count);
+        synth_filter_set_poles(&s->voices[i].right_filter, s->filter.pole_count);
+    }
 }
 
 void synth_set_lfo_rate(synth *s, float frequency_hz)
@@ -306,187 +344,301 @@ void synth_set_lfo_depth(synth *s, float depth)
 
 void synth_set_saturation_drive(synth *s, float drive)
 {
-    synth_saturation_set_drive(&s->effects.saturation, drive);
+    if (!isfinite((float)drive)) return;
+    s->effects.saturation.drive = (float)synth_parameter_clamp(SYNTH_PARAM_SATURATION_DRIVE, (float)drive, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_saturation_set_drive(&s->voices[i].effects.saturation, s->effects.saturation.drive);
 }
 
 void synth_set_saturation_mix(synth *s, float mix)
 {
-    synth_saturation_set_mix(&s->effects.saturation, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.saturation.mix = (float)synth_parameter_clamp(SYNTH_PARAM_SATURATION_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_saturation_set_mix(&s->voices[i].effects.saturation, s->effects.saturation.mix);
 }
 
 void synth_set_distortion_drive(synth *s, float drive)
 {
-    synth_distortion_set_drive(&s->effects.distortion, drive);
+    if (!isfinite((float)drive)) return;
+    s->effects.distortion.drive = (float)synth_parameter_clamp(SYNTH_PARAM_DISTORTION_DRIVE, (float)drive, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_distortion_set_drive(&s->voices[i].effects.distortion, s->effects.distortion.drive);
 }
 
 void synth_set_distortion_mix(synth *s, float mix)
 {
-    synth_distortion_set_mix(&s->effects.distortion, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.distortion.mix = (float)synth_parameter_clamp(SYNTH_PARAM_DISTORTION_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_distortion_set_mix(&s->voices[i].effects.distortion, s->effects.distortion.mix);
 }
 
 void synth_set_bitcrusher_sample_rate(synth *s, float sample_rate)
 {
-    synth_bitcrusher_set_sample_rate(&s->effects.bitcrusher, sample_rate);
+    if (!isfinite((float)sample_rate)) return;
+    s->effects.bitcrusher.sample_rate = (float)synth_parameter_clamp(SYNTH_PARAM_BITCRUSHER_SAMPLE_RATE, (float)sample_rate, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_bitcrusher_set_sample_rate(&s->voices[i].effects.bitcrusher, s->effects.bitcrusher.sample_rate);
 }
 
 void synth_set_bitcrusher_bits(synth *s, int bits)
 {
-    synth_bitcrusher_set_bits(&s->effects.bitcrusher, bits);
+    if (!isfinite((float)bits)) return;
+    s->effects.bitcrusher.bits = (int)synth_parameter_clamp(SYNTH_PARAM_BITCRUSHER_BITS, (float)bits, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_bitcrusher_set_bits(&s->voices[i].effects.bitcrusher, s->effects.bitcrusher.bits);
 }
 
 void synth_set_bitcrusher_mix(synth *s, float mix)
 {
-    synth_bitcrusher_set_mix(&s->effects.bitcrusher, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.bitcrusher.mix = (float)synth_parameter_clamp(SYNTH_PARAM_BITCRUSHER_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_bitcrusher_set_mix(&s->voices[i].effects.bitcrusher, s->effects.bitcrusher.mix);
 }
 
 void synth_set_flanger_rate(synth *s, float hz)
 {
-    synth_flanger_set_rate(&s->effects.flanger, hz);
+    if (!isfinite((float)hz)) return;
+    s->effects.flanger.rate_hz = (float)synth_parameter_clamp(SYNTH_PARAM_FLANGER_RATE, (float)hz, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_flanger_set_rate(&s->voices[i].effects.flanger, s->effects.flanger.rate_hz);
 }
 
 void synth_set_flanger_intensity(synth *s, float intensity)
 {
-    synth_flanger_set_intensity(&s->effects.flanger, intensity);
+    if (!isfinite((float)intensity)) return;
+    s->effects.flanger.intensity = (float)synth_parameter_clamp(SYNTH_PARAM_FLANGER_INTENSITY, (float)intensity, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_flanger_set_intensity(&s->voices[i].effects.flanger, s->effects.flanger.intensity);
+    // the module owns the intensity curve; retain its resolved manual components
+    s->effects.flanger.depth = s->voices[0].effects.flanger.depth;
+    s->effects.flanger.feedback = s->voices[0].effects.flanger.feedback;
 }
 
 void synth_set_flanger_depth(synth *s, float depth)
 {
-    synth_flanger_set_depth(&s->effects.flanger, depth);
+    if (!isfinite((float)depth)) return;
+    s->effects.flanger.depth = (float)synth_parameter_clamp(SYNTH_PARAM_FLANGER_DEPTH, (float)depth, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_flanger_set_depth(&s->voices[i].effects.flanger, s->effects.flanger.depth);
 }
 
 void synth_set_flanger_feedback(synth *s, float feedback)
 {
-    synth_flanger_set_feedback(&s->effects.flanger, feedback);
+    if (!isfinite((float)feedback)) return;
+    s->effects.flanger.feedback = (float)synth_parameter_clamp(SYNTH_PARAM_FLANGER_FEEDBACK, (float)feedback, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_flanger_set_feedback(&s->voices[i].effects.flanger, s->effects.flanger.feedback);
 }
 
 void synth_set_flanger_mix(synth *s, float mix)
 {
-    synth_flanger_set_mix(&s->effects.flanger, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.flanger.mix = (float)synth_parameter_clamp(SYNTH_PARAM_FLANGER_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_flanger_set_mix(&s->voices[i].effects.flanger, s->effects.flanger.mix);
 }
 
 void synth_set_flanger_manual(synth *s, float seconds)
 {
-    synth_flanger_set_manual(&s->effects.flanger, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.flanger.manual_delay_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_FLANGER_MANUAL, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_flanger_set_manual(&s->voices[i].effects.flanger, s->effects.flanger.manual_delay_seconds);
 }
 
 void synth_set_ring_mod_frequency(synth *s, float hz)
 {
-    synth_ring_mod_set_frequency(&s->effects.ring_mod, hz);
+    if (!isfinite((float)hz)) return;
+    s->effects.ring_mod.frequency_hz = (float)synth_parameter_clamp(SYNTH_PARAM_RING_MOD_FREQUENCY, (float)hz, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_ring_mod_set_frequency(&s->voices[i].effects.ring_mod, s->effects.ring_mod.frequency_hz);
 }
 
 void synth_set_ring_mod_rectify(synth *s, float rectify)
 {
-    synth_ring_mod_set_rectify(&s->effects.ring_mod, rectify);
+    if (!isfinite((float)rectify)) return;
+    s->effects.ring_mod.rectify = (float)synth_parameter_clamp(SYNTH_PARAM_RING_MOD_RECTIFY, (float)rectify, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_ring_mod_set_rectify(&s->voices[i].effects.ring_mod, s->effects.ring_mod.rectify);
 }
 
 void synth_set_ring_mod_mix(synth *s, float mix)
 {
-    synth_ring_mod_set_mix(&s->effects.ring_mod, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.ring_mod.mix = (float)synth_parameter_clamp(SYNTH_PARAM_RING_MOD_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_ring_mod_set_mix(&s->voices[i].effects.ring_mod, s->effects.ring_mod.mix);
 }
 
 void synth_set_chorus_rate(synth *s, float hz)
 {
-    synth_chorus_set_rate(&s->effects.chorus, hz);
+    if (!isfinite((float)hz)) return;
+    s->effects.chorus.rate_hz = (float)synth_parameter_clamp(SYNTH_PARAM_CHORUS_RATE, (float)hz, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_chorus_set_rate(&s->voices[i].effects.chorus, s->effects.chorus.rate_hz);
 }
 
 void synth_set_chorus_depth(synth *s, float depth)
 {
-    synth_chorus_set_depth(&s->effects.chorus, depth);
+    if (!isfinite((float)depth)) return;
+    s->effects.chorus.depth = (float)synth_parameter_clamp(SYNTH_PARAM_CHORUS_DEPTH, (float)depth, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_chorus_set_depth(&s->voices[i].effects.chorus, s->effects.chorus.depth);
 }
 
 void synth_set_chorus_mix(synth *s, float mix)
 {
-    synth_chorus_set_mix(&s->effects.chorus, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.chorus.mix = (float)synth_parameter_clamp(SYNTH_PARAM_CHORUS_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_chorus_set_mix(&s->voices[i].effects.chorus, s->effects.chorus.mix);
 }
 
 void synth_set_chorus_width(synth *s, float width)
 {
-    synth_chorus_set_width(&s->effects.chorus, width);
+    if (!isfinite((float)width)) return;
+    s->effects.chorus.width = (float)synth_parameter_clamp(SYNTH_PARAM_CHORUS_WIDTH, (float)width, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_chorus_set_width(&s->voices[i].effects.chorus, s->effects.chorus.width);
 }
 
 void synth_set_chorus_delay(synth *s, float seconds)
 {
-    synth_chorus_set_delay(&s->effects.chorus, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.chorus.delay_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_CHORUS_DELAY, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_chorus_set_delay(&s->voices[i].effects.chorus, s->effects.chorus.delay_seconds);
 }
 
 void synth_set_chorus_feedback(synth *s, float feedback)
 {
-    synth_chorus_set_feedback(&s->effects.chorus, feedback);
+    if (!isfinite((float)feedback)) return;
+    s->effects.chorus.feedback = (float)synth_parameter_clamp(SYNTH_PARAM_CHORUS_FEEDBACK, (float)feedback, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_chorus_set_feedback(&s->voices[i].effects.chorus, s->effects.chorus.feedback);
 }
 
 void synth_set_eq_low(synth *s, float gain_db)
 {
-    synth_eq_set_low(&s->effects.eq, gain_db);
+    if (!isfinite((float)gain_db)) return;
+    s->effects.eq.low_gain_db = (float)synth_parameter_clamp(SYNTH_PARAM_EQ_LOW, (float)gain_db, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_eq_set_low(&s->voices[i].effects.eq, s->effects.eq.low_gain_db);
 }
 
 void synth_set_eq_mid(synth *s, float gain_db)
 {
-    synth_eq_set_mid(&s->effects.eq, gain_db);
+    if (!isfinite((float)gain_db)) return;
+    s->effects.eq.mid_gain_db = (float)synth_parameter_clamp(SYNTH_PARAM_EQ_MID, (float)gain_db, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_eq_set_mid(&s->voices[i].effects.eq, s->effects.eq.mid_gain_db);
 }
 
 void synth_set_eq_high(synth *s, float gain_db)
 {
-    synth_eq_set_high(&s->effects.eq, gain_db);
+    if (!isfinite((float)gain_db)) return;
+    s->effects.eq.high_gain_db = (float)synth_parameter_clamp(SYNTH_PARAM_EQ_HIGH, (float)gain_db, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_eq_set_high(&s->voices[i].effects.eq, s->effects.eq.high_gain_db);
 }
 
 void synth_set_delay_time(synth *s, float seconds)
 {
-    synth_delay_set_time(&s->effects.delay, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.delay.time_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_DELAY_TIME, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_delay_set_time(&s->voices[i].effects.delay, s->effects.delay.time_seconds);
 }
 
 void synth_set_delay_feedback(synth *s, float feedback)
 {
-    synth_delay_set_feedback(&s->effects.delay, feedback);
+    if (!isfinite((float)feedback)) return;
+    s->effects.delay.feedback = (float)synth_parameter_clamp(SYNTH_PARAM_DELAY_FEEDBACK, (float)feedback, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_delay_set_feedback(&s->voices[i].effects.delay, s->effects.delay.feedback);
 }
 
 void synth_set_delay_mix(synth *s, float mix)
 {
-    synth_delay_set_mix(&s->effects.delay, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.delay.mix = (float)synth_parameter_clamp(SYNTH_PARAM_DELAY_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_delay_set_mix(&s->voices[i].effects.delay, s->effects.delay.mix);
 }
 
 void synth_set_plate_reverb_decay(synth *s, float seconds)
 {
-    synth_plate_reverb_set_decay(&s->effects.plate_reverb, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.plate_reverb.decay_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_PLATE_REVERB_DECAY, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_plate_reverb_set_decay(&s->voices[i].effects.plate_reverb, s->effects.plate_reverb.decay_seconds);
 }
 
 void synth_set_plate_reverb_damping(synth *s, float damping)
 {
-    synth_plate_reverb_set_damping(&s->effects.plate_reverb, damping);
+    if (!isfinite((float)damping)) return;
+    s->effects.plate_reverb.damping = (float)synth_parameter_clamp(SYNTH_PARAM_PLATE_REVERB_DAMPING, (float)damping, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_plate_reverb_set_damping(&s->voices[i].effects.plate_reverb, s->effects.plate_reverb.damping);
 }
 
 void synth_set_plate_reverb_mix(synth *s, float mix)
 {
-    synth_plate_reverb_set_mix(&s->effects.plate_reverb, mix);
+    if (!isfinite((float)mix)) return;
+    s->effects.plate_reverb.mix = (float)synth_parameter_clamp(SYNTH_PARAM_PLATE_REVERB_MIX, (float)mix, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_plate_reverb_set_mix(&s->voices[i].effects.plate_reverb, s->effects.plate_reverb.mix);
 }
 
 void synth_set_plate_reverb_predelay(synth *s, float seconds)
 {
-    synth_plate_reverb_set_predelay(&s->effects.plate_reverb, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.plate_reverb.predelay_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_PLATE_REVERB_PREDELAY, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_plate_reverb_set_predelay(&s->voices[i].effects.plate_reverb, s->effects.plate_reverb.predelay_seconds);
 }
 
 void synth_set_compressor_threshold(synth *s, float threshold_db)
 {
-    synth_compressor_set_threshold(&s->effects.compressor, threshold_db);
+    if (!isfinite((float)threshold_db)) return;
+    s->effects.compressor.threshold_db = (float)synth_parameter_clamp(SYNTH_PARAM_COMPRESSOR_THRESHOLD, (float)threshold_db, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_compressor_set_threshold(&s->voices[i].effects.compressor, s->effects.compressor.threshold_db);
 }
 
 void synth_set_compressor_ratio(synth *s, float ratio)
 {
-    synth_compressor_set_ratio(&s->effects.compressor, ratio);
+    if (!isfinite((float)ratio)) return;
+    s->effects.compressor.ratio = (float)synth_parameter_clamp(SYNTH_PARAM_COMPRESSOR_RATIO, (float)ratio, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_compressor_set_ratio(&s->voices[i].effects.compressor, s->effects.compressor.ratio);
 }
 
 void synth_set_compressor_makeup_gain(synth *s, float makeup_gain_db)
 {
-    synth_compressor_set_makeup_gain(&s->effects.compressor, makeup_gain_db);
+    if (!isfinite((float)makeup_gain_db)) return;
+    s->effects.compressor.makeup_gain_db = (float)synth_parameter_clamp(SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN, (float)makeup_gain_db, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_compressor_set_makeup_gain(&s->voices[i].effects.compressor, s->effects.compressor.makeup_gain_db);
 }
 
 void synth_set_compressor_attack_seconds(synth *s, float seconds)
 {
-    synth_compressor_set_attack(&s->effects.compressor, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.compressor.attack_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_COMPRESSOR_ATTACK_SECONDS, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_compressor_set_attack(&s->voices[i].effects.compressor, s->effects.compressor.attack_seconds);
 }
 
 void synth_set_compressor_release_seconds(synth *s, float seconds)
 {
-    synth_compressor_set_release(&s->effects.compressor, seconds);
+    if (!isfinite((float)seconds)) return;
+    s->effects.compressor.release_seconds = (float)synth_parameter_clamp(SYNTH_PARAM_COMPRESSOR_RELEASE_SECONDS, (float)seconds, s->sample_rate);
+    for (size_t i = 0; i < SYNTH_MAX_VOICES; ++i)
+        synth_compressor_set_release(&s->voices[i].effects.compressor, s->effects.compressor.release_seconds);
 }
 
 float synth_get_master_gain(const synth *s)
@@ -561,185 +713,185 @@ float synth_get_lfo_depth(const synth *s)
 
 float synth_get_saturation_drive(const synth *s)
 {
-    return synth_saturation_get_drive(&s->effects.saturation);
+    return s->effects.saturation.drive;
 }
 
 float synth_get_saturation_mix(const synth *s)
 {
-    return synth_saturation_get_mix(&s->effects.saturation);
+    return s->effects.saturation.mix;
 }
 
 float synth_get_distortion_drive(const synth *s)
 {
-    return synth_distortion_get_drive(&s->effects.distortion);
+    return s->effects.distortion.drive;
 }
 
 float synth_get_distortion_mix(const synth *s)
 {
-    return synth_distortion_get_mix(&s->effects.distortion);
+    return s->effects.distortion.mix;
 }
 
 float synth_get_bitcrusher_sample_rate(const synth *s)
 {
-    return synth_bitcrusher_get_sample_rate(&s->effects.bitcrusher);
+    return s->effects.bitcrusher.sample_rate;
 }
 
 int synth_get_bitcrusher_bits(const synth *s)
 {
-    return synth_bitcrusher_get_bits(&s->effects.bitcrusher);
+    return s->effects.bitcrusher.bits;
 }
 
 float synth_get_bitcrusher_mix(const synth *s)
 {
-    return synth_bitcrusher_get_mix(&s->effects.bitcrusher);
+    return s->effects.bitcrusher.mix;
 }
 
 float synth_get_flanger_rate(const synth *s)
 {
-    return synth_flanger_get_rate(&s->effects.flanger);
+    return s->effects.flanger.rate_hz;
 }
 
 float synth_get_flanger_intensity(const synth *s)
 {
-    return synth_flanger_get_intensity(&s->effects.flanger);
+    return s->effects.flanger.intensity;
 }
 
 float synth_get_flanger_depth(const synth *s)
 {
-    return synth_flanger_get_depth(&s->effects.flanger);
+    return s->effects.flanger.depth;
 }
 
 float synth_get_flanger_feedback(const synth *s)
 {
-    return synth_flanger_get_feedback(&s->effects.flanger);
+    return s->effects.flanger.feedback;
 }
 
 float synth_get_flanger_mix(const synth *s)
 {
-    return synth_flanger_get_mix(&s->effects.flanger);
+    return s->effects.flanger.mix;
 }
 
 float synth_get_flanger_manual(const synth *s)
 {
-    return synth_flanger_get_manual(&s->effects.flanger);
+    return s->effects.flanger.manual_delay_seconds;
 }
 
 float synth_get_ring_mod_frequency(const synth *s)
 {
-    return synth_ring_mod_get_frequency(&s->effects.ring_mod);
+    return s->effects.ring_mod.frequency_hz;
 }
 
 float synth_get_ring_mod_rectify(const synth *s)
 {
-    return synth_ring_mod_get_rectify(&s->effects.ring_mod);
+    return s->effects.ring_mod.rectify;
 }
 
 float synth_get_ring_mod_mix(const synth *s)
 {
-    return synth_ring_mod_get_mix(&s->effects.ring_mod);
+    return s->effects.ring_mod.mix;
 }
 
 float synth_get_chorus_rate(const synth *s)
 {
-    return synth_chorus_get_rate(&s->effects.chorus);
+    return s->effects.chorus.rate_hz;
 }
 
 float synth_get_chorus_depth(const synth *s)
 {
-    return synth_chorus_get_depth(&s->effects.chorus);
+    return s->effects.chorus.depth;
 }
 
 float synth_get_chorus_mix(const synth *s)
 {
-    return synth_chorus_get_mix(&s->effects.chorus);
+    return s->effects.chorus.mix;
 }
 
 float synth_get_chorus_width(const synth *s)
 {
-    return synth_chorus_get_width(&s->effects.chorus);
+    return s->effects.chorus.width;
 }
 
 float synth_get_chorus_delay(const synth *s)
 {
-    return synth_chorus_get_delay(&s->effects.chorus);
+    return s->effects.chorus.delay_seconds;
 }
 
 float synth_get_chorus_feedback(const synth *s)
 {
-    return synth_chorus_get_feedback(&s->effects.chorus);
+    return s->effects.chorus.feedback;
 }
 
 float synth_get_eq_low(const synth *s)
 {
-    return synth_eq_get_low(&s->effects.eq);
+    return s->effects.eq.low_gain_db;
 }
 
 float synth_get_eq_mid(const synth *s)
 {
-    return synth_eq_get_mid(&s->effects.eq);
+    return s->effects.eq.mid_gain_db;
 }
 
 float synth_get_eq_high(const synth *s)
 {
-    return synth_eq_get_high(&s->effects.eq);
+    return s->effects.eq.high_gain_db;
 }
 
 float synth_get_delay_time(const synth *s)
 {
-    return synth_delay_get_time(&s->effects.delay);
+    return s->effects.delay.time_seconds;
 }
 
 float synth_get_delay_feedback(const synth *s)
 {
-    return synth_delay_get_feedback(&s->effects.delay);
+    return s->effects.delay.feedback;
 }
 
 float synth_get_delay_mix(const synth *s)
 {
-    return synth_delay_get_mix(&s->effects.delay);
+    return s->effects.delay.mix;
 }
 
 float synth_get_plate_reverb_decay(const synth *s)
 {
-    return synth_plate_reverb_get_decay(&s->effects.plate_reverb);
+    return s->effects.plate_reverb.decay_seconds;
 }
 
 float synth_get_plate_reverb_damping(const synth *s)
 {
-    return synth_plate_reverb_get_damping(&s->effects.plate_reverb);
+    return s->effects.plate_reverb.damping;
 }
 
 float synth_get_plate_reverb_mix(const synth *s)
 {
-    return synth_plate_reverb_get_mix(&s->effects.plate_reverb);
+    return s->effects.plate_reverb.mix;
 }
 
 float synth_get_plate_reverb_predelay(const synth *s)
 {
-    return synth_plate_reverb_get_predelay(&s->effects.plate_reverb);
+    return s->effects.plate_reverb.predelay_seconds;
 }
 
 float synth_get_compressor_threshold(const synth *s)
 {
-    return synth_compressor_get_threshold(&s->effects.compressor);
+    return s->effects.compressor.threshold_db;
 }
 
 float synth_get_compressor_ratio(const synth *s)
 {
-    return synth_compressor_get_ratio(&s->effects.compressor);
+    return s->effects.compressor.ratio;
 }
 
 float synth_get_compressor_makeup_gain(const synth *s)
 {
-    return synth_compressor_get_makeup_gain(&s->effects.compressor);
+    return s->effects.compressor.makeup_gain_db;
 }
 
 float synth_get_compressor_attack_seconds(const synth *s)
 {
-    return synth_compressor_get_attack(&s->effects.compressor);
+    return s->effects.compressor.attack_seconds;
 }
 
 float synth_get_compressor_release_seconds(const synth *s)
 {
-    return synth_compressor_get_release(&s->effects.compressor);
+    return s->effects.compressor.release_seconds;
 }

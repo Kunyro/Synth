@@ -86,4 +86,10 @@ synth_stereo_sample synth_delay_process_with_params(
     synth_stereo_sample input,
     const synth_delay_params *params);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_delay_reset(synth_delay *effect);
+int synth_delay_has_tail(const synth_delay *effect);
+
+int synth_delay_is_ready(const synth_delay *effect);
+
 #endif

@@ -1,4 +1,5 @@
 #include "synth/filter.h"
+#include "internal/dsp_history.h"
 
 #include <math.h>
 
@@ -148,4 +149,17 @@ float synth_filter_process_with_params(synth_filter *filter, float input,
     }
     if (filter->transition_remaining > 0) --filter->transition_remaining;
     return output;
+}
+
+// reset belongs to the filter so callers do not depend on its history layout
+void synth_filter_reset(synth_filter *filter)
+{
+    const int poles = filter->pole_count;
+    synth_filter_init(filter, filter->sample_rate, filter->cutoff_hz);
+    synth_filter_set_poles(filter, poles);
+}
+
+int synth_filter_has_tail(const synth_filter *filter)
+{
+    return synth_history_active(filter->state, SYNTH_FILTER_MAX_POLES);
 }

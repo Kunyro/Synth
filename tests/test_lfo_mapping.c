@@ -15,11 +15,11 @@ static void check(int condition, const char *message)
     }
 }
 
-// feeds a channel-1 control-change packet directly to the adapter, without midi hardware
+// feeds an encoded channel/cc address directly to the adapter, without midi hardware
 static int send_cc(midi_mapping *mapping, synth *s, int control, int value,
                    midi_mapping_apply_result *result)
 {
-    const unsigned char bytes[] = {0xb0, (unsigned char)control, (unsigned char)value};
+    const unsigned char bytes[] = {(unsigned char)(0xb0 + control / 128), (unsigned char)(control % 128), (unsigned char)value};
     return midi_mapping_apply_short_message(mapping, bytes, sizeof(bytes), s, result);
 }
 
@@ -28,7 +28,7 @@ static int control_for(const midi_mapping *mapping, synth_parameter_id id, midi_
 {
     for (size_t i = 0; i < mapping->binding_count; ++i) {
         if (mapping->bindings[i].parameter == id && mapping->bindings[i].target_kind == kind) {
-            return mapping->bindings[i].control;
+            return (mapping->bindings[i].channel - 1) * 128 + mapping->bindings[i].control;
         }
     }
     return -1;
@@ -43,7 +43,7 @@ static void test_all_bindings_and_roundtrip(const char *path)
     char error[MIDI_MAPPING_ERROR_LENGTH];
     synth s;
     midi_mapping_init(&original);
-    check(midi_mapping_parameter_count() == 107, "complete base/global/amount surface");
+    check(midi_mapping_parameter_count() == 160, "complete base/global/amount surface");
     for (size_t i = 0; i < midi_mapping_parameter_count(); ++i) {
         midi_mapping_parameter_info info;
         midi_mapping_binding *binding = &original.bindings[i];
@@ -51,8 +51,8 @@ static void test_all_bindings_and_roundtrip(const char *path)
         binding->parameter = info.parameter;
         binding->target_kind = info.target_kind;
         binding->source_type = MIDI_MAPPING_SOURCE_CC;
-        binding->channel = 1;
-        binding->control = (int)i;
+        binding->channel = 1 + (int)(i / 128);
+        binding->control = (int)(i % 128);
         binding->scale = info.default_scale;
         binding->min_value = info.default_min_value;
         binding->max_value = info.default_max_value;
@@ -62,20 +62,20 @@ static void test_all_bindings_and_roundtrip(const char *path)
     original.bindings[SYNTH_PARAM_ATTACK].min_value = 0.012345678f;
     original.bindings[SYNTH_PARAM_ATTACK].max_value = 1.2345678f;
     // include navigation and chords to ensure round trips retain adapter controls too
-    original.effect_banks[0].selector = (midi_mapping_control_binding){1, MIDI_MAPPING_SOURCE_CC, 2, 10};
-    original.effect_banks[1].macros[2] = (midi_mapping_control_binding){1, MIDI_MAPPING_SOURCE_CC, 2, 11};
+    original.effect_banks[0].selector = (midi_mapping_control_binding){1, MIDI_MAPPING_SOURCE_CC, 16, 10};
+    original.effect_banks[1].macros[2] = (midi_mapping_control_binding){1, MIDI_MAPPING_SOURCE_CC, 16, 11};
     original.chord_bindings[MIDI_CHORD_MODE_PAD_MAJOR] =
-        (midi_mapping_chord_binding){1, MIDI_CHORD_MODE_PAD_MAJOR, MIDI_MAPPING_SOURCE_CC, 2, 12};
+        (midi_mapping_chord_binding){1, MIDI_CHORD_MODE_PAD_MAJOR, MIDI_MAPPING_SOURCE_CC, 16, 12};
     check(midi_mapping_save(&original, path, error, sizeof(error)), "saves complete mapping");
     check(midi_mapping_load(&loaded, path, error, sizeof(error)), "loads more than 64 bindings");
-    check(loaded.binding_count == original.binding_count, "round trip keeps all 107 bindings");
+    check(loaded.binding_count == original.binding_count, "round trip keeps all 160 bindings");
     check(loaded.effect_banks[0].selector.control == 10 &&
           loaded.effect_banks[1].macros[2].control == 11 &&
           loaded.chord_bindings[MIDI_CHORD_MODE_PAD_MAJOR].control == 12, "round trip keeps macro/chord controls");
     for (size_t i = 0; i < loaded.binding_count; ++i) {
         const midi_mapping_binding *a = &original.bindings[i], *b = &loaded.bindings[i];
         check(a->parameter == b->parameter && a->target_kind == b->target_kind &&
-              a->control == b->control && a->scale == b->scale &&
+              a->channel == b->channel && a->control == b->control && a->scale == b->scale &&
               a->min_value == b->min_value && a->max_value == b->max_value,
               "binding identity/range survives serialization exactly");
     }
@@ -84,23 +84,24 @@ static void test_all_bindings_and_roundtrip(const char *path)
     check(strcmp(first.name, "lfo_amount.delay_mix") == 0, "metadata does not share mutable scratch storage");
     synth_init(&s, 8000);
     check(synth_get_lfo_depth(&s) == 0, "global LFO is initially off");
+    check(synth_get_mod_envelope_depth(&s) == 0, "modulation envelope is initially off");
     for (size_t i = 0; i < loaded.binding_count; ++i) {
         midi_mapping_binding *binding = &loaded.bindings[i];
         midi_mapping_apply_result result;
-        if (binding->target_kind != MIDI_MAPPING_TARGET_LFO_AMOUNT) continue;
-        check(synth_get_lfo_amount(&s, binding->parameter) == 0, "binding does not initialize route amount");
-        check(!send_cc(&loaded, &s, binding->control, 110, &result), "amount waits for soft takeover");
-        check(send_cc(&loaded, &s, binding->control, 64, &result), "center picks up zero amount");
-        check(send_cc(&loaded, &s, binding->control, 127, &result), "every amount can reach full positive depth");
-        check(result.parameter == binding->parameter && result.target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT,
+        if (!midi_mapping_target_is_amount(binding->target_kind)) continue;
+        check(synth_get_modulation_amount(&s, midi_mapping_target_source(binding->target_kind), binding->parameter) == 0, "binding does not initialize route amount");
+        check(!send_cc(&loaded, &s, (binding->channel - 1) * 128 + binding->control, 110, &result), "amount waits for soft takeover");
+        check(send_cc(&loaded, &s, (binding->channel - 1) * 128 + binding->control, 64, &result), "center picks up zero amount");
+        check(send_cc(&loaded, &s, (binding->channel - 1) * 128 + binding->control, 127, &result), "every amount can reach full positive depth");
+        check(result.parameter == binding->parameter && result.target_kind == binding->target_kind,
               "apply result distinguishes route amount from base value");
-        check(synth_get_lfo_amount(&s, binding->parameter) == 1, "positive endpoint exact");
-        check(send_cc(&loaded, &s, binding->control, 0, &result), "every amount can reach negative depth");
-        check(synth_get_lfo_amount(&s, binding->parameter) == -1, "negative endpoint exact");
-        send_cc(&loaded, &s, binding->control, 63, &result);
-        check(synth_get_lfo_amount(&s, binding->parameter) == 0, "CC 63 is exact zero");
-        send_cc(&loaded, &s, binding->control, 64, &result);
-        check(synth_get_lfo_amount(&s, binding->parameter) == 0, "CC 64 is exact zero");
+        check(synth_get_modulation_amount(&s, midi_mapping_target_source(binding->target_kind), binding->parameter) == 1, "positive endpoint exact");
+        check(send_cc(&loaded, &s, (binding->channel - 1) * 128 + binding->control, 0, &result), "every amount can reach negative depth");
+        check(synth_get_modulation_amount(&s, midi_mapping_target_source(binding->target_kind), binding->parameter) == -1, "negative endpoint exact");
+        send_cc(&loaded, &s, (binding->channel - 1) * 128 + binding->control, 63, &result);
+        check(synth_get_modulation_amount(&s, midi_mapping_target_source(binding->target_kind), binding->parameter) == 0, "CC 63 is exact zero");
+        send_cc(&loaded, &s, (binding->channel - 1) * 128 + binding->control, 64, &result);
+        check(synth_get_modulation_amount(&s, midi_mapping_target_source(binding->target_kind), binding->parameter) == 0, "CC 64 is exact zero");
     }
     {
         const int base_cc = control_for(&loaded, SYNTH_PARAM_DELAY_MIX, MIDI_MAPPING_TARGET_BASE);
@@ -109,6 +110,9 @@ static void test_all_bindings_and_roundtrip(const char *path)
         float samples[64];
         synth_set_delay_mix(&s, 0.5f);
         synth_set_lfo_depth(&s, 1);
+        synth_set_mod_envelope_depth(&s, 1);
+        synth_set_envelope_amount(&s, SYNTH_PARAM_DELAY_MIX, -0.5f);
+        synth_note_on(&s, 60, 1);
         send_cc(&loaded, &s, amount_cc, 127, &result);
         synth_lfo_reset(&s.lfo, 0.25f);
         synth_render_mono(&s, samples, 64);
@@ -120,13 +124,64 @@ static void test_all_bindings_and_roundtrip(const char *path)
         check(midi_mapping_load(&original, path, error, sizeof(error)), "runtime save reloads");
         check(!original.bindings[base_cc].pickup.picked_up, "pickup state is not persisted");
     }
+    for (int id = SYNTH_PARAM_MOD_ENVELOPE_ATTACK; id <= SYNTH_PARAM_MOD_ENVELOPE_DEPTH; ++id) {
+        midi_mapping_apply_result result;
+        const int cc = control_for(&loaded, (synth_parameter_id)id, MIDI_MAPPING_TARGET_BASE);
+        send_cc(&loaded, &s, cc, 0, &result);
+        check(send_cc(&loaded, &s, cc, 127, &result), "source control picks up while crossing its base");
+        check(synth_get_parameter(&s, (synth_parameter_id)id) == loaded.bindings[cc].max_value,
+              "source control reaches configured maximum");
+        send_cc(&loaded, &s, cc, 0, &result);
+        check(synth_get_parameter(&s, (synth_parameter_id)id) == 0, "source control reaches zero");
+    }
     synth_uninit(&s);
+}
+
+static void test_positive_range_and_capacity(const char *path)
+{
+    midi_mapping mapping;
+    char error[MIDI_MAPPING_ERROR_LENGTH];
+    FILE *file = fopen(path, "w");
+    check(file != NULL, "opens capacity fixture");
+    if (!file) return;
+    for (int i = 0; i < MIDI_MAPPING_MAX_BINDINGS; ++i)
+        fprintf(file, "envelope_amount.filter_cutoff=cc:%d:%d:linear:0:1\n", 1 + i / 128, i % 128);
+    fclose(file);
+    check(midi_mapping_load(&mapping, path, error, sizeof(error)), "accepts exactly 256 bindings");
+    check(mapping.binding_count == MIDI_MAPPING_MAX_BINDINGS, "preserves binding capacity");
+    synth s;
+    synth_init(&s, 8000);
+    midi_mapping_apply_result result;
+    check(!send_cc(&mapping, &s, 0, 64, &result), "positive range waits for endpoint pickup");
+    check(send_cc(&mapping, &s, 0, 0, &result), "positive range picks up at zero endpoint");
+    send_cc(&mapping, &s, 0, 127, &result);
+    check(synth_get_envelope_amount(&s, SYNTH_PARAM_FILTER_CUTOFF) == 1, "positive range reaches one");
+    send_cc(&mapping, &s, 0, 64, &result);
+    check(synth_get_envelope_amount(&s, SYNTH_PARAM_FILTER_CUTOFF) > 0.5f, "positive range has no bipolar center notch");
+    synth_uninit(&s);
+    file = fopen(path, "a");
+    check(file != NULL, "appends overflow fixture");
+    if (!file) return;
+    fputs("mod_envelope_depth=cc:3:0:linear:0:1\n", file);
+    fclose(file);
+    check(!midi_mapping_load(&mapping, path, error, sizeof(error)), "rejects binding 257");
+    check(strstr(error, "line 257:") != NULL, "capacity failure identifies offending line");
 }
 
 // checks that excluded targets and malformed route declarations fail with their line number
 static void test_invalid_declarations(const char *path)
 {
     static const char *invalid[] = {
+        "envelope_amount.attack=cc:1:1:linear:-1:1\n",
+        "envelope_amount.decay=cc:1:1:linear:-1:1\n",
+        "envelope_amount.sustain=cc:1:1:linear:-1:1\n",
+        "envelope_amount.release=cc:1:1:linear:-1:1\n",
+        "envelope_amount.mod_envelope_depth=cc:1:1:linear:-1:1\n",
+        "envelope_amount.lfo_rate=cc:1:1:linear:-1:1\n",
+        "envelope_amount.delay_mix=cc:1:1:linear:-2:1\n",
+        "envelope_amount.delay_mix=cc:1:1:linear:nan:1\n",
+        "envelope_amount.envelope_amount.delay_mix=cc:1:1:linear:-1:1\n",
+        "lfo_amount.mod_envelope_attack=cc:1:1:linear:-1:1\n",
         "lfo_amount.lfo_rate=cc:1:1:linear:-1:1\n",
         "lfo_amount.lfo_depth=cc:1:1:linear:-1:1\n",
         "lfo_amount.lfo_shape_morph=cc:1:1:linear:-1:1\n",
@@ -163,6 +218,7 @@ int main(int argc, char **argv)
     const char *path = argc > 1 ? argv[1] : "build/lfo_mapping_test.conf";
     test_all_bindings_and_roundtrip(path);
     test_invalid_declarations(path);
+    test_positive_range_and_capacity(path);
     remove(path);
     return failures ? 1 : 0;
 }

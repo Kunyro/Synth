@@ -73,10 +73,12 @@ Effects are available in learn mode by their parameter names, such as
 `saturation_drive`, `flanger_rate`, `plate_reverb_mix`,
 `compressor_threshold`, and `compressor_attack_seconds`.
 
-LFO route amounts are listed alongside base parameters, for 107 discoverable
-controls. Use commands such as `bind lfo_amount.delay_mix` or
-`unbind lfo_amount.filter_cutoff`; base and amount bindings are independent.
+LFO and envelope route amounts are listed alongside base/source parameters,
+for 160 discoverable controls. Use commands such as `bind lfo_amount.delay_mix`,
+`bind envelope_amount.filter_cutoff`, or `bind mod_envelope_depth`;
+base and amount bindings are independent.
 New amount bindings default to the signed `linear:-1:1` range. `map-all` includes
-all 52 amounts. Saving writes controller bindings only, never current parameter
-values, LFO amounts, or pickup state. `show` and `validate` accept the same
+all 52 LFO amounts and 48 envelope amounts. Saving writes controller bindings
+only, never current parameter values, route amounts, or pickup state.
+`show` and `validate` accept the same
 canonical names and validation rules as the desktop app.

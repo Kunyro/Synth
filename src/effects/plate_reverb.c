@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 // pick a prime number here makes it better
 #define SYNTH_PLATE_REVERB_REFERENCE_SAMPLE_RATE 29761.0f
@@ -554,4 +555,44 @@ synth_stereo_sample synth_plate_reverb_process(
 {
     const synth_plate_reverb_params params = synth_plate_reverb_get_params(effect);
     return synth_plate_reverb_process_with_params(effect, input, &params);
+}
+
+// clears history without reallocating storage or changing controls
+void synth_plate_reverb_reset(synth_plate_reverb *effect)
+{
+    clear_reverb_history(effect);
+}
+
+int synth_plate_reverb_has_tail(const synth_plate_reverb *effect)
+{
+    const synth_plate_reverb_delay_line *lines[] = {
+        &effect->predelay,
+        &effect->input_diffusers[0].delay, &effect->input_diffusers[1].delay,
+        &effect->input_diffusers[2].delay, &effect->input_diffusers[3].delay,
+        &effect->tank.left_diffuser_1.delay, &effect->tank.left_diffuser_2.delay,
+        &effect->tank.right_diffuser_1.delay, &effect->tank.right_diffuser_2.delay,
+        &effect->tank.left_delay_1, &effect->tank.left_delay_2,
+        &effect->tank.right_delay_1, &effect->tank.right_delay_2
+    };
+    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); ++i)
+        if (synth_history_active(lines[i]->samples, lines[i]->capacity_frames)) return 1;
+    return fabsf(effect->bandwidth_filter.state) > 1e-7f ||
+        fabsf(effect->tank.left_damping_filter.state) > 1e-7f ||
+        fabsf(effect->tank.right_damping_filter.state) > 1e-7f ||
+        fabsf(effect->tank.left_feedback) > 1e-7f || fabsf(effect->tank.right_feedback) > 1e-7f;
+}
+
+int synth_plate_reverb_is_ready(const synth_plate_reverb *effect)
+{
+    const synth_plate_reverb_delay_line *lines[] = {
+        &effect->predelay, &effect->input_diffusers[0].delay,
+        &effect->input_diffusers[1].delay, &effect->input_diffusers[2].delay,
+        &effect->input_diffusers[3].delay, &effect->tank.left_diffuser_1.delay,
+        &effect->tank.left_diffuser_2.delay, &effect->tank.right_diffuser_1.delay,
+        &effect->tank.right_diffuser_2.delay, &effect->tank.left_delay_1,
+        &effect->tank.left_delay_2, &effect->tank.right_delay_1, &effect->tank.right_delay_2
+    };
+    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); ++i)
+        if (!delay_line_has_storage(lines[i])) return 0;
+    return 1;
 }

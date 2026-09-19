@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 static float sanitize_sample_rate(float sample_rate)
 {
@@ -598,4 +599,29 @@ synth_stereo_sample synth_delay_process(
 {
     const synth_delay_params params = synth_delay_get_params(effect);
     return synth_delay_process_with_params(effect, input, &params);
+}
+
+// clears history without reallocating storage or changing controls
+void synth_delay_reset(synth_delay *effect)
+{
+    set_delay_time_immediately(effect, delay_frames_for_time(effect, effect->time_seconds));
+    effect->has_processed = 0;
+}
+
+int synth_delay_has_tail(const synth_delay *effect)
+{
+    for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i) {
+        const synth_delay_voice *v = &effect->voices[i];
+        if (v->state != SYNTH_DELAY_VOICE_INACTIVE &&
+            (synth_history_active(v->line.left, v->line.capacity_frames) ||
+             synth_history_active(v->line.right, v->line.capacity_frames))) return 1;
+    }
+    return 0;
+}
+
+int synth_delay_is_ready(const synth_delay *effect)
+{
+    for (size_t i = 0; i < SYNTH_DELAY_VOICE_COUNT; ++i)
+        if (!delay_line_has_storage(&effect->voices[i].line)) return 0;
+    return 1;
 }

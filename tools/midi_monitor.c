@@ -590,7 +590,7 @@ static int control_is_already_bound(
                 "warning: cc:%d:%d is already bound to %s%s\n",
                 channel,
                 control,
-                binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                midi_mapping_target_prefix(binding->target_kind),
                 midi_mapping_parameter_name(binding->parameter));
             return 1;
         }
@@ -1050,9 +1050,9 @@ static int validate_mapping_file(const char *path)
                     "warning: cc:%d:%d is bound to both %s%s and %s%s\n",
                     a->channel,
                     a->control,
-                    a->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                    midi_mapping_target_prefix(a->target_kind),
                     midi_mapping_parameter_name(a->parameter),
-                    b->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                    midi_mapping_target_prefix(b->target_kind),
                     midi_mapping_parameter_name(b->parameter));
                 warnings += 1;
             }
@@ -1071,7 +1071,7 @@ static int validate_mapping_file(const char *path)
                     "warning: cc:%d:%d is bound to both %s%s and %s\n",
                     parameter->channel,
                     parameter->control,
-                    parameter->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                    midi_mapping_target_prefix(parameter->target_kind),
                     midi_mapping_parameter_name(parameter->parameter),
                     midi_mapping_chord_pad_name(chord->pad));
                 warnings += 1;
@@ -1093,7 +1093,7 @@ static int validate_mapping_file(const char *path)
                     "warning: cc:%d:%d is bound to both %s%s and %s\n",
                     parameter->channel,
                     parameter->control,
-                    parameter->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                    midi_mapping_target_prefix(parameter->target_kind),
                     midi_mapping_parameter_name(parameter->parameter),
                     effect_control_name);
                 warnings += 1;

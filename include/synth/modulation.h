@@ -3,21 +3,35 @@
 
 #include "synth/parameter.h"
 
+typedef enum synth_modulation_source {
+    SYNTH_MOD_SOURCE_LFO,
+    SYNTH_MOD_SOURCE_ENVELOPE,
+    SYNTH_MOD_SOURCE_COUNT
+} synth_modulation_source;
+
 typedef struct synth_modulation {
-    // one slot per engine ID avoids a second destination-id system slots for
-    // excluded controls stay zero; this stores route strengths, not base settings
-    float amounts[SYNTH_PARAM_COUNT];
+    // route strengths only; parameter bases belong to the synth controls
+    float amounts[SYNTH_MOD_SOURCE_COUNT][SYNTH_PARAM_COUNT];
 } synth_modulation;
 
-// route amounts clamp to [-1, 1]; zero disables a route
-// returns zero for invalid/excluded ids, nonfinite amounts, or a null synth
+// shared eligibility and route access for hosts and controller adapters
+int synth_modulation_supports(synth_modulation_source source, synth_parameter_id target);
+int synth_set_modulation_amount(struct synth *s, synth_modulation_source source,
+                                synth_parameter_id target, float amount);
+float synth_get_modulation_amount(const struct synth *s, synth_modulation_source source,
+                                  synth_parameter_id target);
+void synth_reset_modulation_amounts(struct synth *s, synth_modulation_source source);
 int synth_set_lfo_amount(struct synth *s, synth_parameter_id target, float amount);
-// reads a route strength; invalid/excluded targets return zero
 float synth_get_lfo_amount(const struct synth *s, synth_parameter_id target);
-// disables all routes while leaving source settings and phase alone
 void synth_reset_lfo_amounts(struct synth *s);
-// pure destination evaluation: does not advance the source or change base state
+int synth_set_envelope_amount(struct synth *s, synth_parameter_id target, float amount);
+float synth_get_envelope_amount(const struct synth *s, synth_parameter_id target);
+void synth_reset_envelope_amounts(struct synth *s);
+
+// pure evaluation; neither source advances and no stored controls change
 float synth_modulate_value(const struct synth *s, synth_parameter_id target,
                           float base, float lfo_value);
+float synth_modulate_sources(const struct synth *s, synth_parameter_id target,
+                            float base, float lfo_value, float envelope_value);
 
 #endif

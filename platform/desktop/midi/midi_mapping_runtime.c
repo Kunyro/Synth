@@ -21,7 +21,7 @@ static float clampf(float value, float min_value, float max_value)
 // identifies the full signed linear range that needs a reachable zero at the knob's center
 static int is_bipolar_amount(const midi_mapping_binding *binding)
 {
-    return binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT &&
+    return midi_mapping_target_is_amount(binding->target_kind) &&
         binding->scale == MIDI_MAPPING_SCALE_LINEAR &&
         binding->min_value == -1.0f && binding->max_value == 1.0f;
 }
@@ -60,8 +60,8 @@ static float scale_midi_value(const midi_mapping_binding *binding, int midi_valu
 // soft takeover follows stored controls, never render-time effective values
 static float current_parameter_value(const synth *s, const midi_mapping_binding *binding)
 {
-    return binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT
-        ? synth_get_lfo_amount(s, binding->parameter)
+    return midi_mapping_target_is_amount(binding->target_kind)
+        ? synth_get_modulation_amount(s, midi_mapping_target_source(binding->target_kind), binding->parameter)
         : synth_get_parameter(s, binding->parameter);
 }
 
@@ -148,8 +148,8 @@ static int binding_has_pickup(midi_mapping_binding *binding, const synth *s, int
 // sends an accepted knob edit to the matching engine base-value or route-amount api
 static void apply_synth_value(synth *s, const midi_mapping_binding *binding, float value)
 {
-    if (binding->target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT) {
-        synth_set_lfo_amount(s, binding->parameter, value);
+    if (midi_mapping_target_is_amount(binding->target_kind)) {
+        synth_set_modulation_amount(s, midi_mapping_target_source(binding->target_kind), binding->parameter, value);
     } else {
         const synth_parameter_info *info = synth_parameter_info_at(binding->parameter);
         // preserve manual cc behavior: step scaling rounds; other integer bindings truncate

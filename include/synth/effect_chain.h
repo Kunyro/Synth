@@ -54,4 +54,9 @@ synth_stereo_sample synth_effect_chain_process_with_params(
     synth_effect_chain *chain, synth_stereo_sample input,
     const synth_effect_chain_params *params);
 
+// initialization status and allocation-free voice lifecycle operations
+int synth_effect_chain_is_ready(const synth_effect_chain *chain);
+void synth_effect_chain_reset(synth_effect_chain *chain);
+int synth_effect_chain_has_tail(const synth_effect_chain *chain);
+
 #endif

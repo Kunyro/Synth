@@ -80,4 +80,10 @@ synth_stereo_sample synth_flanger_process_with_params(
 // flanger intensity is a mix of depth and feedback
 void synth_flanger_resolve_intensity(synth_flanger_params *params, float intensity);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_flanger_reset(synth_flanger *effect);
+int synth_flanger_has_tail(const synth_flanger *effect);
+
+int synth_flanger_is_ready(const synth_flanger *effect);
+
 #endif

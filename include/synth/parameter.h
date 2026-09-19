@@ -62,6 +62,11 @@ typedef enum synth_parameter_id {
     SYNTH_PARAM_COMPRESSOR_MAKEUP_GAIN,
     SYNTH_PARAM_COMPRESSOR_ATTACK_SECONDS,
     SYNTH_PARAM_COMPRESSOR_RELEASE_SECONDS,
+    SYNTH_PARAM_MOD_ENVELOPE_ATTACK,
+    SYNTH_PARAM_MOD_ENVELOPE_DECAY,
+    SYNTH_PARAM_MOD_ENVELOPE_SUSTAIN,
+    SYNTH_PARAM_MOD_ENVELOPE_RELEASE,
+    SYNTH_PARAM_MOD_ENVELOPE_DEPTH,
     SYNTH_PARAM_COUNT
 } synth_parameter_id;
 
@@ -86,9 +91,9 @@ typedef struct synth_parameter_info {
     // static bounds; cutoff and reduced sample rate also depend on the host rate
     float min_value;
     float max_value;
-    // excursion at amount=1 and global depth=1, in native units or octaves
+    // lfo excursion at amount=1 and depth=1, in native units or octaves
     float modulation_span;
-    // zero excludes global lfo controls from being destinations themselves
+    // lfo eligibility; use synth_modulation_supports for source-specific eligibility
     int modulatable;
 } synth_parameter_info;
 
@@ -100,6 +105,9 @@ const synth_parameter_info *synth_parameter_info_by_name(const char *name);
 float synth_get_parameter(const struct synth *s, synth_parameter_id id);
 // rejects unknown ids and nonfinite values; bounds and quantizes valid values
 int synth_set_parameter(struct synth *s, synth_parameter_id id, float value);
+// resolves the legal endpoints, including sample-rate-dependent limits
+int synth_parameter_bounds(synth_parameter_id id, float sample_rate,
+                           float *minimum, float *maximum);
 // applies static/sample-rate bounds and integer rounding without storing a value
 float synth_parameter_clamp(synth_parameter_id id, float value, float sample_rate);
 

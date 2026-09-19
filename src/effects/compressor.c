@@ -231,3 +231,8 @@ synth_stereo_sample synth_compressor_process(
     const synth_compressor_params params = synth_compressor_get_params(effect);
     return synth_compressor_process_with_params(effect, input, &params);
 }
+
+void synth_compressor_reset(synth_compressor *compressor)
+{
+    compressor->detector_square = 0;
+}

@@ -67,4 +67,8 @@ synth_stereo_sample synth_eq_process_with_params(
     synth_stereo_sample input,
     const synth_eq_params *params);
 
+// allocation-free lifecycle operations; controls remain unchanged
+void synth_eq_reset(synth_eq *effect);
+int synth_eq_has_tail(const synth_eq *effect);
+
 #endif

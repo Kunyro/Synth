@@ -13,7 +13,7 @@ ask it to render audio buffers. All adapters depend on the engine.
 | `synth_render.c` | Shared stereo/mono rendering pipeline |
 | `parameter.c` | Immutable parameter metadata, base access, and effective control resolution |
 | `modulation.c` | Signed route amounts and common modulation evaluation |
-| `voice.c` | Per-voice note state and oscillator/envelope behavior |
+| `voice.c` | Per-voice note lifecycle, envelopes, and DSP resource ownership |
 | `oscillator.c` | Waveform selection and oscillator rendering |
 | `wavetable.c` | Spectral bandlimited wavetable generation and lookup |
 | `envelope.c` | ADSR envelope implementation |
@@ -29,7 +29,7 @@ Most engine users should start with `../include/synth/synth.h`.
 
 Important entry points:
 
-- `synth_init()` initializes a synth with defaults; call `synth_uninit()` before discarding it.
+- `synth_init()` allocates voice resources; check `synth_is_ready()` and call `synth_uninit()` before discarding it.
 - `synth_note_on()`, `synth_note_off()`, and `synth_all_notes_off()` manage numbered musical notes.
 - `synth_note_on_frequency()` starts a direct-frequency voice.
 - `synth_set_*()` functions update envelope, oscillator, filter, LFO, and effect parameters.
@@ -40,9 +40,10 @@ Project-wide defaults live in `../include/synth/synth_config.h`.
 
 ## Signal Path
 
-At a high level, each active voice renders oscillators through the envelope.
-The mixed voice output then passes through the filter and post-filter effects
-before master gain is applied.
+Each voice renders oscillators through its volume envelope, stereo filters,
+complete effect chain, and effective master gain. These completed outputs are
+summed. Knob settings are shared; audio histories and modulation envelopes are
+owned by individual voices. Effect tails continue after envelopes finish.
 
 Current post-filter effects:
 
@@ -57,8 +58,8 @@ Current post-filter effects:
 - Plate reverb with decay, damping, predelay, and wet/dry mix
 - Linked RMS compressor with threshold, ratio, makeup gain, attack, and release
 
-The effects default to dry or neutral settings, so existing patches render
-unchanged until the relevant mix or amount is raised.
+Effects default to dry or neutral settings. Per-voice nonlinear processing
+changes how simultaneous notes interact compared with the former shared chain.
 
 ## Oscillators
 
@@ -87,9 +88,8 @@ range before rendering.
 The global LFO runs continuously, including while no voices are active. It uses
 the same wavetable morph shape as the audio oscillators.
 
-The LFO has 52 destinations: every actual synth parameter exposed by the desktop
-config, including all ten effects. Global LFO controls, chord mode, selectors,
-and controller macros are excluded. All route amounts and global depth start
+The LFO has 52 destinations, including all ten effects. Both modulation sources'
+controls, chord mode, selectors, and controller macros are excluded. All route amounts and global depth start
 at zero.
 
 ```c
@@ -122,12 +122,36 @@ feedback routes, with final clamping afterward.
 See [the modulation contract](../docs/modulation.md) for all destinations,
 spans, state behavior, config examples, and API migration details.
 
+## Modulation Envelope
+
+Each note retriggers an independent held ADSR. Its output is 0–1, with signed
+route amounts -1–1 and an overall depth. Depth and routes start at zero.
+
+```c
+synth_set_mod_envelope_adsr(&instrument, (synth_adsr){0.02f, 0.1f, 0.4f, 0.3f});
+synth_set_mod_envelope_depth(&instrument, 1.0f);
+synth_set_envelope_amount(&instrument, SYNTH_PARAM_FILTER_CUTOFF, 1.0f);
+```
+
+The envelope supports 48 destinations: the LFO destinations except volume ADSR.
+At full depth, amount +1 reaches the destination maximum at the envelope peak;
+-1 reaches its minimum. Fractional amounts interpolate in the destination's
+linear/logarithmic domain. LFO and envelope offsets add before clamping.
+
+Release lasts the configured duration from the current level. Manual ADSR edits
+preserve stage/level. The source ends when the volume envelope reaches OFF;
+effect tails continue. A stolen voice fades for 2 ms before its history resets
+and the new note starts. See the modulation contract for pending-note handling
+and standalone voice resource ownership.
+
 ## Hosting the Engine
 
 Configure with `SYNTH_BUILD_DESKTOP=OFF` to build and test only the portable
 engine. Hosts provide sample rate, buffers, and synchronization; initialize and
 release resource-owning modules outside the audio callback. Parameter changes
-and rendering on the same synth instance must be serialized by the host.
+and rendering on the same synth instance must be serialized by the host. Do not
+copy resource-owning synth/voice structs. Failed initialization releases partial
+resources and renders silence; destruction is safe afterward.
 
 MIDI packet parsing is in `platform/desktop/midi/midi_types.c`. That adapter
 normalizes pitch bend to `-1..1` and passes musical operations to the engine.

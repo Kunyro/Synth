@@ -272,7 +272,7 @@ static int add_binding(
     }
 
     if (!midi_mapping_parameter_info_by_name(key, &info)) {
-        set_error(error, error_size, line_number, "unknown or excluded parameter; route keys use lfo_amount.<base parameter>");
+        set_error(error, error_size, line_number, "unknown or excluded parameter; route keys use lfo_amount.<parameter> or envelope_amount.<parameter>");
         return 0;
     }
 

@@ -66,3 +66,33 @@ synth_stereo_sample synth_effect_chain_process(synth_effect_chain *chain, synth_
     const synth_effect_chain_params params = synth_effect_chain_get_params(chain);
     return synth_effect_chain_process_with_params(chain, input, &params);
 }
+
+int synth_effect_chain_is_ready(const synth_effect_chain *chain)
+{
+    return synth_delay_is_ready(&chain->delay) && synth_chorus_is_ready(&chain->chorus) &&
+        synth_flanger_is_ready(&chain->flanger) && synth_plate_reverb_is_ready(&chain->plate_reverb);
+}
+
+void synth_effect_chain_reset(synth_effect_chain *chain)
+{
+    synth_saturation_reset(&chain->saturation);
+    synth_bitcrusher_reset(&chain->bitcrusher);
+    synth_flanger_reset(&chain->flanger);
+    synth_chorus_reset(&chain->chorus);
+    synth_eq_reset(&chain->eq);
+    synth_delay_reset(&chain->delay);
+    synth_plate_reverb_reset(&chain->plate_reverb);
+    synth_ring_mod_reset(&chain->ring_mod);
+    synth_compressor_reset(&chain->compressor);
+}
+
+int synth_effect_chain_has_tail(const synth_effect_chain *chain)
+{
+    return synth_saturation_has_tail(&chain->saturation) ||
+        synth_bitcrusher_has_tail(&chain->bitcrusher) ||
+        synth_flanger_has_tail(&chain->flanger) ||
+        synth_chorus_has_tail(&chain->chorus) ||
+        synth_eq_has_tail(&chain->eq) ||
+        synth_delay_has_tail(&chain->delay) ||
+        synth_plate_reverb_has_tail(&chain->plate_reverb);
+}

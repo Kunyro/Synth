@@ -46,6 +46,8 @@ typedef struct synth_compressor {
 } synth_compressor;
 
 void synth_compressor_init(synth_compressor *compressor, float sample_rate);
+// clears the detector without changing controls or coefficient caches
+void synth_compressor_reset(synth_compressor *compressor);
 void synth_compressor_set_sample_rate(synth_compressor *compressor, float sample_rate);
 void synth_compressor_set_threshold(synth_compressor *compressor, float threshold_db);
 void synth_compressor_set_ratio(synth_compressor *compressor, float ratio);

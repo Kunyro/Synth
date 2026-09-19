@@ -197,7 +197,7 @@ static void on_midi_short_message(void *user_data, const unsigned char *data, un
         } else {
             printf(
                 "Mapped MIDI: %s%s=%.3f from channel=%d cc=%d value=%d\n",
-                result.target_kind == MIDI_MAPPING_TARGET_LFO_AMOUNT ? "lfo_amount." : "",
+                midi_mapping_target_prefix(result.target_kind),
                 midi_mapping_parameter_name(result.parameter),
                 result.synth_value,
                 result.channel,
@@ -286,6 +286,11 @@ int main(int argc, char **argv)
     }
 
     synth_init(&app.synth, SYNTH_DEFAULT_SAMPLE_RATE);
+    if (!synth_is_ready(&app.synth)) {
+        fprintf(stderr, "Could not allocate synth voice processing buffers.\n");
+        synth_uninit(&app.synth);
+        return 1;
+    }
     midi_chord_mode_init(&app.chord_mode);
     midi_mapping_init(&app.midi_mapping);
     app.midi_mapping_enabled = 0;

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../internal/synth_internal.h"
+#include "../internal/dsp_history.h"
 
 #define SYNTH_CHORUS_OUTPUT_COMPENSATION 0.65f
 #define SYNTH_CHORUS_TWO_PI 6.28318530717958647692f
@@ -375,4 +376,24 @@ synth_stereo_sample synth_chorus_process(
 {
     const synth_chorus_params params = synth_chorus_get_params(effect);
     return synth_chorus_process_with_params(effect, input, &params);
+}
+
+// clears history without reallocating storage or changing controls
+void synth_chorus_reset(synth_chorus *effect)
+{
+    synth_history_clear(effect->delay.left, effect->delay.capacity_frames);
+    synth_history_clear(effect->delay.right, effect->delay.capacity_frames);
+    effect->delay.write_index = 0;
+    for (size_t i = 0; i < SYNTH_CHORUS_VOICE_COUNT; ++i) effect->phases[i] = voice_phase_offsets[i];
+}
+
+int synth_chorus_has_tail(const synth_chorus *effect)
+{
+    return synth_history_active(effect->delay.left, effect->delay.capacity_frames) ||
+        synth_history_active(effect->delay.right, effect->delay.capacity_frames);
+}
+
+int synth_chorus_is_ready(const synth_chorus *effect)
+{
+    return delay_line_has_storage(&effect->delay);
 }
